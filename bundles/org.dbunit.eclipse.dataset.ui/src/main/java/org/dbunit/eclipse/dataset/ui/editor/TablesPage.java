@@ -27,11 +27,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
+import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
+import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
+import org.dbunit.eclipse.dataset.ui.grid.DatasetGrid;
+import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
+import org.dbunit.eclipse.dataset.ui.preferences.PreferenceKeys;
+import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.resource.FontDescriptor;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.jface.resource.LocalResourceManager;
@@ -43,6 +50,7 @@ import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.custom.StackLayout;
 import org.eclipse.swt.events.SelectionListener;
+import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.layout.GridData;
@@ -50,6 +58,7 @@ import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.ui.ISharedImages;
 import org.eclipse.ui.PlatformUI;
@@ -61,7 +70,7 @@ import org.eclipse.ui.texteditor.ITextEditor;
  *
  * @since 1.0.0
  */
-final class TablesPage
+final class TablesPage implements DatasetGridContext
 {
     private final FlatXmlDatasetEditor editor;
 
@@ -84,6 +93,8 @@ final class TablesPage
     private final Button createEmptyDatasetButton;
 
     private final Map<String, CTabItem> tabsByKey = new LinkedHashMap<>();
+
+    private final Map<String, DatasetGrid> gridsByKey = new LinkedHashMap<>();
 
     private final IDocumentListener sourceDocumentListener = new IDocumentListener()
     {
@@ -187,9 +198,66 @@ final class TablesPage
         expectedRenameNewKey = newKey;
     }
 
-    boolean isEditable()
+    @Override
+    public boolean isEditable()
     {
         return editable;
+    }
+
+    @Override
+    public DatasetDocument getDatasetDocument()
+    {
+        return datasetDocument;
+    }
+
+    @Override
+    public String getNullDisplayText()
+    {
+        return DatasetUiPlugin.getDefault().getPreferenceStore().getString(PreferenceKeys.NULL_DISPLAY_TEXT);
+    }
+
+    @Override
+    public boolean isDarkTheme()
+    {
+        return relativeLuminance(control.getBackground()) < 0.5;
+    }
+
+    @Override
+    public boolean executeEdit(final Runnable edit)
+    {
+        if (!editable || !editor.getSourceEditor().validateEditorInputState())
+        {
+            return false;
+        }
+        try
+        {
+            edit.run();
+        }
+        catch (final DatasetEditException e)
+        {
+            editor.getEditorSite().getActionBars().getStatusLineManager().setErrorMessage(e.getMessage());
+            Display.getCurrent().beep();
+            return false;
+        }
+        editor.getEditorSite().getActionBars().getStatusLineManager().setErrorMessage(null);
+        return true;
+    }
+
+    @Override
+    public void fillContextMenu(final IMenuManager menu, final String region)
+    {
+    }
+
+    private static double relativeLuminance(final Color color)
+    {
+        return 0.2126 * linearize(color.getRed()) + 0.7152 * linearize(color.getGreen())
+                + 0.0722 * linearize(color.getBlue());
+    }
+
+    private static double linearize(final int channelValue)
+    {
+        final double normalized = channelValue / 255.0;
+        return normalized <= 0.03928 ? normalized / 12.92 : Math.pow((normalized + 0.055) / 1.055, 2.4);
     }
 
     CTabFolder getTabFolder()
@@ -274,10 +342,13 @@ final class TablesPage
             final String key = resolveRenamedKey(table.getKey());
             seenKeys.add(key);
             CTabItem item = tabsByKey.get(key);
+            DatasetGrid grid = gridsByKey.get(key);
             if (item == null)
             {
+                grid = new DatasetGrid(tabFolder, this, key);
+                gridsByKey.put(key, grid);
                 item = new CTabItem(tabFolder, SWT.NONE, index);
-                item.setControl(new Composite(tabFolder, SWT.NONE));
+                item.setControl(grid.getControl());
                 tabsByKey.put(key, item);
             }
             else if (tabFolder.indexOf(item) != index)
@@ -285,6 +356,7 @@ final class TablesPage
                 item = moveTab(item, index);
                 tabsByKey.put(key, item);
             }
+            grid.tableChanged(table);
             updateTab(item, table, model);
             index++;
         }
@@ -300,6 +372,7 @@ final class TablesPage
                 entry.getValue().getControl().dispose();
                 entry.getValue().dispose();
                 iterator.remove();
+                gridsByKey.remove(entry.getKey());
             }
         }
     }
@@ -309,6 +382,9 @@ final class TablesPage
         if (currentKey.equals(expectedRenameNewKey) && tabsByKey.containsKey(expectedRenameOldKey))
         {
             tabsByKey.put(currentKey, tabsByKey.remove(expectedRenameOldKey));
+            final DatasetGrid grid = gridsByKey.remove(expectedRenameOldKey);
+            grid.tableRenamed(currentKey);
+            gridsByKey.put(currentKey, grid);
         }
         return currentKey;
     }
