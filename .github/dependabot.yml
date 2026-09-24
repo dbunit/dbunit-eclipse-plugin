@@ -1,0 +1,57 @@
+version: 2
+updates:
+  # -----------------------------------------------------------------------
+  # Maven dependencies and plugins (including the Tycho version property)
+  # - weekly, grouped to reduce changes.xml churn.
+  # A 7-day cooldown lets a bad or compromised release be yanked first.
+  # Eclipse release and NatTable p2 repository URLs in the .target files
+  # are not Maven coordinates; update those by hand.
+  # -----------------------------------------------------------------------
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    groups:
+      # Tycho build plugins must move together
+      tycho:
+        patterns:
+          - "org.eclipse.tycho:*"
+      # Maven build and reporting plugins
+      maven-plugins:
+        patterns:
+          - "org.apache.maven.plugins:*"
+          - "org.codehaus.mojo:*"
+          - "org.asciidoctor:*"
+          - "org.apache.maven.reporting:*"
+      # Test-only libraries
+      test-dependencies:
+        patterns:
+          - "org.junit*:*"
+          - "org.assertj:*"
+          - "net.bytebuddy:*"
+          - "org.dbunit:*"
+        update-types: ["minor", "patch"]
+
+  # -----------------------------------------------------------------------
+  # GitHub Actions - daily, all actions grouped into one PR.
+  # Checked daily so security-relevant action pins are picked up quickly;
+  # a short 3-day cooldown still lets an obviously-bad release be pulled.
+  # -----------------------------------------------------------------------
+  # zizmor: ignore[dependabot-cooldown]  # 3 days is a deliberate tradeoff for actions
+  - package-ecosystem: "github-actions"
+    # "/" covers only .github/workflows; the local composite action is listed separately.
+    directories:
+      - "/"
+      - "/.github/actions/jdk-setup"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 10
+    groups:
+      actions-updates:                 # Group all action updates into one PR
+        patterns:
+          - "*"
