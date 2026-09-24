@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.dbunit</groupId>
+    <artifactId>dbunit-eclipse-plugin</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>org.dbunit.eclipse.repository</artifactId>
+  <packaging>eclipse-repository</packaging>
+
+  <name>dbUnit Eclipse Plugin - p2 Repository</name>
+  <description>
+    Assembles the p2 repository (Eclipse update site) from category.xml:
+    target/repository/ and the archived target/org.dbunit.eclipse.repository-VERSION.zip.
+  </description>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>tycho-p2-repository-plugin</artifactId>
+        <configuration>
+          <repositoryName>dbUnit Eclipse Plugin ${unqualifiedVersion}</repositoryName>
+          <includeAllDependencies>false</includeAllDependencies>
+          <compress>true</compress>
+          <xzCompress>true</xzCompress>
+          <keepNonXzIndexFiles>true</keepNonXzIndexFiles>
+        </configuration>
+        <executions>
+          <!-- Archive after the package phase so the zip includes the PGP signatures that the
+               sign profile adds to the assembled repository during the package phase. -->
+          <execution>
+            <id>default-archive-repository</id>
+            <phase>pre-integration-test</phase>
+            <goals>
+              <goal>archive-repository</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <!--
+      PGP-signs every artifact in the assembled repository (release builds: -Psign).
+      Eclipse verifies these signatures during installation and asks the user to trust the dbUnit
+      release key once, instead of warning about unsigned content.
+      Uses the gpg executable and its default secret key; the passphrase comes from the
+      MAVEN_GPG_PASSPHRASE environment variable (tycho-gpg-plugin default).
+    -->
+    <profile>
+      <id>sign</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.eclipse.tycho</groupId>
+            <artifactId>tycho-gpg-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>pgp-sign-p2-artifacts</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>sign-p2-artifacts</goal>
+                </goals>
+                <configuration>
+                  <skipIfJarsigned>true</skipIfJarsigned>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

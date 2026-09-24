@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<site>
+   <!--
+     Only the features users choose are listed here. Third-party runtime dependencies (NatTable,
+     Eclipse Collections) are included by org.dbunit.eclipse.feature, so they are part of this
+     repository without appearing in the install wizard; do not list them here, because p2 would
+     show uncategorized entries in an "Uncategorized" category.
+   -->
+   <feature id="org.dbunit.eclipse.feature" version="0.0.0">
+      <category name="org.dbunit.eclipse.category"/>
+   </feature>
+   <feature id="org.dbunit.eclipse.feature.source" version="0.0.0">
+      <category name="org.dbunit.eclipse.category.sources"/>
+   </feature>
+
+   <category-def name="org.dbunit.eclipse.category" label="dbUnit">
+      <description>
+         dbUnit tools for the Eclipse IDE.
+      </description>
+   </category-def>
+   <category-def name="org.dbunit.eclipse.category.sources" label="dbUnit Sources">
+      <description>
+         Source code of the dbUnit tools, for debugging.
+      </description>
+   </category-def>
+</site>

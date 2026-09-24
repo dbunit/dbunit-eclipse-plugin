@@ -80,6 +80,7 @@
     <module>bundles/org.dbunit.eclipse.dataset.core</module>
     <module>bundles/org.dbunit.eclipse.dataset.ui</module>
     <module>features/org.dbunit.eclipse.feature</module>
+    <module>releng/org.dbunit.eclipse.repository</module>
   </modules>
 
   <dependencyManagement>
