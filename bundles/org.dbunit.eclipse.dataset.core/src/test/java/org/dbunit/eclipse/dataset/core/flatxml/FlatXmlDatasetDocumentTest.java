@@ -1619,6 +1619,591 @@ class FlatXmlDatasetDocumentTest
         });
     }
 
+    @Test
+    void testAddTable_whenTheEndTagIsAloneOnItsLine_insertsAtTheStartOfThatLine() throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.addTable("USERS", List.of());
+
+            assertThat(document.get())
+                    .as("The table must be added at the start of the end tag's own line.")
+                    .isEqualTo("<dataset>\n  <USERS/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testAddTable_whenTheEndTagSharesItsLineWithOtherContent_insertsBeforeTheEndTag()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <ORDERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.addTable("USERS", List.of());
+
+            assertThat(document.get())
+                    .as("The table must be added on its own line, right before the end tag.")
+                    .isEqualTo("<dataset>\n    <ORDERS ID=\"1\"/>\n    <USERS/>\n</dataset>");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testAddTable_whenRootIsSelfClosing_replacesItWithAnOpenAndCloseTag() throws Exception
+    {
+        final IDocument document = new Document("<dataset/>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.addTable("USERS", List.of());
+
+            assertThat(document.get())
+                    .as("A self-closing root must become an open and close tag around the new table.")
+                    .isEqualTo("<dataset>\n  <USERS/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testAddTable_whenRootIsSelfClosingWithAttributes_keepsThemOnTheOpenTag() throws Exception
+    {
+        final IDocument document = new Document("<dataset foo=\"bar\"/>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.addTable("USERS", List.of());
+
+            assertThat(document.get())
+                    .as("The root's attributes must survive turning a self-closing root into an open tag.")
+                    .isEqualTo("<dataset foo=\"bar\">\n  <USERS/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testAddTable_whenATableAlreadyHasRows_insertsAfterThemUsingTheirIndentation() throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <ORDERS ID=\"1\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.addTable("USERS", List.of());
+
+            assertThat(document.get())
+                    .as("The table must be added after existing rows, matching their indentation.")
+                    .isEqualTo("<dataset>\n    <ORDERS ID=\"1\"/>\n    <USERS/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testAddTable_whenColumnNamesAreGiven_recordsThemAsPendingColumns() throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.addTable("ITEMS", List.of("SKU", "QTY"));
+
+            assertThat(document.get()).isEqualTo("<dataset>\n  <ITEMS/>\n</dataset>\n");
+            final DatasetTable table = datasetDocument.getModel().findTable("ITEMS").orElseThrow();
+            assertThat(table.getColumns()).as("Both given names must be recorded as pending columns.")
+                    .containsExactly(new DatasetColumn("SKU", false, false, true),
+                            new DatasetColumn("QTY", false, false, true));
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testAddTable_whenCreationIsUndoneAndTheNameIsReused_hasNoLeftoverPendingColumns()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n</dataset>\n");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addTable("ITEMS", List.of("SKU", "QTY"));
+
+            undoManager.undo();
+            datasetDocument.refresh();
+
+            assertThat(datasetDocument.getModel().findTable("ITEMS"))
+                    .as("The undone table must be gone from the model.").isEmpty();
+            datasetDocument.addTable("ITEMS", List.of());
+
+            final DatasetTable table = datasetDocument.getModel().findTable("ITEMS").orElseThrow();
+            assertThat(table.getColumns())
+                    .as("The undone table's pending columns must not leak into the reused name.")
+                    .isEmpty();
+        });
+    }
+
+    @Test
+    void testAddTable_whenAdditionIsUndoneAndRedone_thePendingColumnsComeBack() throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n</dataset>\n");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addTable("ITEMS", List.of("SKU", "QTY"));
+
+            undoManager.undo();
+            datasetDocument.refresh();
+            assertThat(datasetDocument.getModel().findTable("ITEMS"))
+                    .as("Undo must remove the added table.").isEmpty();
+
+            undoManager.redo();
+            datasetDocument.refresh();
+
+            final DatasetTable table = datasetDocument.getModel().findTable("ITEMS").orElseThrow();
+            assertThat(table.getColumns())
+                    .as("Redo must bring the table's pending columns back with it.")
+                    .containsExactly(new DatasetColumn("SKU", false, false, true),
+                            new DatasetColumn("QTY", false, false, true));
+        });
+    }
+
+    @Test
+    void testAddTable_whenNameIsInvalid_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.addTable("1BAD", List.of()))
+                .as("An invalid table name must be rejected.").isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testAddTable_whenNameAlreadyExists_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.addTable("users", List.of()))
+                .as("A name that already exists, case-insensitively, must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testAddTable_whenAnExistingTableIsEqualIgnoringCaseYetDistinct_addsTheTable()
+    {
+        final IDocument document = new Document("<dataset><\u0130TEMS ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.addTable("ITEMS", List.of());
+
+        assertThat(datasetDocument.getModel().getTables()).extracting(DatasetTable::getKey)
+                .as("A table whose key differs from that of every existing table must be added, although "
+                        + "its name equals one of theirs ignoring case.")
+                .containsExactly("\u0130TEMS", "ITEMS");
+    }
+
+    @Test
+    void testAddTable_whenAnExistingTableSharesTheKeyYetIsNotEqualIgnoringCase_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><straße ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.addTable("STRASSE", List.of()))
+                .as("A name with the key of an existing table must be rejected, although the two names are "
+                        + "not equal ignoring case.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testAddTable_whenNameIsDataset_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.addTable("dataset", List.of()))
+                .as("The reserved name 'dataset' must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testAddTable_whenAColumnNameIsInvalid_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.addTable("ORDERS", List.of("1st col")))
+                .as("An invalid column name must be rejected.").isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+        assertThat(datasetDocument.getModel().findTable("ORDERS")).as("No table must have been added.")
+                .isEmpty();
+    }
+
+    @Test
+    void testAddTable_whenColumnNamesHaveADuplicateCaseInsensitively_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.addTable("ORDERS", List.of("ID", "id")))
+                .as("A duplicate column name, case-insensitively, must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+        assertThat(datasetDocument.getModel().findTable("ORDERS")).as("No table must have been added.")
+                .isEmpty();
+    }
+
+    @Test
+    void testAddTable_whenColumnNamesAreEqualIgnoringCaseYetDistinct_recordsBoth()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.addTable("ORDERS", List.of("ID", "\u0130D"));
+
+        assertThat(datasetDocument.getModel().findTable("ORDERS").orElseThrow().getColumns())
+                .as("Column names with different keys must both be recorded, although they are equal "
+                        + "ignoring case.")
+                .containsExactly(new DatasetColumn("ID", false, false, true),
+                        new DatasetColumn("\u0130D", false, false, true));
+    }
+
+    @Test
+    void testAddTable_whenColumnNamesShareAKeyYetAreNotEqualIgnoringCase_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.addTable("ORDERS", List.of("straße", "STRASSE")))
+                .as("Two column names with the same key must be rejected as duplicates, although they "
+                        + "are not equal ignoring case.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+        assertThat(datasetDocument.getModel().findTable("ORDERS")).as("No table must have been added.")
+                .isEmpty();
+    }
+
+    @Test
+    void testRenameTable_whenElementsAreSelfClosing_renamesTheStartTagAcrossAllSegments()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\"/>\n"
+                + "    <ORDERS ID=\"10\"/>\n    <USERS ID=\"2\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.renameTable("USERS", "CUSTOMERS");
+
+            assertThat(document.get())
+                    .as("Every segment of the table, wherever it appears, must be renamed.")
+                    .isEqualTo("<dataset>\n    <CUSTOMERS ID=\"1\"/>\n    <ORDERS ID=\"10\"/>\n"
+                            + "    <CUSTOMERS ID=\"2\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testRenameTable_whenAnElementHasAnExplicitEndTag_renamesBothTags() throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\"></USERS>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.renameTable("USERS", "CUSTOMERS");
+
+            assertThat(document.get()).as("Both the start and end tag names must be replaced.")
+                    .isEqualTo("<dataset>\n    <CUSTOMERS ID=\"1\"></CUSTOMERS>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testRenameTable_whenColumnsArePending_movesThemToTheNewKey() throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "EXTRA");
+
+            datasetDocument.renameTable("USERS", "CUSTOMERS");
+
+            assertThat(document.get()).isEqualTo("<dataset><CUSTOMERS ID=\"1\"/></dataset>");
+            assertThat(datasetDocument.getModel().findTable("USERS"))
+                    .as("The old table key must be gone.").isEmpty();
+            final DatasetTable table = datasetDocument.getModel().findTable("CUSTOMERS").orElseThrow();
+            assertThat(table.getColumns())
+                    .as("The pending column must move to the renamed table.")
+                    .contains(new DatasetColumn("EXTRA", false, false, true));
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testRenameTable_whenUndone_thePendingColumnAddedBeforeItSurvivesUnderTheOldName()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "EXTRA");
+
+            datasetDocument.renameTable("USERS", "CUSTOMERS");
+            undoManager.undo();
+            datasetDocument.refresh();
+
+            final DatasetTable tableAfterRenameUndo =
+                    datasetDocument.getModel().findTable("USERS").orElseThrow();
+            assertThat(tableAfterRenameUndo.getColumns())
+                    .as("Undoing the rename must bring the pending column back under the old table name.")
+                    .contains(new DatasetColumn("EXTRA", false, false, true));
+
+            undoManager.undo();
+            datasetDocument.refresh();
+
+            final DatasetTable tableAfterColumnUndo =
+                    datasetDocument.getModel().findTable("USERS").orElseThrow();
+            assertThat(tableAfterColumnUndo.getColumnIndex("EXTRA"))
+                    .as("A second undo, of the column add, must still remove the pending column.")
+                    .isEqualTo(-1);
+        });
+    }
+
+    @Test
+    void testRenameTable_whenNewNameIsInvalid_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.renameTable("USERS", "1BAD"))
+                .as("An invalid new table name must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testRenameTable_whenNewNameAlreadyExists_throwsAndChangesNothing()
+    {
+        final IDocument document =
+                new Document("<dataset><USERS ID=\"1\"/><ORDERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.renameTable("USERS", "orders"))
+                .as("A new name that already exists, case-insensitively, must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testRenameTable_whenAnotherTableIsEqualIgnoringCaseYetDistinct_renamesTheTable()
+    {
+        final IDocument document =
+                new Document("<dataset><USERS ID=\"1\"/><\u0130TEMS ID=\"9\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.renameTable("USERS", "ITEMS");
+
+        assertThat(document.get())
+                .as("A new name whose key differs from that of every other table must be accepted, "
+                        + "although it equals the name of one of them ignoring case.")
+                .isEqualTo("<dataset><ITEMS ID=\"1\"/><\u0130TEMS ID=\"9\"/></dataset>");
+    }
+
+    @Test
+    void testRenameTable_whenAnotherTableSharesTheKeyYetIsNotEqualIgnoringCase_throwsAndChangesNothing()
+    {
+        final IDocument document =
+                new Document("<dataset><USERS ID=\"1\"/><straße ID=\"9\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.renameTable("USERS", "STRASSE"))
+                .as("A new name with the key of another table must be rejected, because the rename would "
+                        + "merge the two tables, although the names are not equal ignoring case.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testRenameTable_whenNewNameIsDataset_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.renameTable("USERS", "dataset"))
+                .as("The reserved name 'dataset' must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testRenameTable_whenTableIsDeclaredOnly_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset>\n</dataset>\n");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.renameTable("USERS", "CUSTOMERS"))
+                .as("A declared-only table must be rejected instead of silently doing nothing.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testDeleteTable_whenAnotherTableIsInterleaved_leavesItByteIdentical() throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\"/>\n"
+                + "    <ORDERS ID=\"10\"/>\n    <USERS ID=\"2\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.deleteTable("USERS");
+
+            assertThat(document.get())
+                    .as("The other table's element must be left byte-identical.")
+                    .isEqualTo("<dataset>\n    <ORDERS ID=\"10\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testDeleteTable_whenTableIsDtdDeclared_leavesADeclaredOnlyTable() throws Exception
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset>\n"
+                        + "    <USERS ID=\"1\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.deleteTable("USERS");
+
+            assertThat(document.get()).as("The table's only element must be removed.").isEqualTo(
+                    "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                            + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset>\n</dataset>\n");
+            final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+            assertThat(table.isDeclaredOnly())
+                    .as("A DTD-declared table must remain, as declared-only.").isTrue();
+            assertThat(table.getColumns()).as("Its declared column must still be listed.")
+                    .containsExactly(new DatasetColumn("ID", true, false, false));
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testDeleteTable_whenTableIsDeclaredOnly_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset>\n</dataset>\n");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.deleteTable("USERS"))
+                .as("A declared-only table must be rejected instead of silently doing nothing.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testDeleteTable_whenUndone_itsPendingColumnsComeBack() throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "EXTRA");
+
+            datasetDocument.deleteTable("USERS");
+            undoManager.undo();
+            datasetDocument.refresh();
+
+            final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+            assertThat(table.getColumns())
+                    .as("Undoing the delete must bring the table's pending column back.")
+                    .contains(new DatasetColumn("EXTRA", false, false, true));
+        });
+    }
+
     private static void withUndoManager(final IDocument document, final UndoManagerConsumer consumer)
             throws Exception
     {
