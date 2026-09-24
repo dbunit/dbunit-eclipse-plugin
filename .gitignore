@@ -1,0 +1,26 @@
+bin
+target
+.settings
+.classpath
+.project
+*.jar
+.polyglot.*
+
+.tycho-consumer-pom.xml
+
+# Ignoring IntelliJ IDEA project files and directories.  These are personal.
+.idea
+*.iml
+*.ipr
+*.iws
+
+# AI related dirs
+.aider*
+!.aider.conf.yml
+!.aiderignore
+.jackknife
+
+# Eclipse runtime workbench and launch artifacts
+runtime-*/
+*.launch
+

@@ -1,0 +1,14 @@
+* text=auto
+# Test datasets are compared byte for byte (offsets, line ends, encodings): never convert them.
+**/src/test/resources/datasets/** -text
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.sh text eol=lf
+mvnw text eol=lf
+*.png binary
+*.gif binary
+*.jpg binary
+*.ico binary
+*.zip binary
+*.jar binary
