@@ -78,6 +78,7 @@
   <modules>
     <module>releng/org.dbunit.eclipse.target</module>
     <module>bundles/org.dbunit.eclipse.dataset.core</module>
+    <module>bundles/org.dbunit.eclipse.dataset.ui</module>
   </modules>
 
   <dependencyManagement>

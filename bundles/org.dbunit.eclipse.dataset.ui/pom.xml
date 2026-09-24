@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.dbunit</groupId>
+    <artifactId>dbunit-eclipse-plugin</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>org.dbunit.eclipse.dataset.ui</artifactId>
+  <packaging>eclipse-plugin</packaging>
+
+  <name>dbUnit Eclipse Plugin - Dataset Editor UI</name>
+  <description>
+    The spreadsheet-like dataset editor: editor registration, NatTable grid, commands, and preferences.
+  </description>
+
+  <dependencies>
+    <!-- OSGi UI tests from src/test/java run inside a workbench by tycho-surefire-plugin:plugin-test. -->
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- AssertJ's OSGi manifest requires the Byte Buddy packages at test runtime. -->
+    <dependency>
+      <groupId>net.bytebuddy</groupId>
+      <artifactId>byte-buddy</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Tycho's JUnit 6 provider imports the launcher and the suite engine (and, through it, the
+         suite API) into the OSGi test runtime. -->
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-launcher</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-suite-engine</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-license</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.basedir}/../..</directory>
+                  <includes>
+                    <include>LICENSE.txt</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>target-platform-configuration</artifactId>
+        <configuration>
+          <!-- Let the pom's test-scope JUnit and AssertJ join the OSGi test runtime. -->
+          <pomDependencies>consider</pomDependencies>
+          <dependency-resolution>
+            <extraRequirements>
+              <!-- The IDE application and product the UI tests launch. -->
+              <requirement>
+                <type>eclipse-feature</type>
+                <id>org.eclipse.platform</id>
+                <versionRange>0.0.0</versionRange>
+              </requirement>
+              <!-- Test-only bundles are not required by the bundle's manifest, so they must be requested
+                   explicitly to reach the OSGi test runtime; their own imports resolve transitively. -->
+              <requirement>
+                <type>eclipse-plugin</type>
+                <id>assertj-core</id>
+                <versionRange>0.0.0</versionRange>
+              </requirement>
+            </extraRequirements>
+          </dependency-resolution>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>tycho-surefire-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>execute-ui-tests</id>
+            <goals>
+              <goal>plugin-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <useUIHarness>true</useUIHarness>
+          <useUIThread>true</useUIThread>
+          <product>org.eclipse.platform.ide</product>
+          <application>org.eclipse.ui.ide.workbench</application>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
