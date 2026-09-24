@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Sample dataset for the dbUnit Eclipse Plugin tests. -->
+<dataset>
+    <USERS ID="1" NAME="Alice" EMAIL="alice@example.org" CREATED="2024-01-01"/>
+    <USERS ID="2" NAME='Bob' CREATED="2024-01-02"/>
+    <!-- Orders reference users. -->
+    <ORDERS ID="10" USER_ID="1" TOTAL="12.50"/>
+    <USERS ID="3"
+           NAME="Carol &amp; Dave"
+           EMAIL=""
+           CREATED="2024-01-03"/>
+    <ORDERS ID="11" USER_ID="3" TOTAL="7.00"></ORDERS>
+    <AUDIT_LOG/>
+    <order_items ORDER_ID="10" LINE="1" NOTE="first&#10;second"/>
+    <ORDER_ITEMS ORDER_ID="10" LINE="2"/>
+</dataset>

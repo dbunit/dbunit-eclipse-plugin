@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dataset [
+<!ELEMENT dataset (USERS*, ORDERS*)>
+<!ELEMENT USERS EMPTY>
+<!ATTLIST USERS
+    ID CDATA #REQUIRED
+    NAME CDATA #IMPLIED
+>
+<!ELEMENT ORDERS EMPTY>
+<!ATTLIST ORDERS
+    ID CDATA #REQUIRED
+    USER_ID CDATA #REQUIRED
+>
+]>
+<dataset>
+    <USERS ID="1" NAME="Alice" EXTRA="ignored"/>
+</dataset>
