@@ -35,7 +35,7 @@
     <!-- Test-scope framework versions, resolved from Maven Central -->
     <assertjCoreVersion>3.27.7</assertjCoreVersion>
     <!-- AssertJ imports Byte Buddy packages; keep in step with assertj-core's own byte-buddy dependency. -->
-    <byteBuddyVersion>1.18.3</byteBuddyVersion>
+    <byteBuddyVersion>1.18.14</byteBuddyVersion>
     <dbunitVersion>3.5.2</dbunitVersion>
     <junitVersion>6.1.3</junitVersion>
 
