@@ -95,6 +95,22 @@ final class FlatXmlTextLayout
         return new Region(lineStart, delimiterEnd - lineStart);
     }
 
+    /**
+     * Returns the start of the line containing a position.
+     */
+    int startOfLineContaining(final int offset)
+    {
+        return lineStartOffset(offset);
+    }
+
+    /**
+     * Returns whether only whitespace precedes a position on its line.
+     */
+    boolean isAtStartOfItsLine(final int offset)
+    {
+        return isBlank(text, lineStartOffset(offset), offset);
+    }
+
     private static IRegion elementRegion(final FlatXmlElement element)
     {
         return new Region(element.offset(), element.endOffset() - element.offset());

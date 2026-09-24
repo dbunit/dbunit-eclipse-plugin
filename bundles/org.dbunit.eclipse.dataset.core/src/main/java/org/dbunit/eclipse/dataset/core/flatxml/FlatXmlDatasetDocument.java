@@ -24,6 +24,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -56,6 +57,8 @@ import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.Region;
 import org.eclipse.jface.text.TextUtilities;
+import org.eclipse.text.edits.DeleteEdit;
+import org.eclipse.text.edits.InsertEdit;
 import org.eclipse.text.edits.MalformedTreeException;
 import org.eclipse.text.edits.MultiTextEdit;
 import org.eclipse.text.edits.ReplaceEdit;
@@ -107,6 +110,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     private DatasetModel model;
 
     private FlatXmlIndex index;
+
+    private FlatXmlTextLayout layout;
 
     private boolean stale;
 
@@ -261,26 +266,237 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     @Override
     public void insertRows(final String tableKey, final int rowIndex, final List<List<String>> rows)
     {
-        throw new UnsupportedOperationException("insertRows is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        final DatasetTable table = getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        if (table.getColumns().isEmpty())
+        {
+            throw new DatasetEditException(
+                    "Table '" + table.getName() + "' has no columns to insert a row into.");
+        }
+        final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
+        if (rowIndex < 0 || rowIndex > rowElements.size())
+        {
+            throw new DatasetEditException(
+                    "Row " + rowIndex + " is out of range for table '" + table.getName() + "'.");
+        }
+        for (final List<String> values : rows)
+        {
+            if (values.size() != table.getColumns().size())
+            {
+                throw new DatasetEditException("Each new row must have exactly "
+                        + table.getColumns().size() + " values for table '" + table.getName() + "'.");
+            }
+        }
+        if (rows.isEmpty())
+        {
+            return;
+        }
+
+        final CharsetEncoder encoder = currentEncoder();
+        final String delimiter = layout.getLineDelimiter();
+        final List<String> rowTexts = new ArrayList<>();
+        for (final List<String> values : rows)
+        {
+            rowTexts.add(buildRowText(table, normalizeAllNullRow(values), encoder));
+        }
+
+        final TextEdit edit;
+        if (rowIndex < rowElements.size())
+        {
+            final FlatXmlElement anchor = rowElements.get(rowIndex);
+            final String indent = layout.indentOf(anchor);
+            final StringBuilder insertText = new StringBuilder();
+            for (final String rowText : rowTexts)
+            {
+                insertText.append(rowText).append(delimiter).append(indent);
+            }
+            edit = new InsertEdit(anchor.offset(), insertText.toString());
+        }
+        else if (!rowElements.isEmpty())
+        {
+            final FlatXmlElement last = rowElements.get(rowElements.size() - 1);
+            final String indent = layout.indentOf(last);
+            final StringBuilder insertText = new StringBuilder();
+            for (final String rowText : rowTexts)
+            {
+                insertText.append(delimiter).append(indent).append(rowText);
+            }
+            edit = new InsertEdit(last.endOffset(), insertText.toString());
+        }
+        else if (!index.getMarkerElements(tableKey).isEmpty())
+        {
+            final FlatXmlElement marker = index.getMarkerElements(tableKey).get(0);
+            final String indent = layout.indentOf(marker);
+            final String joined = String.join(delimiter + indent, rowTexts);
+            edit = new ReplaceEdit(marker.offset(), marker.endOffset() - marker.offset(), joined);
+        }
+        else
+        {
+            final String indent = layout.childIndentation(index.getRoot(), index.getElements());
+            final String joined = String.join(delimiter + indent, rowTexts);
+            edit = insertAsLastChildOfRoot(joined);
+        }
+
+        apply(List.of(edit));
+        refreshInternal(ChangeOrigin.EDIT);
     }
 
     @Override
     public void duplicateRows(final String tableKey, final int[] rowIndexes)
     {
-        throw new UnsupportedOperationException("duplicateRows is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        final DatasetTable table = getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
+        final int[] sorted = rowIndexes.clone();
+        Arrays.sort(sorted);
+        for (final int rowIndex : sorted)
+        {
+            if (rowIndex < 0 || rowIndex >= rowElements.size())
+            {
+                throw new DatasetEditException(
+                        "Row " + rowIndex + " is out of range for table '" + table.getName() + "'.");
+            }
+        }
+        if (sorted.length == 0)
+        {
+            return;
+        }
+
+        final FlatXmlElement lastSelected = rowElements.get(sorted[sorted.length - 1]);
+        final String delimiter = layout.getLineDelimiter();
+        final String indent = layout.indentOf(lastSelected);
+        final String text = document.get();
+        final StringBuilder insertText = new StringBuilder();
+        for (final int rowIndex : sorted)
+        {
+            final FlatXmlElement element = rowElements.get(rowIndex);
+            insertText.append(delimiter).append(indent).append(text, element.offset(),
+                    element.endOffset());
+        }
+
+        apply(List.of(new InsertEdit(lastSelected.endOffset(), insertText.toString())));
+        refreshInternal(ChangeOrigin.EDIT);
     }
 
     @Override
     public void deleteRows(final String tableKey, final int[] rowIndexes)
     {
-        throw new UnsupportedOperationException("deleteRows is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        final DatasetTable table = getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
+        final int[] sorted = rowIndexes.clone();
+        Arrays.sort(sorted);
+        for (final int rowIndex : sorted)
+        {
+            if (rowIndex < 0 || rowIndex >= rowElements.size())
+            {
+                throw new DatasetEditException(
+                        "Row " + rowIndex + " is out of range for table '" + table.getName() + "'.");
+            }
+        }
+        if (sorted.length == 0)
+        {
+            return;
+        }
+
+        final boolean deletingAllRows = sorted.length == rowElements.size();
+        final boolean hasMarker = !index.getMarkerElements(tableKey).isEmpty();
+        final List<TextEdit> edits = new ArrayList<>();
+        for (int position = 0; position < sorted.length; position++)
+        {
+            final FlatXmlElement element = rowElements.get(sorted[position]);
+            if (position == 0 && deletingAllRows && !hasMarker)
+            {
+                edits.add(new ReplaceEdit(element.offset(), element.endOffset() - element.offset(),
+                        "<" + table.getName() + "/>"));
+            }
+            else
+            {
+                final IRegion region = layout.lineExtent(element);
+                edits.add(new DeleteEdit(region.getOffset(), region.getLength()));
+            }
+        }
+
+        apply(edits);
+        refreshInternal(ChangeOrigin.EDIT);
     }
 
     @Override
     public void moveRows(final String tableKey, final int firstRowIndex, final int rowCount,
             final int delta)
     {
-        throw new UnsupportedOperationException("moveRows is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        final DatasetTable table = getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
+        if (firstRowIndex < 0 || rowCount < 1 || firstRowIndex + rowCount > rowElements.size())
+        {
+            throw new DatasetEditException(
+                    "The row block is out of range for table '" + table.getName() + "'.");
+        }
+        if (delta != -1 && delta != 1)
+        {
+            throw new DatasetEditException("A row block can only move up or down by one position at a "
+                    + "time.");
+        }
+        if (delta < 0 && firstRowIndex == 0)
+        {
+            throw new DatasetEditException(
+                    "Cannot move past the first row of table '" + table.getName() + "'.");
+        }
+        if (delta > 0 && firstRowIndex + rowCount >= rowElements.size())
+        {
+            throw new DatasetEditException(
+                    "Cannot move past the last row of table '" + table.getName() + "'.");
+        }
+
+        final int startPosition = delta < 0 ? firstRowIndex - 1 : firstRowIndex;
+        final int positionCount = rowCount + 1;
+        final String text = document.get();
+        final List<FlatXmlElement> positions = new ArrayList<>();
+        final List<String> texts = new ArrayList<>();
+        for (int i = 0; i < positionCount; i++)
+        {
+            final FlatXmlElement element = rowElements.get(startPosition + i);
+            positions.add(element);
+            texts.add(text.substring(element.offset(), element.endOffset()));
+        }
+
+        final List<TextEdit> edits = new ArrayList<>();
+        for (int i = 0; i < positionCount; i++)
+        {
+            final int sourceIndex =
+                    delta > 0 ? Math.floorMod(i - 1, positionCount) : Math.floorMod(i + 1, positionCount);
+            final FlatXmlElement position = positions.get(i);
+            edits.add(new ReplaceEdit(position.offset(), position.endOffset() - position.offset(),
+                    texts.get(sourceIndex)));
+        }
+
+        apply(edits);
+        refreshInternal(ChangeOrigin.EDIT);
     }
 
     @Override
@@ -487,6 +703,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         final DatasetModel oldModel = model;
         model = new DatasetModel(built.model().getTables(), problems, built.model().isEditable());
         index = built.index();
+        layout = new FlatXmlTextLayout(text, TextUtilities.getDefaultLineDelimiter(document));
         stale = false;
         notifyListeners(new DatasetModelChangeEvent(oldModel, model, origin));
     }
@@ -662,6 +879,75 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         {
             return StandardCharsets.UTF_8.newEncoder();
         }
+    }
+
+    /**
+     * Returns the text of a new row element: the table's display name, one attribute per non-null value
+     * in table column order, and a self-closing end.
+     */
+    private static String buildRowText(final DatasetTable table, final List<String> values,
+            final CharsetEncoder encoder)
+    {
+        final StringBuilder text = new StringBuilder();
+        text.append('<').append(table.getName());
+        for (int columnIndex = 0; columnIndex < table.getColumns().size(); columnIndex++)
+        {
+            final String value = values.get(columnIndex);
+            if (value != null)
+            {
+                text.append(' ').append(table.getColumns().get(columnIndex).name()).append("=\"")
+                        .append(AttributeValueCodec.escape(value, encoder)).append('"');
+            }
+        }
+        text.append("/>");
+        return text.toString();
+    }
+
+    /**
+     * Returns values unchanged, unless every value is null, in which case the first column becomes the
+     * empty string instead: a row cannot have every value NULL, because an element without attributes is
+     * not a row.
+     */
+    private static List<String> normalizeAllNullRow(final List<String> values)
+    {
+        for (final String value : values)
+        {
+            if (value != null)
+            {
+                return values;
+            }
+        }
+        if (values.isEmpty())
+        {
+            return values;
+        }
+        final List<String> normalized = new ArrayList<>(values);
+        normalized.set(0, "");
+        return normalized;
+    }
+
+    /**
+     * Inserts text as the last child of the root: before the root's end tag (at the start of its line
+     * when only whitespace precedes it there), or, when the root is self-closing, by replacing it with an
+     * open and close tag around the new text.
+     */
+    private TextEdit insertAsLastChildOfRoot(final String childrenText)
+    {
+        final FlatXmlRoot root = index.getRoot();
+        final String delimiter = layout.getLineDelimiter();
+        final String childIndentation = layout.childIndentation(root, index.getElements());
+        if (root.selfClosing())
+        {
+            final String replacement = "<dataset>" + delimiter + childIndentation + childrenText
+                    + delimiter + "</dataset>";
+            return new ReplaceEdit(root.offset(), root.endOffset() - root.offset(), replacement);
+        }
+        if (layout.isAtStartOfItsLine(root.endTagOffset()))
+        {
+            final int lineStart = layout.startOfLineContaining(root.endTagOffset());
+            return new InsertEdit(lineStart, childIndentation + childrenText + delimiter);
+        }
+        return new InsertEdit(root.endTagOffset(), delimiter + childIndentation + childrenText + delimiter);
     }
 
     private record DtdResolution(DtdDeclarations declarations, DtdState state)

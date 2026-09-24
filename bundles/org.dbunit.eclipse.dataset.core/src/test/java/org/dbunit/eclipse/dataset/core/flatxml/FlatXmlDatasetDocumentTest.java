@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -593,6 +594,448 @@ class FlatXmlDatasetDocumentTest
 
         assertThat(document.get()).as("setCells must refresh and use fresh offsets after an external change.")
                 .isEqualTo("<dataset><AUDIT_LOG/><USERS ID=\"1\" NAME=\"Bob\"/></dataset>");
+    }
+
+    @Test
+    void testInsertRows_whenInsertingBeforeTheFirstRow_placesTheNewRowThereWithMatchingIndentation()
+            throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset>\n    <USERS ID=\"1\"/>\n    <USERS ID=\"2\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.insertRows("USERS", 0, List.of(List.of("0")));
+
+            assertThat(document.get())
+                    .as("The new row must be inserted before the first, indented to match.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"0\"/>\n    <USERS ID=\"1\"/>\n"
+                            + "    <USERS ID=\"2\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).as("Undo must restore the original text.").isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testInsertRows_whenInsertingInTheMiddle_placesTheNewRowBetweenItsNeighbors() throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset>\n    <USERS ID=\"1\"/>\n    <USERS ID=\"3\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.insertRows("USERS", 1, List.of(List.of("2")));
+
+            assertThat(document.get()).as("The new row must be inserted between its neighbors.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"1\"/>\n    <USERS ID=\"2\"/>\n"
+                            + "    <USERS ID=\"3\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testInsertRows_whenInsertingAfterTheLastRow_appendsTheNewRowWithMatchingIndentation()
+            throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset>\n    <USERS ID=\"1\"/>\n    <USERS ID=\"2\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.insertRows("USERS", 2, List.of(List.of("3")));
+
+            assertThat(document.get())
+                    .as("The new row must be appended after the last, indented to match.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"1\"/>\n    <USERS ID=\"2\"/>\n"
+                            + "    <USERS ID=\"3\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testInsertRows_whenIndentationUsesTabs_copiesTabIndentation() throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset>\n\t<USERS ID=\"1\"/>\n\t<USERS ID=\"2\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.insertRows("USERS", 1, List.of(List.of("3")));
+
+            assertThat(document.get()).as("The new row must copy the tab indentation.").isEqualTo(
+                    "<dataset>\n\t<USERS ID=\"1\"/>\n\t<USERS ID=\"3\"/>\n\t<USERS ID=\"2\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testInsertRows_whenTableHasOnlyAMarker_replacesTheMarker() throws Exception
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset>\n    <USERS/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.insertRows("USERS", 0, List.of(List.of("1"), List.of("2")));
+
+            assertThat(document.get()).as("The marker must be replaced by the new rows.").isEqualTo(
+                    "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                            + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset>\n"
+                            + "    <USERS ID=\"1\"/>\n    <USERS ID=\"2\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testInsertRows_whenTableIsDtdOnly_addsTheElementBeforeTheEndTag() throws Exception
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*, ORDERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED>\n<!ELEMENT ORDERS EMPTY>\n"
+                        + "<!ATTLIST ORDERS ID CDATA #REQUIRED>\n]>\n<dataset>\n"
+                        + "    <USERS ID=\"1\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.insertRows("ORDERS", 0, List.of(List.of("5")));
+
+            assertThat(document.get())
+                    .as("The new row must be added as the last child, before the end tag.")
+                    .isEqualTo("<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*, ORDERS*)>\n"
+                            + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #REQUIRED>\n"
+                            + "<!ELEMENT ORDERS EMPTY>\n<!ATTLIST ORDERS ID CDATA #REQUIRED>\n]>\n"
+                            + "<dataset>\n    <USERS ID=\"1\"/>\n    <ORDERS ID=\"5\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testInsertRows_whenAllValuesAreNull_getsTheEmptyStringInItsFirstColumn() throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.insertRows("USERS", 1, List.of(Arrays.asList(null, null)));
+
+            assertThat(document.get())
+                    .as("An all-null row must get the empty string in its first column.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n"
+                            + "    <USERS ID=\"\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testInsertRows_whenInsertingSeveralRows_keepsTheGivenOrder() throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.insertRows("USERS", 1,
+                    List.of(List.of("2"), List.of("3"), List.of("4")));
+
+            assertThat(document.get()).as("Several new rows must keep the given order.").isEqualTo(
+                    "<dataset>\n    <USERS ID=\"1\"/>\n    <USERS ID=\"2\"/>\n    <USERS ID=\"3\"/>\n"
+                            + "    <USERS ID=\"4\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testInsertRows_whenRowIndexIsOutOfRange_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.insertRows("USERS", 5, List.of(List.of("2"))))
+                .as("An out-of-range row index must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testDeleteRows_whenDeletingMiddleRowsAloneOnTheirLines_removesTheirWholeLines() throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\"/>\n"
+                + "    <USERS ID=\"2\"/>\n    <USERS ID=\"3\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.deleteRows("USERS", new int[] { 1 });
+
+            assertThat(document.get())
+                    .as("Deleting a middle row alone on its line must remove the whole line.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"1\"/>\n    <USERS ID=\"3\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testDeleteRows_whenDeletingInlineElements_removesOnlyTheElements() throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/><USERS ID=\"3\"/></dataset>");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.deleteRows("USERS", new int[] { 1 });
+
+            assertThat(document.get()).as("Deleting an inline element must remove only that element.")
+                    .isEqualTo("<dataset><USERS ID=\"1\"/><USERS ID=\"3\"/></dataset>");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testDeleteRows_whenDeletingAllRowsWithoutAMarker_leavesAMarkerElement() throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset>\n    <USERS ID=\"1\"/>\n    <USERS ID=\"2\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.deleteRows("USERS", new int[] { 0, 1 });
+
+            assertThat(document.get()).as("Deleting every row must leave a marker so the table stays.")
+                    .isEqualTo("<dataset>\n    <USERS/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testDeleteRows_whenDeletingAllRowsOfATableThatHasAMarker_keepsOnlyTheMarker() throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS/>\n    <USERS ID=\"1\"/>\n"
+                + "    <USERS ID=\"2\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.deleteRows("USERS", new int[] { 0, 1 });
+
+            assertThat(document.get())
+                    .as("With an existing marker, deleting all rows must not add another.")
+                    .isEqualTo("<dataset>\n    <USERS/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testDeleteRows_whenARowIndexIsOutOfRange_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.deleteRows("USERS", new int[] { 5 }))
+                .as("An out-of-range row index must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testDuplicateRows_whenDuplicatingSelectedRows_copiesTheirTextVerbatimAfterTheLastSelected()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\"/>\n"
+                + "    <USERS ID=\"2\"/>\n    <USERS ID=\"3\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.duplicateRows("USERS", new int[] { 0, 2 });
+
+            assertThat(document.get())
+                    .as("Duplicates must be inserted verbatim, in row order, after the last selected row.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"1\"/>\n    <USERS ID=\"2\"/>\n"
+                            + "    <USERS ID=\"3\"/>\n    <USERS ID=\"1\"/>\n"
+                            + "    <USERS ID=\"3\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testDuplicateRows_whenARowIndexIsOutOfRange_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.duplicateRows("USERS", new int[] { 5 }))
+                .as("An out-of-range row index must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testMoveRows_whenMovingDown_swapsWithTheNextRow() throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset>\n    <USERS ID=\"1\"/>\n    <USERS ID=\"2\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.moveRows("USERS", 0, 1, 1);
+
+            assertThat(document.get()).as("Moving down must swap the row with its next neighbor.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"2\"/>\n    <USERS ID=\"1\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testMoveRows_whenMovingUp_swapsWithThePreviousRow() throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset>\n    <USERS ID=\"1\"/>\n    <USERS ID=\"2\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.moveRows("USERS", 1, 1, -1);
+
+            assertThat(document.get()).as("Moving up must swap the row with its previous neighbor.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"2\"/>\n    <USERS ID=\"1\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testMoveRows_whenMovingABlockDown_movesTheWholeBlockPastItsNeighbor() throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\"/>\n"
+                + "    <USERS ID=\"2\"/>\n    <USERS ID=\"3\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.moveRows("USERS", 0, 2, 1);
+
+            assertThat(document.get())
+                    .as("Moving a block down must move it past its next neighbor as a unit.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"3\"/>\n    <USERS ID=\"1\"/>\n"
+                            + "    <USERS ID=\"2\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testMoveRows_whenTableSegmentsAreInterleavedWithAnotherTable_stillRotatesCorrectly()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\"/>\n"
+                + "    <ORDERS ID=\"10\"/>\n    <USERS ID=\"2\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.moveRows("USERS", 0, 1, 1);
+
+            assertThat(document.get())
+                    .as("Moving must rotate element texts in place, working across an interleaved "
+                            + "segment.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"2\"/>\n    <ORDERS ID=\"10\"/>\n"
+                            + "    <USERS ID=\"1\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testMoveRows_whenMovingPastTheFirstRow_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.moveRows("USERS", 0, 1, -1))
+                .as("Moving the first row up must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testMoveRows_whenMovingPastTheLastRow_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.moveRows("USERS", 1, 1, 1))
+                .as("Moving the last row down must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
     }
 
     private static void withUndoManager(final IDocument document, final UndoManagerConsumer consumer)
