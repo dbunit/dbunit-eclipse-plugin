@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.dbunit</groupId>
+  <artifactId>dbunit-eclipse-plugin</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <name>dbUnit Eclipse Plugin</name>
+  <url>https://dbunit.github.io/dbunit-eclipse-plugin/</url>
+  <inceptionYear>2026</inceptionYear>
+  <description>
+    Eclipse IDE plugin for dbUnit: edit dbUnit dataset files like a spreadsheet.
+  </description>
+
+  <licenses>
+    <license>
+      <name>GNU Lesser General Public License, Version 2.1</name>
+      <url>http://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <properties>
+    <!-- Maven configuration -->
+    <project.build.outputTimestamp>2026-09-23T00:00:00Z</project.build.outputTimestamp>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <project.scm.id>github</project.scm.id>
+
+    <!-- Tycho (requires Java 21+ and Maven 3.9.9+ to run the build) -->
+    <tychoVersion>5.0.4</tychoVersion>
+
+    <!-- Test-scope framework versions, resolved from Maven Central -->
+    <assertjCoreVersion>3.27.7</assertjCoreVersion>
+    <!-- AssertJ imports Byte Buddy packages; keep in step with assertj-core's own byte-buddy dependency. -->
+    <byteBuddyVersion>1.18.3</byteBuddyVersion>
+    <dbunitVersion>3.5.2</dbunitVersion>
+    <junitVersion>6.1.3</junitVersion>
+
+    <!-- Maven plugin versions -->
+    <asciidoctorMavenPluginVersion>3.2.0</asciidoctorMavenPluginVersion>
+    <changesPluginVersion>3.0.0-M3</changesPluginVersion>
+    <projectInfoReportsPluginVersion>3.9.0</projectInfoReportsPluginVersion>
+    <resourcesPluginVersion>3.5.0</resourcesPluginVersion>
+    <sitePluginVersion>3.22.0</sitePluginVersion>
+    <surefirePluginVersion>3.6.0</surefirePluginVersion>
+    <versionsMavenPluginVersion>2.22.0</versionsMavenPluginVersion>
+  </properties>
+
+  <scm>
+    <connection>scm:git:https://github.com/dbunit/dbunit-eclipse-plugin.git</connection>
+    <developerConnection>scm:git:https://github.com/dbunit/dbunit-eclipse-plugin.git</developerConnection>
+    <url>https://github.com/dbunit/dbunit-eclipse-plugin</url>
+    <tag>HEAD</tag>
+  </scm>
+  <issueManagement>
+    <system>github</system>
+    <url>https://github.com/dbunit/dbunit-eclipse-plugin/issues</url>
+  </issueManagement>
+  <ciManagement>
+    <system>GitHub Actions</system>
+    <url>https://github.com/dbunit/dbunit-eclipse-plugin/actions</url>
+  </ciManagement>
+
+  <developers>
+    <developer>
+      <name>Jeff Jensen</name>
+      <id>jeffjensen</id>
+      <email>jeffjensen@users.sourceforge.net</email>
+      <roles>
+        <role>Java Developer (active)</role>
+      </roles>
+    </developer>
+  </developers>
+
+  <modules>
+    <module>releng/org.dbunit.eclipse.target</module>
+  </modules>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.assertj</groupId>
+        <artifactId>assertj-core</artifactId>
+        <version>${assertjCoreVersion}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>net.bytebuddy</groupId>
+        <artifactId>byte-buddy</artifactId>
+        <version>${byteBuddyVersion}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.dbunit</groupId>
+        <artifactId>dbunit</artifactId>
+        <version>${dbunitVersion}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter</artifactId>
+        <version>${junitVersion}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.junit.platform</groupId>
+        <artifactId>junit-platform-launcher</artifactId>
+        <version>${junitVersion}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.junit.platform</groupId>
+        <artifactId>junit-platform-suite-engine</artifactId>
+        <version>${junitVersion}</version>
+        <scope>test</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <defaultGoal>verify</defaultGoal>
+
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>${resourcesPluginVersion}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-site-plugin</artifactId>
+          <version>${sitePluginVersion}</version>
+          <configuration>
+            <relativizeSiteLinks>false</relativizeSiteLinks>
+          </configuration>
+          <dependencies>
+            <dependency>
+              <groupId>org.asciidoctor</groupId>
+              <artifactId>asciidoctor-parser-doxia-module</artifactId>
+              <version>${asciidoctorMavenPluginVersion}</version>
+            </dependency>
+          </dependencies>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${surefirePluginVersion}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>versions-maven-plugin</artifactId>
+          <version>${versionsMavenPluginVersion}</version>
+          <configuration>
+            <!-- The root directory, not ${project.basedir}, which is each module's own directory. -->
+            <rulesUri>file:///${maven.multiModuleProjectDirectory}/versions-maven-plugin-rules.xml</rulesUri>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.eclipse.tycho</groupId>
+          <artifactId>tycho-gpg-plugin</artifactId>
+          <version>${tychoVersion}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.eclipse.tycho</groupId>
+          <artifactId>tycho-p2-plugin</artifactId>
+          <version>${tychoVersion}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.eclipse.tycho</groupId>
+          <artifactId>tycho-p2-repository-plugin</artifactId>
+          <version>${tychoVersion}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.eclipse.tycho</groupId>
+          <artifactId>tycho-surefire-plugin</artifactId>
+          <version>${tychoVersion}</version>
+          <configuration>
+            <failIfNoTests>true</failIfNoTests>
+            <trimStackTrace>false</trimStackTrace>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.eclipse.tycho</groupId>
+          <artifactId>tycho-versions-plugin</artifactId>
+          <version>${tychoVersion}</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
+    <plugins>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>tycho-maven-plugin</artifactId>
+        <version>${tychoVersion}</version>
+        <extensions>true</extensions>
+      </plugin>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>target-platform-configuration</artifactId>
+        <version>${tychoVersion}</version>
+        <configuration>
+          <!-- Resolve only from the repositories the target file names. p2 repositories may
+               reference newer Eclipse releases, which would silently raise the baseline. -->
+          <referencedRepositoryMode>ignore</referencedRepositoryMode>
+          <!-- The baseline target platform: the oldest Eclipse release the plugin supports.
+               The latest-target profile below switches to the newest release instead. -->
+          <target>
+            <artifact>
+              <groupId>org.dbunit</groupId>
+              <artifactId>org.dbunit.eclipse.target</artifactId>
+              <version>${project.version}</version>
+            </artifact>
+          </target>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>tycho-packaging-plugin</artifactId>
+        <version>${tychoVersion}</version>
+        <configuration>
+          <format>'v'yyyyMMdd-HHmm</format>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>tycho-source-plugin</artifactId>
+        <version>${tychoVersion}</version>
+        <executions>
+          <execution>
+            <id>plugin-source</id>
+            <goals>
+              <goal>plugin-source</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <reporting>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-changes-plugin</artifactId>
+        <version>${changesPluginVersion}</version>
+        <configuration>
+          <issueLinkTemplatePerSystem>
+            <github><![CDATA[https://github.com/dbunit/dbunit-eclipse-plugin/issues/%ISSUE%]]></github>
+          </issueLinkTemplatePerSystem>
+        </configuration>
+        <reportSets>
+          <reportSet>
+            <reports>
+              <report>changes</report>
+            </reports>
+          </reportSet>
+        </reportSets>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-project-info-reports-plugin</artifactId>
+        <version>${projectInfoReportsPluginVersion}</version>
+        <reportSets>
+          <reportSet>
+            <reports>
+              <report>index</report>
+              <report>licenses</report>
+              <report>scm</report>
+              <report>issue-management</report>
+              <report>ci-management</report>
+              <report>team</report>
+            </reports>
+          </reportSet>
+        </reportSets>
+      </plugin>
+    </plugins>
+  </reporting>
+
+  <profiles>
+    <!-- Build and test against the newest Eclipse release to catch forward-compatibility breaks. -->
+    <profile>
+      <id>latest-target</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.eclipse.tycho</groupId>
+            <artifactId>target-platform-configuration</artifactId>
+            <version>${tychoVersion}</version>
+            <configuration>
+              <target>
+                <artifact>
+                  <groupId>org.dbunit</groupId>
+                  <artifactId>org.dbunit.eclipse.target</artifactId>
+                  <version>${project.version}</version>
+                  <classifier>latest</classifier>
+                </artifact>
+              </target>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

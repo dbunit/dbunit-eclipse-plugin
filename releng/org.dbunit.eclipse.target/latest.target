@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<?pde version="3.8"?>
+<!--
+  Latest target platform: the NEWEST Eclipse release, used by the latest-target Maven profile
+  (./mvnw clean verify -Platest-target) and the CI compatibility job.
+  Use this target in the IDE (Window > Preferences > Plug-in Development > Target Platform) when running
+  the plugin in a runtime workbench, since it matches the Eclipse most developers run.
+
+  NatTable and Eclipse Collections have the same fixed versions as in the baseline target (see there).
+  Newer release repositories no longer contain Eclipse Collections, so the 2024-06 release repository is
+  listed only to supply that pinned bundle; the platform still resolves to the newest release.
+-->
+<target name="dbUnit Eclipse Plugin - Latest Eclipse release" sequenceNumber="2">
+  <locations>
+    <location followRepositoryReferences="false" includeAllPlatforms="false" includeConfigurePhase="false" includeMode="planner" includeSource="true" type="InstallableUnit">
+      <repository location="https://download.eclipse.org/releases/latest/"/>
+      <repository location="https://download.eclipse.org/nattable/releases/2.7.0/repository/"/>
+      <repository location="https://download.eclipse.org/releases/2024-06/"/>
+      <unit id="org.eclipse.platform.feature.group" version="0.0.0"/>
+      <unit id="org.eclipse.nebula.widgets.nattable.core.feature.feature.group" version="2.7.0.202608310502"/>
+      <unit id="org.eclipse.collections" version="11.1.0.v20220705-1455"/>
+    </location>
+  </locations>
+  <targetJRE path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-21"/>
+</target>
