@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feature
+      id="org.dbunit.eclipse.feature"
+      label="%featureName"
+      version="1.0.0.qualifier"
+      provider-name="%providerName">
+
+   <description url="%descriptionURL">
+      %description
+   </description>
+
+   <copyright url="%copyrightURL">
+      %copyright
+   </copyright>
+
+   <license url="%licenseURL">
+      %license
+   </license>
+
+   <!-- Third-party runtime dependencies are included, so the update site is self-contained
+        (installable without other update sites, e.g. behind a proxy). NatTable and Eclipse
+        Collections are not singletons; other versions a user already has can coexist. -->
+   <includes
+         id="org.eclipse.nebula.widgets.nattable.core.feature"
+         version="0.0.0"/>
+
+   <plugin
+         id="org.dbunit.eclipse.dataset.core"
+         version="0.0.0"/>
+
+   <plugin
+         id="org.dbunit.eclipse.dataset.ui"
+         version="0.0.0"/>
+
+   <!-- Required by NatTable; the Eclipse release repository ships it as this single bundle. -->
+   <plugin
+         id="org.eclipse.collections"
+         version="0.0.0"/>
+
+</feature>
