@@ -20,6 +20,8 @@
  */
 package org.dbunit.eclipse.dataset.core.flatxml;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -98,6 +100,18 @@ final class FlatXmlIndex
     List<FlatXmlElement> getMarkerElements(final String tableKey)
     {
         return markerElements.getOrDefault(tableKey, List.of());
+    }
+
+    /**
+     * Returns a table's row and marker elements together, in document order, so callers can find the
+     * table's first element regardless of whether it is a row or a marker.
+     */
+    List<FlatXmlElement> getAllElementsInOrder(final String tableKey)
+    {
+        final List<FlatXmlElement> combined = new ArrayList<>(getRowElements(tableKey));
+        combined.addAll(getMarkerElements(tableKey));
+        combined.sort(Comparator.comparingInt(FlatXmlElement::offset));
+        return List.copyOf(combined);
     }
 
     private static Map<String, List<FlatXmlElement>> copyOfElementLists(

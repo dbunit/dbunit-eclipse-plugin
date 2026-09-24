@@ -31,6 +31,61 @@ public final class Messages extends NLS
 {
     private static final String BUNDLE_NAME = "org.dbunit.eclipse.dataset.core.messages";
 
+    /**
+     * A column has a value in a later row but is missing from the table's first element.
+     */
+    public static String Validator_columnNotInFirstRow;
+
+    /**
+     * The table's first element has no attributes, but a later row has values.
+     */
+    public static String Validator_firstElementWithoutAttributes;
+
+    /**
+     * A table is spelled with more than one letter case.
+     */
+    public static String Validator_tableNameCaseVariants;
+
+    /**
+     * A column of a table is spelled with more than one letter case.
+     */
+    public static String Validator_columnNameCaseVariants;
+
+    /**
+     * An element has two attributes whose names differ only in case.
+     */
+    public static String Validator_duplicateColumnInRow;
+
+    /**
+     * A table that has elements is not declared in the DTD.
+     */
+    public static String Validator_tableNotDeclaredInDtd;
+
+    /**
+     * A row has an attribute the DTD does not declare for the table, without column sensing.
+     */
+    public static String Validator_columnNotDeclaredInDtdWarning;
+
+    /**
+     * A row has an attribute the DTD does not declare for the table, with column sensing.
+     */
+    public static String Validator_columnNotDeclaredInDtdError;
+
+    /**
+     * The DTD content model names an element the DTD does not declare.
+     */
+    public static String Validator_dtdTableWithoutDeclaration;
+
+    /**
+     * The DOCTYPE's external DTD could not be read.
+     */
+    public static String Validator_dtdNotLoaded;
+
+    /**
+     * An empty element in a table that has rows, other than the table's first element.
+     */
+    public static String Validator_redundantEmptyElement;
+
     static
     {
         NLS.initializeMessages(BUNDLE_NAME, Messages.class);
