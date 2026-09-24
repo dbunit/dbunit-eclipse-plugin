@@ -1,0 +1,87 @@
+name: Build any branch
+
+on:
+  # Adds the manual "Run workflow" button
+  workflow_dispatch:
+  push:
+    # Branches only: the release workflow builds and tests a release tag.
+    branches: ['**']
+    paths-ignore:
+      - 'src/site/**'
+      - '**/*.adoc'
+      - '**/*.md'
+  pull_request:
+    paths-ignore:
+      - 'src/site/**'
+      - '**/*.adoc'
+      - '**/*.md'
+
+permissions: {}
+
+env:
+  MAVEN_COMMAND: ./mvnw
+  MAVEN_CLI_COMMON: "-e -B"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Builds, runs all tests (UI tests under Xvfb), and assembles the p2 repository against both the
+  # baseline (oldest supported) and the latest Eclipse release target platforms.
+  build:
+    name: Build and test (${{ matrix.target.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [
+          {name: 'baseline Eclipse release', profile: '', file: 'org.dbunit.eclipse.target.target'},
+          {name: 'latest Eclipse release', profile: '-Platest-target', file: 'latest.target'}
+        ]
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+    - uses: ./.github/actions/jdk-setup
+      with:
+        # Each target platform has its own cache, so both legs keep their Eclipse platform cached.
+        cache-dependency-path: |
+          **/pom.xml
+          .mvn/wrapper/maven-wrapper.properties
+          releng/org.dbunit.eclipse.target/${{ matrix.target.file }}
+    - name: Install Xvfb for the UI tests
+      run: |
+        if ! command -v xvfb-run > /dev/null; then
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+        fi
+    # The build time is the version qualifier, instead of project.build.outputTimestamp, which changes
+    # only per release: each build of main is then newer than the last, so Eclipse offers the nightly
+    # update site (this p2 repository) as an update. Release builds keep the reproducible qualifier.
+    - name: Build, test, and assemble the p2 repository
+      run: xvfb-run -a ${{ env.MAVEN_COMMAND }} ${{ env.MAVEN_CLI_COMMON }} clean verify ${{ matrix.target.profile }} -DforceContextQualifier="v$(date -u +%Y%m%d-%H%M)"
+    # Also the nightly update site: "Publish site and update site to GitHub Pages" publishes the
+    # artifact of the latest successful build of main, so main's artifacts are kept longer.
+    - name: Upload the p2 repository for manual testing and the nightly update site
+      if: ${{ matrix.target.profile == '' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: p2-repository
+        path: releng/org.dbunit.eclipse.repository/target/repository/
+        retention-days: ${{ github.ref == 'refs/heads/main' && 90 || 11 }}
+    - name: Upload test results after a failure
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: test-results-${{ strategy.job-index }}
+        # The UI tests report to failsafe-reports; the workbench log is under the hidden .metadata.
+        path: |
+          **/target/surefire-reports/
+          **/target/failsafe-reports/
+          **/target/work/data/.metadata/.log
+        include-hidden-files: true
+        retention-days: 11

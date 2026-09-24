@@ -1,0 +1,43 @@
+name: "JDK Setup"
+description: "Set up Temurin JDK 21 with Maven dependency caching, optionally importing the GPG release key"
+inputs:
+  gpg-private-key:
+    description: "GPG private key to import for PGP-signing the p2 repository."
+    required: false
+    default: ''
+  gpg-passphrase:
+    description: "Environment variable name holding the GPG passphrase."
+    required: false
+    default: ''
+  cache-dependency-path:
+    description: >-
+      Files whose content keys the Maven cache. Include the target platform file the job resolves:
+      jobs that resolve different platforms need different keys, or one job's cache replaces the other's.
+      The default fits a build against the baseline target platform.
+    required: false
+    default: |
+      **/pom.xml
+      .mvn/wrapper/maven-wrapper.properties
+      releng/org.dbunit.eclipse.target/org.dbunit.eclipse.target.target
+runs:
+  using: "composite"
+  steps:
+    - name: Set up JDK 21
+      if: ${{ inputs.gpg-private-key == '' }}
+      uses: actions/setup-java@v6
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: maven
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+
+    - name: Set up JDK 21 with the GPG release key
+      if: ${{ inputs.gpg-private-key != '' }}
+      uses: actions/setup-java@v6
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: maven
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+        gpg-private-key: ${{ inputs.gpg-private-key }}
+        gpg-passphrase: ${{ inputs.gpg-passphrase }}
