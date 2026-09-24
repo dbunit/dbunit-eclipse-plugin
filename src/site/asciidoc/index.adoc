@@ -1,0 +1,23 @@
+= dbUnit Eclipse Plugin
+
+Edit link:https://dbunit.github.io/dbunit-extension/[dbUnit] dataset files like a spreadsheet, inside the Eclipse IDE.
+
+The *dbUnit Dataset Editor* opens dbUnit flat XML dataset files as a grid:
+each table is a sheet, each row element is a spreadsheet row, and each attribute is a cell.
+Edits are written back into the XML text with minimal changes,
+so comments, formatting, and the DOCTYPE are preserved and version-control diffs stay small.
+A *Source* tab shows the XML text; both views always show the same content.
+
+Version 1 supports the dbUnit flat XML format (`FlatXmlDataSet`).
+Other dbUnit dataset formats are planned for later versions.
+
+== Installation
+
+Add the update site `https://dbunit.github.io/dbunit-eclipse-plugin/updates/`
+with *Help > Install New Software...*.
+See link:install.html[Installation] for requirements and step-by-step instructions.
+
+== Getting Help
+
+Report bugs and request enhancements at
+https://github.com/dbunit/dbunit-eclipse-plugin/issues.

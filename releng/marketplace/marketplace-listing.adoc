@@ -1,0 +1,98 @@
+= Eclipse Marketplace Listing
+
+Content for the dbUnit Eclipse Plugin listing on https://marketplace.eclipse.org.
+Create the listing once (Add Content > Solution, signed in with the Eclipse Foundation account that
+maintains dbUnit), then update it after every release (see `src/site/asciidoc/releasing.adoc`).
+
+== Listing Fields
+
+[cols="1,3", options="header"]
+|===
+|Field |Value
+
+|Name
+|dbUnit Dataset Editor
+
+|Short description (teaser)
+|Edit dbUnit dataset files like a spreadsheet: tables as sheets, rows as rows, attributes as cells.
+
+|Organization / Company
+|dbUnit
+
+|Website
+|https://dbunit.github.io/dbunit-eclipse-plugin/
+
+|Support URL
+|https://github.com/dbunit/dbunit-eclipse-plugin/issues
+
+|License
+|LGPL (GNU Lesser General Public License 2.1)
+
+|Categories
+|Database; Testing; Editor
+
+|Tags
+|dbunit, dataset, xml, spreadsheet, grid, table editor, testing, database, flat xml
+
+|Status
+|Production/Stable (Beta until 1.0.0 is released)
+
+|Solution version
+|The released version, for example 1.0.0
+
+|Eclipse versions
+|2024-06 and every later release (update when the baseline target platform changes)
+
+|Platforms
+|Windows, Mac, Linux/GTK
+
+|Update site URL
+|https://dbunit.github.io/dbunit-eclipse-plugin/updates/
+
+|Features
+|`org.dbunit.eclipse.feature` (required); `org.dbunit.eclipse.feature.source` (optional)
+
+|Minimum Java version
+|17
+|===
+
+== Description
+
+----
+The dbUnit Dataset Editor opens dbUnit dataset files as a spreadsheet inside Eclipse.
+
+* Each table is a sheet; each row element is a row; each attribute is a cell.
+* Type to edit, Enter and Tab to move, copy and paste rectangular ranges to and from Excel
+  or LibreOffice.
+* Insert, duplicate, move, and delete rows; add, rename, and delete columns and tables.
+* NULL (absent attribute) and empty string are shown and edited distinctly.
+* Understands dbUnit semantics: column sensing, empty tables, repeated table segments,
+  and DTD-declared columns and tables.
+* Warns about dataset content that dbUnit would silently ignore.
+* Edits are written back into the XML with minimal text changes: comments, formatting,
+  attribute order, and the DOCTYPE are preserved, so version-control diffs stay small.
+* Full undo and redo; a Source tab shows the XML, always in sync with the grid.
+
+Version 1 supports the dbUnit flat XML format (FlatXmlDataSet).
+Other dbUnit dataset formats are planned for later versions.
+
+dbUnit is a JUnit extension for database-driven projects that puts the database into a known
+state between test runs: https://github.com/dbunit/dbunit-extension
+----
+
+== Screenshots
+
+Capture from a running workbench (light and dark themes) and upload with the listing:
+
+. A multi-table dataset on the Tables page, one cell being edited.
+. The Source page showing the same dataset.
+. A validation warning shown on a column header.
+
+== Install Button
+
+After the listing is approved, the marketplace assigns a node id.
+Add the drag-to-install button to `README.adoc` and the site's index page:
+
+----
+image:https://marketplace.eclipse.org/sites/all/themes/solstice/public/images/marketplace/btn-install.svg["Drag to your running Eclipse workspace to install dbUnit Dataset Editor", link="https://marketplace.eclipse.org/marketplace-client-intro?mpc_install=NODE_ID"]
+----

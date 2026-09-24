@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<site xmlns="http://maven.apache.org/SITE/2.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/SITE/2.0.0 https://maven.apache.org/xsd/site-2.0.0.xsd">
+
+  <bannerLeft name="" href="https://dbunit.github.io">
+    <image src="images/dbunit-logo.jpg"/>
+  </bannerLeft>
+
+  <bannerRight name="" href="https://github.com/dbunit/dbunit-eclipse-plugin">
+    <image src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" width="48px" height="48px"/>
+  </bannerRight>
+
+  <!-- position can be right, left, navigation-top, navigation-bottom, bottom -->
+  <publishDate format="dd-MMM-yyyy" position="navigation-bottom" />
+
+  <skin>
+    <groupId>org.apache.maven.skins</groupId>
+    <artifactId>maven-fluido-skin</artifactId>
+    <version>2.1.0</version>
+  </skin>
+
+  <body>
+    <head>
+      <![CDATA[
+      <link rel="icon" href="images/favicon.ico" type="image/x-icon" />
+      <link rel="shortcut icon" href="images/favicon.ico" type="image/x-icon" />
+      ]]>
+    </head>
+
+    <links>
+      <item name="main" href="https://github.com/dbunit/dbunit-eclipse-plugin/actions/workflows/build-any-branch.yml?query=branch%3Amain">
+        <image src="https://github.com/dbunit/dbunit-eclipse-plugin/actions/workflows/build-any-branch.yml/badge.svg?branch=main"/>
+      </item>
+    </links>
+
+    <breadcrumbs>
+      <item name="DBUnit" href="https://github.com/dbunit"/>
+    </breadcrumbs>
+
+    <menu name="Overview">
+      <item name="Introduction" href="index.html" />
+      <item name="Installation" href="install.html" />
+      <item name="Changes" href="changes.html" />
+    </menu>
+    <menu name="Developing the dbUnit Eclipse Plugin">
+      <item name="Developers Guide" href="devguide.html"/>
+      <item name="Building" href="building.html"/>
+      <item name="Releasing" href="releasing.html"/>
+    </menu>
+    <menu ref="reports"/>
+  </body>
+</site>

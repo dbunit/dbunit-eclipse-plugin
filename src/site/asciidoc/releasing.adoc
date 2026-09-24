@@ -1,0 +1,145 @@
+= Releasing
+
+== Overview
+
+A release publishes the plugin's p2 repository (Eclipse update site) in two places:
+
+* A GitHub Release for the tag `eclipse-plugin-VERSION`, with the zipped p2 repository
+  `dbunit-eclipse-plugin-VERSION-p2-repository.zip` and its `.sha256` checksum attached.
+  The attached zip is the durable copy of each released update site.
+* The GitHub Pages site https://dbunit.github.io/dbunit-eclipse-plugin/, where
+  `updates/` is a p2 composite repository of every release and `updates/releases/VERSION/`
+  holds each release's repository.
+
+Pushing the tag starts the *Release to Eclipse update site* workflow (`.github/workflows/release.yml`):
+it verifies the tag matches the POM version, builds and tests the tagged commit, PGP-signs the p2
+repository, and creates the GitHub Release.
+When it succeeds, the *Publish site and update site to GitHub Pages* workflow
+(`.github/workflows/publish-site.yml`) rebuilds the whole Pages site from the documentation and the
+assets of all GitHub Releases, and deploys it.
+
+A release is built from its `X.Y.Z-SNAPSHOT` version, so the tag `eclipse-plugin-1.0.0` names the
+POM version `1.0.0-SNAPSHOT`.
+The build replaces the `qualifier` of the bundle and feature versions (`1.0.0.qualifier`) with the
+root POM's `project.build.outputTimestamp`, which the release prep sets to the release time.
+The released versions (`1.0.0.v20261015-1430`) are then newer than every earlier CI and nightly build
+of 1.0.0, which use their build time as the qualifier, so Eclipse offers the release as an update;
+and building the tag again reproduces the same versions.
+A plain `1.0.0` version would give bundles without a qualifier, which Eclipse orders below every
+`1.0.0.v...` build, so the release workflow refuses it.
+
+The plugin is not deployed to Maven Central; Eclipse users install from the update site.
+
+== One-Time Repository Setup
+
+Do these once, before the first release.
+
+. *GitHub Pages*: Settings > Pages > Build and deployment > Source: *GitHub Actions*.
+
+. *Release environment*: Settings > Environments > New environment `release`.
+Optionally add required reviewers so each release waits for approval.
+
+. *Signing secrets* (on the `release` environment, or as organization secrets shared with the other dbUnit repositories):
+.. `GPG_PRIVATE_KEY`: the ASCII-armored private key of the dbUnit release signing key
+(the same key that signs dbUnit's Maven Central artifacts).
+.. `GPG_PASSPHRASE`: its passphrase.
+
+. *Trust information for users*: add the release key's fingerprint to the site's
+link:install.html[Installation] page, so users can compare it with the key Eclipse asks them to trust.
+
+. *Dry run of the signing* on a workstation that has the release key in its GnuPG keyring:
++
+----
+mvnw clean verify -Psign
+----
++
+Then confirm `releng/org.dbunit.eclipse.repository/target/repository/artifacts.xml.xz` contains
+`pgp.signatures` properties (decompress it with `xz -dk`) and the repository properties contain `pgp.publicKeys`.
+
+== Release Steps
+
+. Confirm the latest *Build any branch* run on `main` is green for both target platforms.
+
+. Update the root `pom.xml` `<project.build.outputTimestamp>` property to the current UTC time,
+for example `2026-10-15T14:30:00Z`.
+It becomes the qualifier of every bundle and feature version (`1.0.0.v20261015-1430`).
+Keep the `1.0.0-SNAPSHOT` version (see <<Overview>>).
+
+. Update `src/changes/changes.xml`: confirm the release version and set the release date to today.
+
+. Build and test locally:
++
+----
+mvnw clean verify
+----
+
+. Commit the files "Prep release 1.0.0".
+
+. Tag the commit; prefix the release number with "eclipse-plugin-":
++
+----
+git tag eclipse-plugin-1.0.0
+----
+
+. Push the commit and the tag:
++
+----
+git push origin main eclipse-plugin-1.0.0
+----
+
+. Watch https://github.com/dbunit/dbunit-eclipse-plugin/actions/workflows/release.yml.
+The GitHub Release is created last, so a failed build or test has published nothing.
+If it fails:
+.. Fix the cause on `main` in a new commit.
+The version is still `1.0.0-SNAPSHOT`, so the fixed commit is released under the same tag.
+.. Move the tag to the fixed commit, locally and on GitHub, and push both:
++
+----
+git tag -d eclipse-plugin-1.0.0
+git push origin :refs/tags/eclipse-plugin-1.0.0
+git tag eclipse-plugin-1.0.0
+git push origin main eclipse-plugin-1.0.0
+----
+
+. After the release workflow succeeds, prepare the next development version:
+.. Set the next SNAPSHOT version:
++
+----
+mvnw -B org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion=1.0.1-SNAPSHOT
+----
+.. Add a new `<release version="1.0.1" date="TBD" description="">` element to `src/changes/changes.xml`.
+.. Commit the files "Prepare next development iteration" and push them:
++
+----
+git push origin main
+----
+
+. Watch https://github.com/dbunit/dbunit-eclipse-plugin/actions/workflows/publish-site.yml,
+then confirm https://dbunit.github.io/dbunit-eclipse-plugin/updates/compositeContent.xml lists
+`releases/1.0.0`.
+
+. Verify the published update site in a fresh Eclipse installation of the oldest supported release
+(2024-06) and of the latest release:
+.. Install from `https://dbunit.github.io/dbunit-eclipse-plugin/updates/`.
+.. Confirm Eclipse asks to trust the dbUnit PGP key, and not about unsigned content.
+.. Open a flat XML dataset and edit a cell.
+
+. Update the Eclipse Marketplace listing: see `releng/marketplace/marketplace-listing.adoc`.
+
+. Post an Announcement Discussion https://github.com/dbunit/dbunit-eclipse-plugin/discussions/categories/announcements.
+Consider using the changes plugin's announcement-generate goal:
++
+----
+mvnw -N changes:announcement-generate -Dchanges.version=1.0.0
+----
++
+Review and adjust the text as desired before using.
+
+== Raising the Minimum Supported Eclipse Release
+
+The baseline target platform (`releng/org.dbunit.eclipse.target/org.dbunit.eclipse.target.target`)
+defines the oldest Eclipse release the plugin compiles and tests against.
+When raising it, update together, in one commit:
+the baseline target file, the `Require-Bundle` lower bounds in the `MANIFEST.MF` files,
+`features/org.dbunit.eclipse.feature/feature.properties`, the site's Installation page,
+`README.adoc`, and the Eclipse Marketplace listing.

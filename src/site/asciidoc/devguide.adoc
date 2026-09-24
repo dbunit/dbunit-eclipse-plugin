@@ -1,0 +1,28 @@
+= Developers Guide
+
+Contributions to the dbUnit Eclipse Plugin are welcome.
+This page describes how the repository is organized and how to work on the plugin in Eclipse.
+link:building.html[Building] covers the command-line build, and link:releasing.html[Releasing] the release procedure.
+
+== Repository Layout
+
+[cols="2,5", options="header"]
+|===
+|Path |Contents
+
+|`bundles/org.dbunit.eclipse.dataset.core` |UI-independent dataset model, flat XML parser, and edit engine
+|`bundles/org.dbunit.eclipse.dataset.ui` |The editor: registration, NatTable grid, commands, preferences
+|`features/org.dbunit.eclipse.feature` |The installable feature (and its generated source feature)
+|`releng/org.dbunit.eclipse.target` |Target platform definitions: baseline (the oldest supported Eclipse release) and latest
+|`releng/org.dbunit.eclipse.repository` |The p2 repository (update site) definition, `category.xml`
+|`releng/marketplace` |Eclipse Marketplace listing content
+|`src/site` |This documentation site, published to GitHub Pages
+|`.github/workflows` |CI build, release, and site/update-site publishing
+|===
+
+== Developing in Eclipse
+
+. Install the *Eclipse IDE for RCP and RAP Developers* package, or add *Eclipse Plug-in Development Environment* and m2e to any package.
+. *File > Import... > Maven > Existing Maven Projects*, then select the repository's root directory.
+. Open `releng/org.dbunit.eclipse.target/latest.target` and click *Set as Active Target Platform*.
+. Run or debug with *Run As > Eclipse Application* from the `org.dbunit.eclipse.dataset.ui` project.

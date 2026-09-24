@@ -1,0 +1,40 @@
+= Building
+
+== Requirements
+
+Building requires JDK 21 or newer, which Tycho needs to run the build; the plugin itself targets Java 17.
+
+The repository includes the https://maven.apache.org/wrapper/[Maven Wrapper] (`mvnw`, or `mvnw.cmd` on Windows),
+which downloads and runs the Maven version the build needs.
+Use it for all build operations instead of a separately installed `mvn`.
+
+== Building and Testing
+
+[source,shell]
+----
+# Build, run all tests (UI tests open a workbench window), and assemble the update site
+./mvnw clean verify
+
+# Same, against the newest Eclipse release instead of the oldest supported one
+./mvnw clean verify -Platest-target
+
+# Build and test only the core bundle (plain JUnit tests, no workbench): the fast inner loop
+./mvnw clean verify -pl releng/org.dbunit.eclipse.target,bundles/org.dbunit.eclipse.dataset.core
+
+# Skip tests
+./mvnw clean verify -DskipTests
+----
+
+The core-only build lists the target platform module in `-pl` because `-am` does not find it.
+On Linux without a display, run the build under Xvfb: `xvfb-run -a ./mvnw clean verify`.
+
+== Installing a Local Build
+
+The update site is assembled in `releng/org.dbunit.eclipse.repository/target/repository/`
+and zipped as `releng/org.dbunit.eclipse.repository/target/org.dbunit.eclipse.repository-VERSION.zip`.
+Install either into Eclipse with *Help > Install New Software... > Add... > Local...* (or *Archive...*).
+
+== Generating the Site
+
+`./mvnw -N site` generates this documentation site; open `target/site/index.html` to review it.
+CI publishes the site to GitHub Pages from the `main` branch.

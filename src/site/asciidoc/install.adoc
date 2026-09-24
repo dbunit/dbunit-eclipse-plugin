@@ -1,0 +1,38 @@
+= Installation
+
+== Requirements
+
+* Eclipse IDE 2024-06 or newer, any package (the plugin needs only the Eclipse Platform).
+* Java 17 or newer to run Eclipse (every Eclipse release from 2024-06 on already requires it).
+
+== Install from the update site
+
+. In Eclipse, open *Help > Install New Software...*.
+. In *Work with*, enter `https://dbunit.github.io/dbunit-eclipse-plugin/updates/` and press Enter.
+. Select *dbUnit Dataset Editor* in the *dbUnit* category, then *Next*.
+. Review the items to install, then *Next*.
+. Accept the license (GNU LGPL 2.1), then *Finish*.
+. When Eclipse asks whether to trust the signed content, check the *dbUnit* PGP key, then *Trust Selected*.
+. Restart Eclipse when prompted.
+
+The update site is self-contained: the feature includes the Eclipse Nebula NatTable grid widget
+and Eclipse Collections, so no other update site is needed.
+They install alongside any other versions of them already present.
+
+=== Offline installation
+
+Every release attaches its update site as a zip file,
+`dbunit-eclipse-plugin-VERSION-p2-repository.zip`, to its
+https://github.com/dbunit/dbunit-eclipse-plugin/releases[GitHub Release].
+Download it, then in *Help > Install New Software...* choose *Add... > Archive...* and select the zip.
+
+=== Nightly builds
+
+The latest build of the `main` branch that passed all tests is at
+`https://dbunit.github.io/dbunit-eclipse-plugin/updates/nightly/`.
+Nightly builds are for testing unreleased fixes; they are not signed.
+
+== Updating and uninstalling
+
+* Update: *Help > Check for Updates*.
+* Uninstall: *Help > About Eclipse IDE > Installation Details*, select *dbUnit Dataset Editor*, *Uninstall...*.
