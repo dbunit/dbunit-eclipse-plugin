@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <extension point="org.eclipse.core.contenttype.contentTypes">
+      <content-type
+            id="org.dbunit.eclipse.dataset.flatxml"
+            base-type="org.eclipse.core.runtime.xml"
+            name="%contentType.flatXml.name"
+            file-extensions="xml"
+            priority="normal">
+         <describer class="org.dbunit.eclipse.dataset.core.flatxml.FlatXmlContentDescriber"/>
+      </content-type>
+   </extension>
+</plugin>
