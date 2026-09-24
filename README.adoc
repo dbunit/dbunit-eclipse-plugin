@@ -1,0 +1,41 @@
+= dbUnit Eclipse Plugin
+
+image:https://github.com/dbunit/dbunit-eclipse-plugin/actions/workflows/build-any-branch.yml/badge.svg?branch=main["Build Status", link="https://github.com/dbunit/dbunit-eclipse-plugin/actions/workflows/build-any-branch.yml?query=branch%3Amain"]
+image:https://img.shields.io/badge/License-LGPL%20v2.1-blue.svg["License: LGPL v2.1", link="https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html"]
+image:https://img.shields.io/badge/Eclipse-2024--06%2B-2C2255["Eclipse 2024-06+"]
+
+Edit link:https://dbunit.github.io/dbunit-extension/[dbUnit] dataset files like a spreadsheet, inside the Eclipse IDE.
+
+The *dbUnit Dataset Editor* opens dbUnit flat XML dataset files as a grid:
+each table is a sheet, each row element is a spreadsheet row, and each attribute is a cell.
+Edits are written back into the XML text with minimal changes,
+so comments, formatting, and the DOCTYPE are preserved and diffs stay small.
+
+Version 1 supports the dbUnit flat XML format; other dataset formats are planned.
+
+== Documentation
+
+The full documentation site, including installation instructions and the developer guide, is at
+https://dbunit.github.io/dbunit-eclipse-plugin/.
+To build the plugin or work on it in Eclipse, start with the
+link:https://dbunit.github.io/dbunit-eclipse-plugin/devguide.html[Developers Guide].
+
+== Installing
+
+The plugin is published as an Eclipse update site at `https://dbunit.github.io/dbunit-eclipse-plugin/updates/`.
+See the link:https://dbunit.github.io/dbunit-eclipse-plugin/install.html[Installation] page for step-by-step instructions,
+offline installation, and nightly builds.
+
+== Getting Help
+
+If you found a bug or have an enhancement request, create an issue at
+https://github.com/dbunit/dbunit-eclipse-plugin/issues.
+
+If you have questions, ideas, or want to get involved, start a discussion at
+https://github.com/dbunit/dbunit-eclipse-plugin/discussions.
+
+We are a small team working on improvements and issues along the way and need more help — we will gladly help you as needed with your ideas and contributions and look to add you as a committer when ready.
+
+== Thank You for Supporting Us
+image:https://img.shields.io/badge/Reviewed_by-Sourcery_AI-A11ED3?style=flat["Reviewed by Sourcery", link="https://sourcery.ai"]
+image:https://img.shields.io/badge/Reviewed_by-CodeRabbit-FF5A00?style=flat["Reviewed by CodeRabbit", link="https://coderabbit.ai"]
