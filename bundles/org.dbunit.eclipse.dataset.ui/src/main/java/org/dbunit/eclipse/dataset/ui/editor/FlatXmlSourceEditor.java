@@ -18,40 +18,25 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  */
-package org.dbunit.eclipse.dataset.ui;
+package org.dbunit.eclipse.dataset.ui.editor;
 
-import org.eclipse.osgi.util.NLS;
+import org.eclipse.ui.editors.text.TextEditor;
 
 /**
- * Externalized, user-visible strings of the dataset editor UI bundle.
+ * The Source page of {@link FlatXmlDatasetEditor}: a plain text editor over the same document, with the
+ * one addition the multi-page editor needs to detect changes made outside the workbench.
  *
  * @since 1.0.0
  */
-public final class Messages extends NLS
+public class FlatXmlSourceEditor extends TextEditor
 {
-    private static final String BUNDLE_NAME = "org.dbunit.eclipse.dataset.ui.messages";
-
     /**
-     * The title of the dialog shown when the Source page fails to open.
+     * Checks whether the editor input changed or was deleted outside the workbench, prompting to reload
+     * or save as needed. The multi-page editor calls this on the nested editor's behalf, because a nested
+     * editor never receives part activation notifications directly.
      */
-    public static String Editor_openErrorTitle;
-
-    /**
-     * The title of the Tables page.
-     */
-    public static String Editor_tablesPageText;
-
-    /**
-     * The title of the Source page.
-     */
-    public static String Editor_sourcePageText;
-
-    static
+    public void checkExternalModification()
     {
-        NLS.initializeMessages(BUNDLE_NAME, Messages.class);
-    }
-
-    private Messages()
-    {
+        safelySanityCheckState(getEditorInput());
     }
 }

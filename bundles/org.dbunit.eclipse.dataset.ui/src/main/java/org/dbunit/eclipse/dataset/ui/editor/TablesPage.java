@@ -18,40 +18,38 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  */
-package org.dbunit.eclipse.dataset.ui;
+package org.dbunit.eclipse.dataset.ui.editor;
 
-import org.eclipse.osgi.util.NLS;
+import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
+import org.eclipse.swt.SWT;
+import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Control;
 
 /**
- * Externalized, user-visible strings of the dataset editor UI bundle.
+ * The Tables page of {@link FlatXmlDatasetEditor}.
  *
  * @since 1.0.0
  */
-public final class Messages extends NLS
+final class TablesPage
 {
-    private static final String BUNDLE_NAME = "org.dbunit.eclipse.dataset.ui.messages";
+    private final Composite control;
 
-    /**
-     * The title of the dialog shown when the Source page fails to open.
-     */
-    public static String Editor_openErrorTitle;
-
-    /**
-     * The title of the Tables page.
-     */
-    public static String Editor_tablesPageText;
-
-    /**
-     * The title of the Source page.
-     */
-    public static String Editor_sourcePageText;
-
-    static
+    TablesPage(final Composite parent, final FlatXmlDatasetEditor editor,
+            final FlatXmlDatasetDocument datasetDocument)
     {
-        NLS.initializeMessages(BUNDLE_NAME, Messages.class);
+        control = new Composite(parent, SWT.NONE);
     }
 
-    private Messages()
+    Control getControl()
+    {
+        return control;
+    }
+
+    void activate()
+    {
+    }
+
+    void deactivate()
     {
     }
 }

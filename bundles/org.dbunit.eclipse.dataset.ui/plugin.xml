@@ -4,4 +4,16 @@
    <extension point="org.eclipse.core.runtime.preferences">
       <initializer class="org.dbunit.eclipse.dataset.ui.preferences.DatasetPreferenceInitializer"/>
    </extension>
+
+   <extension point="org.eclipse.ui.editors">
+      <editor
+            id="org.dbunit.eclipse.dataset.ui.flatXmlDatasetEditor"
+            name="%editor.name"
+            icon="icons/obj16/dataset.png"
+            class="org.dbunit.eclipse.dataset.ui.editor.FlatXmlDatasetEditor"
+            contributorClass="org.dbunit.eclipse.dataset.ui.editor.DatasetEditorContributor"
+            default="true">
+         <contentTypeBinding contentTypeId="org.dbunit.eclipse.dataset.flatxml"/>
+      </editor>
+   </extension>
 </plugin>
