@@ -170,6 +170,18 @@ final class TablesPage implements DatasetGridContext
         return control;
     }
 
+    /**
+     * Commits the value of an open cell editor, so that it is in the document before the document is saved
+     * or the Source page shows it.
+     */
+    void commitActiveCellEditor()
+    {
+        for (final DatasetGrid grid : gridsByKey.values())
+        {
+            grid.commitActiveCellEditor();
+        }
+    }
+
     void activate()
     {
         active = true;
