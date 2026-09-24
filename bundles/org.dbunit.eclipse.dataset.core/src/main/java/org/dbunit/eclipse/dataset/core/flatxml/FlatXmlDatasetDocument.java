@@ -43,6 +43,7 @@ import org.dbunit.eclipse.dataset.core.edit.DatasetModelChangeEvent;
 import org.dbunit.eclipse.dataset.core.edit.DatasetModelListener;
 import org.dbunit.eclipse.dataset.core.edit.TextDatasetDocument;
 import org.dbunit.eclipse.dataset.core.model.CellAddress;
+import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetRow;
@@ -502,19 +503,200 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     @Override
     public void addColumn(final String tableKey, final String columnName)
     {
-        throw new UnsupportedOperationException("addColumn is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        final DatasetTable table = getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        if (!XmlNames.isValidName(columnName))
+        {
+            throw new DatasetEditException("'" + columnName + "' is not a valid column name.");
+        }
+        if (table.getColumnIndex(columnName) >= 0)
+        {
+            throw new DatasetEditException(
+                    "Table '" + table.getName() + "' already has a column named '" + columnName + "'.");
+        }
+
+        pendingColumns.computeIfAbsent(tableKey, unused -> new ArrayList<>()).add(columnName);
+        stale = true;
+        refreshInternal(ChangeOrigin.EDIT);
     }
 
     @Override
     public void renameColumn(final String tableKey, final String columnName, final String newColumnName)
     {
-        throw new UnsupportedOperationException("renameColumn is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        final DatasetTable table = getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        final int columnIndex = table.getColumnIndex(columnName);
+        if (columnIndex < 0)
+        {
+            throw new DatasetEditException(
+                    "Column '" + columnName + "' does not exist in table '" + table.getName() + "'.");
+        }
+        if (!XmlNames.isValidName(newColumnName))
+        {
+            throw new DatasetEditException("'" + newColumnName + "' is not a valid column name.");
+        }
+        final int conflictingIndex = table.getColumnIndex(newColumnName);
+        if (conflictingIndex >= 0 && conflictingIndex != columnIndex)
+        {
+            throw new DatasetEditException("Table '" + table.getName() + "' already has a column named '"
+                    + newColumnName + "'.");
+        }
+
+        final DatasetColumn column = table.getColumns().get(columnIndex);
+        final String key = columnName.toUpperCase(Locale.ENGLISH);
+        final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
+        for (final FlatXmlElement element : rowElements)
+        {
+            int matches = 0;
+            for (final FlatXmlAttribute attribute : element.attributes())
+            {
+                if (attribute.name().toUpperCase(Locale.ENGLISH).equals(key))
+                {
+                    matches++;
+                }
+            }
+            if (matches > 1)
+            {
+                throw new DatasetEditException("Cannot rename column '" + column.name() + "' in table '"
+                        + table.getName() + "' because a row has two attributes for it that differ only "
+                        + "in letter case; remove one of them on the Source page first.");
+            }
+        }
+
+        if (column.pending())
+        {
+            final List<String> pending = pendingColumns.get(tableKey);
+            if (pending != null)
+            {
+                for (int i = 0; i < pending.size(); i++)
+                {
+                    if (pending.get(i).equalsIgnoreCase(columnName))
+                    {
+                        pending.set(i, newColumnName);
+                        break;
+                    }
+                }
+            }
+            stale = true;
+            refreshInternal(ChangeOrigin.EDIT);
+            return;
+        }
+
+        final Map<String, String> renames = new LinkedHashMap<>();
+        renames.put(key, newColumnName);
+        final CharsetEncoder encoder = currentEncoder();
+        final String text = document.get();
+        final List<TextEdit> edits = new ArrayList<>();
+        for (final FlatXmlElement element : rowElements)
+        {
+            final String rewritten =
+                    StartTagRewriter.rewrite(text, element, table.getColumns(), Map.of(), renames, encoder);
+            if (rewritten != null)
+            {
+                edits.add(new ReplaceEdit(element.nameEndOffset(),
+                        element.attributesEndOffset() - element.nameEndOffset(), rewritten));
+            }
+        }
+        if (edits.isEmpty())
+        {
+            return;
+        }
+        apply(edits);
+        refreshInternal(ChangeOrigin.EDIT);
     }
 
     @Override
     public void deleteColumn(final String tableKey, final String columnName)
     {
-        throw new UnsupportedOperationException("deleteColumn is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        final DatasetTable table = getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        final int columnIndex = table.getColumnIndex(columnName);
+        if (columnIndex < 0)
+        {
+            throw new DatasetEditException(
+                    "Column '" + columnName + "' does not exist in table '" + table.getName() + "'.");
+        }
+        final DatasetColumn column = table.getColumns().get(columnIndex);
+
+        if (column.pending())
+        {
+            final List<String> pending = pendingColumns.get(tableKey);
+            if (pending != null)
+            {
+                pending.removeIf(name -> name.equalsIgnoreCase(columnName));
+                if (pending.isEmpty())
+                {
+                    pendingColumns.remove(tableKey);
+                }
+            }
+            stale = true;
+            refreshInternal(ChangeOrigin.EDIT);
+            return;
+        }
+
+        final String key = columnName.toUpperCase(Locale.ENGLISH);
+        final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
+        for (final FlatXmlElement element : rowElements)
+        {
+            boolean hasColumn = false;
+            int remaining = 0;
+            for (final FlatXmlAttribute attribute : element.attributes())
+            {
+                if (attribute.name().toUpperCase(Locale.ENGLISH).equals(key))
+                {
+                    hasColumn = true;
+                }
+                else
+                {
+                    remaining++;
+                }
+            }
+            if (hasColumn && remaining == 0)
+            {
+                throw new DatasetEditException("Cannot delete column '" + column.name() + "' from table '"
+                        + table.getName() + "' because it would leave a row with no values.");
+            }
+        }
+
+        final Map<String, String> changes = new LinkedHashMap<>();
+        changes.put(key, null);
+        final CharsetEncoder encoder = currentEncoder();
+        final String text = document.get();
+        final List<TextEdit> edits = new ArrayList<>();
+        for (final FlatXmlElement element : rowElements)
+        {
+            final String rewritten =
+                    StartTagRewriter.rewrite(text, element, table.getColumns(), changes, Map.of(), encoder);
+            if (rewritten != null)
+            {
+                edits.add(new ReplaceEdit(element.nameEndOffset(),
+                        element.attributesEndOffset() - element.nameEndOffset(), rewritten));
+            }
+        }
+        if (edits.isEmpty())
+        {
+            return;
+        }
+        apply(edits);
+        refreshInternal(ChangeOrigin.EDIT);
     }
 
     @Override
@@ -698,6 +880,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         final DtdResolution dtdResolution = resolveDtd(parse.doctype());
         final FlatXmlModelBuilder.Result built = FlatXmlModelBuilder.build(text, parse,
                 dtdResolution.declarations(), options, pendingColumns);
+        prunePendingColumns(built.model().getTables());
         final List<DatasetProblem> problems = FlatXmlValidator.validate(parse, built.index(),
                 built.model().getTables(), dtdResolution.state(), dtdResolution.declarations(), options);
         final DatasetModel oldModel = model;
@@ -706,6 +889,33 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         layout = new FlatXmlTextLayout(text, TextUtilities.getDefaultLineDelimiter(document));
         stale = false;
         notifyListeners(new DatasetModelChangeEvent(oldModel, model, origin));
+    }
+
+    /**
+     * Drops each table's pending columns that a fresh build now finds backed by data or the DTD, so a
+     * pending column never lingers once it is no longer needed.
+     */
+    private void prunePendingColumns(final List<DatasetTable> tables)
+    {
+        for (final DatasetTable table : tables)
+        {
+            final List<String> pending = pendingColumns.get(table.getKey());
+            if (pending == null)
+            {
+                continue;
+            }
+            pending.removeIf(name -> isBackedByRealColumn(table, name));
+            if (pending.isEmpty())
+            {
+                pendingColumns.remove(table.getKey());
+            }
+        }
+    }
+
+    private static boolean isBackedByRealColumn(final DatasetTable table, final String name)
+    {
+        final int columnIndex = table.getColumnIndex(name);
+        return columnIndex >= 0 && !table.getColumns().get(columnIndex).pending();
     }
 
     private DtdResolution resolveDtd(final FlatXmlDoctype doctype)
