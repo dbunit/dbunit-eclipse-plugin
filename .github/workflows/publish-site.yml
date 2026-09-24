@@ -1,0 +1,103 @@
+name: Publish site and update site to GitHub Pages
+
+# Publishes https://dbunit.github.io/dbunit-eclipse-plugin/ :
+#   /                  the Maven site (documentation)
+#   /updates/          the Eclipse update site users add: a p2 composite of every released version
+#   /updates/releases/ one p2 repository per release, unpacked from each GitHub Release asset
+#   /updates/nightly/  the latest successful build of main (not part of the composite)
+# Each deployment replaces the whole Pages site, so every run reassembles all released versions.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/site/**'
+      - '**/*.adoc'
+      - '**/*.md'
+  # zizmor: ignore[dangerous-triggers]
+  # workflow_run is used safely: the build-site job requires a successful triggering
+  # run from this repository (head_repository guard) and checks out the default
+  # branch - never a triggering ref, so never fork-controlled code. A "Build any
+  # branch" run must also be for main; a release run is tag-triggered, so it is
+  # matched by workflow name instead of by branch.
+  workflow_run:
+    workflows: ["Build any branch", "Release to Eclipse update site"]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  MAVEN_COMMAND: ./mvnw
+  MAVEN_CLI_COMMON: "-e -B"
+
+jobs:
+  build-site:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       (github.event.workflow_run.name == 'Release to Eclipse update site' ||
+        github.event.workflow_run.head_branch == 'main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read # downloading the p2 repository artifact of a "Build any branch" run
+      contents: read # actions/checkout, and reading the GitHub Release assets
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+    - uses: ./.github/actions/jdk-setup
+      with:
+        # The site needs only the Maven site plugins, not an Eclipse target platform, so its small
+        # cache is kept apart from the build caches.
+        cache-dependency-path: |
+          pom.xml
+          .mvn/wrapper/maven-wrapper.properties
+    - name: Generate the Maven site
+      run: ${{ env.MAVEN_COMMAND }} ${{ env.MAVEN_CLI_COMMON }} -N site -Dproject.build.outputTimestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    # The nightly build is the p2 repository of the latest successful "Build any branch" run on main,
+    # which built and tested exactly that commit, so a commit whose tests have not passed is never
+    # published. Only push and manual runs qualify: they run this repository's own main branch.
+    - name: Download the nightly p2 repository from the latest successful build of main
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPOSITORY: ${{ github.repository }}
+      run: |
+        run_id="$(gh run list --repo "$REPOSITORY" --workflow build-any-branch.yml --branch main \
+            --status success --limit 20 --json databaseId,event \
+            --jq '[.[] | select(.event == "push" or .event == "workflow_dispatch")][0].databaseId // empty')"
+        if [ -z "$run_id" ]; then
+          echo "::warning::main has no successful build yet; publishing without a nightly build."
+          exit 0
+        fi
+        gh run download "$run_id" --repo "$REPOSITORY" --name p2-repository --dir target/nightly-repository
+    - name: Assemble the update site from all GitHub Releases and the nightly build
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPOSITORY: ${{ github.repository }}
+      run: .github/scripts/assemble-update-site.sh target/site target/nightly-repository
+    - name: Upload Pages artifact
+      uses: actions/upload-pages-artifact@v5
+      with:
+        path: target/site/
+
+  deploy:
+    needs: build-site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v5
