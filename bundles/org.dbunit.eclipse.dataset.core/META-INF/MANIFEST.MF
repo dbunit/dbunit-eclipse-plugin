@@ -14,4 +14,6 @@ Require-Bundle: org.eclipse.equinox.common;bundle-version="3.19.0",
 Import-Package: org.eclipse.osgi.util;version="1.1.0"
 Export-Package: org.dbunit.eclipse.dataset.core,
  org.dbunit.eclipse.dataset.core.model,
- org.dbunit.eclipse.dataset.core.dtd;x-friends:="org.dbunit.eclipse.dataset.ui"
+ org.dbunit.eclipse.dataset.core.dtd;x-friends:="org.dbunit.eclipse.dataset.ui",
+ org.dbunit.eclipse.dataset.core.edit;x-friends:="org.dbunit.eclipse.dataset.ui",
+ org.dbunit.eclipse.dataset.core.flatxml;x-friends:="org.dbunit.eclipse.dataset.ui"
