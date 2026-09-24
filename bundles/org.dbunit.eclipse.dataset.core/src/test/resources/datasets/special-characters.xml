@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dataset>
+    <SPECIAL_CHARACTERS ENTITIES="&lt;&gt;&amp;&quot;&apos;" CHAR_REFS="&#9;&#10;&#13;" LITERAL_TAB="a	b" LITERAL_NEWLINE="a
+b" DOUBLE_QUOTED="double" SINGLE_QUOTED='single' NON_ASCII="Café Möbelträger" EMOJI="😀"/>
+</dataset>
