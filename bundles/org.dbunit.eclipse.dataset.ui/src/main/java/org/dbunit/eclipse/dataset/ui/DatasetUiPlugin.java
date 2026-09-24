@@ -20,6 +20,7 @@
  */
 package org.dbunit.eclipse.dataset.ui;
 
+import org.eclipse.jface.resource.ImageRegistry;
 import org.eclipse.ui.plugin.AbstractUIPlugin;
 import org.osgi.framework.BundleContext;
 
@@ -71,5 +72,11 @@ public final class DatasetUiPlugin extends AbstractUIPlugin
     {
         plugin = null;
         super.stop(context);
+    }
+
+    @Override
+    protected void initializeImageRegistry(final ImageRegistry registry)
+    {
+        DatasetImages.initializeImageRegistry(registry);
     }
 }
