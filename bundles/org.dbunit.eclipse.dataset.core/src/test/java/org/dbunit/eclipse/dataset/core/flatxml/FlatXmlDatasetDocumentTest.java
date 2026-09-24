@@ -31,13 +31,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.dbunit.eclipse.dataset.core.TestDatasets;
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
+import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.edit.ChangeOrigin;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.model.CellAddress;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.jface.text.Document;
+import org.eclipse.jface.text.DocumentRewriteSessionEvent;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.IDocumentExtension4;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.text.undo.DocumentUndoManagerRegistry;
 import org.eclipse.text.undo.IDocumentUndoManager;
@@ -274,6 +277,341 @@ class FlatXmlDatasetDocumentTest
         assertThat(located).as("For a NULL cell, locate must return the element name.").isEqualTo("USERS");
     }
 
+    @Test
+    void testSetCells_whenChangingDoubleAndSingleQuotedValues_keepsEachAttributesQuoteStyle()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME='Bob'/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.setCells("USERS",
+                List.of(new CellChange(0, "ID", "2"), new CellChange(0, "NAME", "Rob")));
+
+        assertThat(document.get()).as("Each attribute must keep its own quote style.")
+                .isEqualTo("<dataset><USERS ID=\"2\" NAME='Rob'/></dataset>");
+    }
+
+    @Test
+    void testSetCells_whenSettingNull_removesTheAttributeAndItsLeadingWhitespace()
+    {
+        final IDocument document =
+                new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\" EMAIL=\"a@x.org\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", null)));
+
+        assertThat(document.get()).as("Setting NULL must remove the attribute and its leading whitespace.")
+                .isEqualTo("<dataset><USERS ID=\"1\" EMAIL=\"a@x.org\"/></dataset>");
+    }
+
+    @Test
+    void testSetCells_whenSettingAValueOnANullCellThatIsTheFirstColumn_insertsItFirst()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\" EMAIL=\"a@x.org\"/>"
+                + "<USERS NAME=\"Bob\" EMAIL=\"b@x.org\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.setCells("USERS", List.of(new CellChange(1, "ID", "2")));
+
+        assertThat(document.get()).as("A value for the first column must be inserted first.")
+                .isEqualTo("<dataset><USERS ID=\"1\" NAME=\"Alice\" EMAIL=\"a@x.org\"/>"
+                        + "<USERS ID=\"2\" NAME=\"Bob\" EMAIL=\"b@x.org\"/></dataset>");
+    }
+
+    @Test
+    void testSetCells_whenSettingAValueOnANullCellThatIsAMiddleColumn_insertsItInTheMiddle()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\" EMAIL=\"a@x.org\"/>"
+                + "<USERS ID=\"2\" EMAIL=\"b@x.org\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.setCells("USERS", List.of(new CellChange(1, "NAME", "Bob")));
+
+        assertThat(document.get()).as("A value for a middle column must be inserted between its neighbors.")
+                .isEqualTo("<dataset><USERS ID=\"1\" NAME=\"Alice\" EMAIL=\"a@x.org\"/>"
+                        + "<USERS ID=\"2\" NAME=\"Bob\" EMAIL=\"b@x.org\"/></dataset>");
+    }
+
+    @Test
+    void testSetCells_whenSettingAValueOnANullCellThatIsTheLastColumn_insertsItLast()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\" EMAIL=\"a@x.org\"/>"
+                + "<USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.setCells("USERS", List.of(new CellChange(1, "EMAIL", "b@x.org")));
+
+        assertThat(document.get()).as("A value for the last column must be inserted last.")
+                .isEqualTo("<dataset><USERS ID=\"1\" NAME=\"Alice\" EMAIL=\"a@x.org\"/>"
+                        + "<USERS ID=\"2\" NAME=\"Bob\" EMAIL=\"b@x.org\"/></dataset>");
+    }
+
+    @Test
+    void testSetCells_whenChangingSeveralCellsOfOneElement_isOneUndoStep() throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\" EMAIL=\"a@x.org\"/></dataset>");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.setCells("USERS",
+                    List.of(new CellChange(0, "NAME", "Bob"), new CellChange(0, "EMAIL", "b@x.org")));
+
+            assertThat(document.get()).as("Both changes to the one element must be applied.")
+                    .isEqualTo("<dataset><USERS ID=\"1\" NAME=\"Bob\" EMAIL=\"b@x.org\"/></dataset>");
+            undoManager.undo();
+            assertThat(document.get()).as("One undo must revert both changes to the one element.")
+                    .isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testSetCells_whenChangingSeveralRows_isOneUndoStepThatRestoresTheOriginalTextExactly()
+            throws Exception
+    {
+        final IDocument document = new Document(
+                "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.setCells("USERS",
+                    List.of(new CellChange(0, "NAME", "Alicia"), new CellChange(1, "NAME", "Robert")));
+
+            assertThat(document.get()).as("Both rows must be changed.").isEqualTo(
+                    "<dataset><USERS ID=\"1\" NAME=\"Alicia\"/><USERS ID=\"2\" NAME=\"Robert\"/></dataset>");
+            undoManager.undo();
+            assertThat(document.get()).as("One undo must restore the original text exactly.")
+                    .isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testBatch_whenHoldingTwoSetCellsCalls_isOneUndoStep() throws Exception
+    {
+        final IDocument document = new Document(
+                "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.batch(() ->
+            {
+                datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Alicia")));
+                datasetDocument.setCells("USERS", List.of(new CellChange(1, "NAME", "Robert")));
+            });
+
+            assertThat(document.get()).as("Both calls inside the batch must be applied.").isEqualTo(
+                    "<dataset><USERS ID=\"1\" NAME=\"Alicia\"/><USERS ID=\"2\" NAME=\"Robert\"/></dataset>");
+            undoManager.undo();
+            assertThat(document.get()).as("One undo must revert the whole batch.").isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testBatch_whenHoldingASetCellsOfMoreThan50RowsAndAnotherSetCells_isStillOneUndoStep()
+            throws Exception
+    {
+        final StringBuilder xml = new StringBuilder("<dataset>");
+        for (int i = 0; i < 60; i++)
+        {
+            xml.append("<USERS ID=\"").append(i).append("\" NAME=\"Name").append(i).append("\"/>");
+        }
+        xml.append("<ORDERS ID=\"1\" TOTAL=\"5\"/></dataset>");
+        final IDocument document = new Document(xml.toString());
+        final String original = document.get();
+
+        withUndoManager(document, undoManager ->
+        {
+            // TextViewer begins a compound change when a rewrite session starts and ends it when the
+            // session stops; simulate that here to prove a session started inside the batch would not
+            // split the batch into more than one undo step (none must start, since apply() only starts a
+            // session when it is the outermost change).
+            ((IDocumentExtension4) document).addDocumentRewriteSessionListener(event ->
+            {
+                if (event.getChangeType() == DocumentRewriteSessionEvent.SESSION_START)
+                {
+                    undoManager.beginCompoundChange();
+                }
+                else if (event.getChangeType() == DocumentRewriteSessionEvent.SESSION_STOP)
+                {
+                    undoManager.endCompoundChange();
+                }
+            });
+
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            final List<CellChange> manyChanges = new ArrayList<>();
+            for (int i = 0; i < 60; i++)
+            {
+                manyChanges.add(new CellChange(i, "NAME", "Changed" + i));
+            }
+
+            datasetDocument.batch(() ->
+            {
+                datasetDocument.setCells("USERS", manyChanges);
+                datasetDocument.setCells("ORDERS", List.of(new CellChange(0, "TOTAL", "9")));
+            });
+
+            assertThat(document.get()).as("All changes must be applied.").contains("Changed59")
+                    .contains("TOTAL=\"9\"");
+            undoManager.undo();
+            assertThat(document.get()).as(
+                    "Even past the 50-edit threshold, a batch's changes must still be one undo step.")
+                    .isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testSetCells_whenValueContainsSpecialCharacters_escapesThem()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NOTE=\"x\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.setCells("USERS", List.of(new CellChange(0, "NOTE", "a<b & \"c\" \t\nd")));
+
+        assertThat(document.get()).as("Every special character must be escaped correctly.").isEqualTo(
+                "<dataset><USERS ID=\"1\" NOTE=\"a&lt;b &amp; &quot;c&quot; &#09;&#xA;d\"/></dataset>");
+    }
+
+    @Test
+    void testSetCells_whenValueIsUnchanged_doesNothingAndAddsNoUndoStep() throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Alice")));
+
+            assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+            assertThat(undoManager.undoable()).as("No undo step must be added for a no-op change.")
+                    .isFalse();
+        });
+    }
+
+    @Test
+    void testSetCells_whenStartTagSpansSeveralLines_keepsItsLayout()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"\n       NAME=\"Alice\"\n"
+                + "       EMAIL=\"a@x.org\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Bob")));
+
+        assertThat(document.get())
+                .as("Only the changed attribute's value changes; the multi-line layout stays.")
+                .isEqualTo("<dataset><USERS ID=\"1\"\n       NAME=\"Bob\"\n"
+                        + "       EMAIL=\"a@x.org\"/></dataset>");
+    }
+
+    @Test
+    void testSetCells_whenDocumentHasCommentsAndCrLfLineEnds_preservesThem()
+    {
+        final IDocument document = new Document("<dataset>\r\n    <!-- a comment -->\r\n"
+                + "    <USERS ID=\"1\" NAME=\"Alice\"/>\r\n</dataset>\r\n");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Bob")));
+
+        assertThat(document.get()).as("Comments and CR LF line ends elsewhere must be untouched.")
+                .isEqualTo("<dataset>\r\n    <!-- a comment -->\r\n"
+                        + "    <USERS ID=\"1\" NAME=\"Bob\"/>\r\n</dataset>\r\n");
+    }
+
+    @Test
+    void testSetCells_whenCharsetCannotEncodeTheValue_usesACharacterReference()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NOTE=\"x\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, DtdSource.NONE,
+                FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.ISO_8859_1);
+        datasetDocument.refresh();
+
+        datasetDocument.setCells("USERS", List.of(new CellChange(0, "NOTE", "€")));
+
+        assertThat(document.get()).as(
+                "A character the document's encoder cannot represent must become a numeric character "
+                        + "reference.")
+                .isEqualTo("<dataset><USERS ID=\"1\" NOTE=\"&#x20AC;\"/></dataset>");
+    }
+
+    @Test
+    void testSetCells_whenChangeWouldEmptyARow_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.setCells("USERS", List.of(new CellChange(0, "ID", null))))
+                .as("Emptying a row's only value must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testSetCells_whenValueContainsANonXmlCharacter_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(
+                () -> datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "\u0001"))))
+                .as("A value with a character outside the XML 1.0 Char range must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testSetCells_afterADirectDocumentReplaceElsewhere_usesFreshOffsets() throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        document.replace(document.get().indexOf("<USERS"), 0, "<AUDIT_LOG/>");
+
+        datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Bob")));
+
+        assertThat(document.get()).as("setCells must refresh and use fresh offsets after an external change.")
+                .isEqualTo("<dataset><AUDIT_LOG/><USERS ID=\"1\" NAME=\"Bob\"/></dataset>");
+    }
+
+    private static void withUndoManager(final IDocument document, final UndoManagerConsumer consumer)
+            throws Exception
+    {
+        DocumentUndoManagerRegistry.connect(document);
+        final IDocumentUndoManager undoManager = DocumentUndoManagerRegistry.getDocumentUndoManager(document);
+        undoManager.connect(FlatXmlDatasetDocumentTest.class);
+        try
+        {
+            consumer.accept(undoManager);
+        }
+        finally
+        {
+            undoManager.disconnect(FlatXmlDatasetDocumentTest.class);
+            DocumentUndoManagerRegistry.disconnect(document);
+        }
+    }
+
     private static FlatXmlDatasetDocument create(final IDocument document)
     {
         return new FlatXmlDatasetDocument(document, DtdSource.NONE, FlatXmlOptions.DBUNIT_DEFAULTS,
@@ -299,5 +637,11 @@ class FlatXmlDatasetDocumentTest
         {
             return Optional.of(text);
         }
+    }
+
+    @FunctionalInterface
+    private interface UndoManagerConsumer
+    {
+        void accept(IDocumentUndoManager undoManager) throws Exception;
     }
 }
