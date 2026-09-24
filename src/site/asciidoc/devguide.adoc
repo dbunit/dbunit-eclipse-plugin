@@ -15,6 +15,7 @@ link:building.html[Building] covers the command-line build, and link:releasing.h
 |`features/org.dbunit.eclipse.feature` |The installable feature (and its generated source feature)
 |`releng/org.dbunit.eclipse.target` |Target platform definitions: baseline (the oldest supported Eclipse release) and latest
 |`releng/org.dbunit.eclipse.repository` |The p2 repository (update site) definition, `category.xml`
+|`releng/icons` |A generator of the editor's icons, run with `java releng/icons/GenerateIcons.java`
 |`releng/marketplace` |Eclipse Marketplace listing content
 |`src/site` |This documentation site, published to GitHub Pages
 |`.github/workflows` |CI build, release, and site/update-site publishing
