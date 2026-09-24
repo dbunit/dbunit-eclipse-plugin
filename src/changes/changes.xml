@@ -8,6 +8,7 @@
 
   <body>
     <release version="1.0.0" date="TBD" description="Initial release: a spreadsheet-like editor for dbUnit flat XML dataset files, published as a signed Eclipse update site.">
+      <action dev="jeffjensen" type="add" issue="2" system="github" due-to="Jeff Jensen">Add the dbUnit Dataset Editor, a spreadsheet-like editor for dbUnit flat XML dataset files.</action>
     </release>
   </body>
 </document>
