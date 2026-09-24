@@ -21,12 +21,17 @@
 package org.dbunit.eclipse.dataset.ui.editor;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.eclipse.core.filesystem.EFS;
+import org.eclipse.core.filesystem.IFileStore;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.ResourcesPlugin;
@@ -36,17 +41,20 @@ import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.ide.FileStoreEditorInput;
 import org.eclipse.ui.ide.IDE;
 
 /**
  * A disposable workspace project for editor tests: creates files, opens them, drains pending SWT events,
- * then closes every editor it opened and deletes the project.
+ * then closes every editor it opened and deletes the project and the files it created outside it.
  */
 final class UiTestWorkspace implements AutoCloseable
 {
     private final IProject project;
 
     private final List<IEditorPart> openedEditors = new ArrayList<>();
+
+    private final List<Path> externalFiles = new ArrayList<>();
 
     UiTestWorkspace() throws CoreException
     {
@@ -76,6 +84,24 @@ final class UiTestWorkspace implements AutoCloseable
         return editor;
     }
 
+    /**
+     * Creates a read-only file outside the workspace, as the editor gets for a file that it must not change,
+     * and opens it in the dataset editor.
+     */
+    IEditorPart openReadOnlyExternalFile(final String content) throws IOException, PartInitException
+    {
+        final Path file = Files.createTempFile("dataset-editor-test-", ".xml");
+        externalFiles.add(file);
+        Files.writeString(file, content);
+        file.toFile().setReadOnly();
+        final IFileStore fileStore = EFS.getLocalFileSystem().getStore(file.toUri());
+        final IEditorPart editor = activePage().openEditor(new FileStoreEditorInput(fileStore),
+                FlatXmlDatasetEditor.ID);
+        openedEditors.add(editor);
+        processEvents();
+        return editor;
+    }
+
     static void processEvents()
     {
         final Display display = Display.getCurrent() != null ? Display.getCurrent() : Display.getDefault();
@@ -91,7 +117,7 @@ final class UiTestWorkspace implements AutoCloseable
     }
 
     @Override
-    public void close() throws CoreException
+    public void close() throws CoreException, IOException
     {
         final IWorkbenchPage page = activePage();
         for (final IEditorPart editor : openedEditors)
@@ -100,5 +126,10 @@ final class UiTestWorkspace implements AutoCloseable
         }
         processEvents();
         project.delete(true, true, null);
+        for (final Path file : externalFiles)
+        {
+            file.toFile().setWritable(true);
+            Files.delete(file);
+        }
     }
 }

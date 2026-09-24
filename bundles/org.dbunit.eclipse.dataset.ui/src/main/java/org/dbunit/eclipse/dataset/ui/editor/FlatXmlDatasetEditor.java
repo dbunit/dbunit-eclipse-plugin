@@ -239,9 +239,25 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         return sourceEditor;
     }
 
+    FlatXmlDatasetDocument getDatasetDocument()
+    {
+        return datasetDocument;
+    }
+
+    TablesPage getTablesPage()
+    {
+        return tablesPage;
+    }
+
     String getPageTitle(final int pageIndex)
     {
         return getPageText(pageIndex);
+    }
+
+    void showOnSourcePage(final int offset, final int length)
+    {
+        setActivePage(SOURCE_PAGE_INDEX);
+        sourceEditor.selectAndReveal(offset, length);
     }
 
     @Override
