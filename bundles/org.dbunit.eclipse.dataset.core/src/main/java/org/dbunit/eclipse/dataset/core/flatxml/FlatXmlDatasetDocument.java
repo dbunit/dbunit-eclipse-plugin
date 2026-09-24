@@ -21,6 +21,8 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +30,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import org.dbunit.eclipse.dataset.core.dtd.DtdDeclarations;
@@ -42,6 +45,7 @@ import org.dbunit.eclipse.dataset.core.edit.TextDatasetDocument;
 import org.dbunit.eclipse.dataset.core.model.CellAddress;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
+import org.dbunit.eclipse.dataset.core.model.DatasetRow;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.DocumentEvent;
@@ -194,7 +198,74 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     @Override
     public void setCells(final String tableKey, final List<CellChange> changes)
     {
-        throw new UnsupportedOperationException("setCells is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        final DatasetTable table = getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        for (final CellChange change : changes)
+        {
+            if (change.rowIndex() < 0 || change.rowIndex() >= table.getRows().size())
+            {
+                throw new DatasetEditException(
+                        "Row " + change.rowIndex() + " does not exist in table '" + table.getName()
+                                + "'.");
+            }
+            if (table.getColumnIndex(change.columnName()) < 0)
+            {
+                throw new DatasetEditException("Column '" + change.columnName() + "' does not exist in "
+                        + "table '" + table.getName() + "'.");
+            }
+        }
+
+        final Map<Integer, Map<String, String>> changesByRow = new LinkedHashMap<>();
+        for (final CellChange change : changes)
+        {
+            final String columnKey = change.columnName().toUpperCase(Locale.ENGLISH);
+            changesByRow.computeIfAbsent(change.rowIndex(), unused -> new LinkedHashMap<>())
+                    .put(columnKey, change.value());
+        }
+
+        final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
+        final CharsetEncoder encoder = currentEncoder();
+        final List<TextEdit> edits = new ArrayList<>();
+        final String text = document.get();
+        for (final Map.Entry<Integer, Map<String, String>> entry : changesByRow.entrySet())
+        {
+            final int rowIndex = entry.getKey();
+            final Map<String, String> rowChanges = entry.getValue();
+            final FlatXmlElement element = rowElements.get(rowIndex);
+            final String ambiguousKey = findCaseVariantColumnKey(element, rowChanges.keySet());
+            if (ambiguousKey != null)
+            {
+                final String columnName = table.getColumns().get(table.getColumnIndex(ambiguousKey)).name();
+                throw new DatasetEditException("Cannot change column '" + columnName + "' because row "
+                        + rowIndex + " of table '" + table.getName() + "' has two attributes for it that "
+                        + "differ only in letter case; remove one of them on the Source page first.");
+            }
+            if (wouldEmptyRow(table, rowIndex, rowChanges))
+            {
+                throw new DatasetEditException(
+                        "This change would leave row " + rowIndex + " of table '" + table.getName()
+                                + "' with no values.");
+            }
+            final String rewritten = StartTagRewriter.rewrite(text, element, table.getColumns(),
+                    rowChanges, Map.of(), encoder);
+            if (rewritten != null)
+            {
+                edits.add(new ReplaceEdit(element.nameEndOffset(),
+                        element.attributesEndOffset() - element.nameEndOffset(), rewritten));
+            }
+        }
+        if (edits.isEmpty())
+        {
+            return;
+        }
+        apply(edits);
+        refreshInternal(ChangeOrigin.EDIT);
     }
 
     @Override
@@ -589,6 +660,76 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     private String tableKey(final String name)
     {
         return options.caseSensitiveTableNames() ? name : name.toUpperCase(Locale.ENGLISH);
+    }
+
+    /**
+     * Returns whether applying rowChanges (column key to new value) to a row would leave every column
+     * NULL; a row with no values would leave its element without attributes, which is not a valid row.
+     */
+    private static boolean wouldEmptyRow(final DatasetTable table, final int rowIndex,
+            final Map<String, String> rowChanges)
+    {
+        final DatasetRow row = table.getRows().get(rowIndex);
+        for (int columnIndex = 0; columnIndex < table.getColumns().size(); columnIndex++)
+        {
+            final String columnKey = table.getColumns().get(columnIndex).name().toUpperCase(Locale.ENGLISH);
+            final String value = rowChanges.containsKey(columnKey) ? rowChanges.get(columnKey)
+                    : row.getValue(columnIndex);
+            if (value != null)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Returns the first key in columnKeys whose element has two or more attributes that differ only in
+     * letter case, or null when none do.
+     */
+    private static String findCaseVariantColumnKey(final FlatXmlElement element, final Set<String> columnKeys)
+    {
+        for (final String columnKey : columnKeys)
+        {
+            if (hasCaseVariantAttributes(element, columnKey))
+            {
+                return columnKey;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Returns whether element has two or more attributes whose upper-cased name equals columnKey.
+     */
+    private static boolean hasCaseVariantAttributes(final FlatXmlElement element, final String columnKey)
+    {
+        int matches = 0;
+        for (final FlatXmlAttribute attribute : element.attributes())
+        {
+            if (attribute.name().toUpperCase(Locale.ENGLISH).equals(columnKey))
+            {
+                matches++;
+            }
+        }
+        return matches > 1;
+    }
+
+    /**
+     * Returns an encoder for the document's current charset, falling back to UTF-8 when the supplier
+     * returns null or throws.
+     */
+    private CharsetEncoder currentEncoder()
+    {
+        try
+        {
+            final Charset result = charset.get();
+            return (result != null ? result : StandardCharsets.UTF_8).newEncoder();
+        }
+        catch (final RuntimeException e)
+        {
+            return StandardCharsets.UTF_8.newEncoder();
+        }
     }
 
     private record DtdResolution(DtdDeclarations declarations, DtdState state)
