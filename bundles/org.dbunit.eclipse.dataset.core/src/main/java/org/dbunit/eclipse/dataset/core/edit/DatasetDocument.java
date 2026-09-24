@@ -23,6 +23,7 @@ package org.dbunit.eclipse.dataset.core.edit;
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
+import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 
 /**
  * An editable dataset bound to its source. Not thread-safe: use it from one thread (the UI thread in the
@@ -144,6 +145,16 @@ public interface DatasetDocument
      * @param columnName The name of the column to delete.
      */
     void deleteColumn(String tableKey, String columnName);
+
+    /**
+     * Returns the key a table with this name would have: the identity {@link DatasetTable#getKey()}
+     * carries across refreshes, accounting for this document's table-name case sensitivity. Callers use
+     * this to predict a table's key before an edit that creates or renames it completes.
+     *
+     * @param tableName The name to compute the key for.
+     * @return The key.
+     */
+    String tableKeyOf(String tableName);
 
     /**
      * Appends an empty table.

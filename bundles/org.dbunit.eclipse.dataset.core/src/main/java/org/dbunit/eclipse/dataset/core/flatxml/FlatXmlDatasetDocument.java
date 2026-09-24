@@ -702,19 +702,149 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     @Override
     public void addTable(final String tableName, final List<String> columnNames)
     {
-        throw new UnsupportedOperationException("addTable is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        if (!XmlNames.isValidName(tableName))
+        {
+            throw new DatasetEditException("'" + tableName + "' is not a valid table name.");
+        }
+        if (isReservedRootName(tableName))
+        {
+            throw new DatasetEditException("'" + tableName + "' is reserved for the root element.");
+        }
+        for (final DatasetTable existing : getModel().getTables())
+        {
+            if (sameTableName(existing.getName(), tableName))
+            {
+                throw new DatasetEditException("A table named '" + tableName + "' already exists.");
+            }
+        }
+        final List<String> seenColumnNames = new ArrayList<>();
+        for (final String columnName : columnNames)
+        {
+            if (!XmlNames.isValidName(columnName))
+            {
+                throw new DatasetEditException("'" + columnName + "' is not a valid column name.");
+            }
+            for (final String seenColumnName : seenColumnNames)
+            {
+                if (seenColumnName.equalsIgnoreCase(columnName))
+                {
+                    throw new DatasetEditException("Table '" + tableName + "' already has a column named '"
+                            + columnName + "'.");
+                }
+            }
+            seenColumnNames.add(columnName);
+        }
+
+        apply(List.of(insertAsLastChildOfRoot("<" + tableName + "/>")));
+        if (!columnNames.isEmpty())
+        {
+            pendingColumns.put(tableKeyOf(tableName), new ArrayList<>(columnNames));
+        }
+        refreshInternal(ChangeOrigin.EDIT);
     }
 
     @Override
     public void renameTable(final String tableKey, final String newTableName)
     {
-        throw new UnsupportedOperationException("renameTable is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        if (!XmlNames.isValidName(newTableName))
+        {
+            throw new DatasetEditException("'" + newTableName + "' is not a valid table name.");
+        }
+        if (isReservedRootName(newTableName))
+        {
+            throw new DatasetEditException("'" + newTableName + "' is reserved for the root element.");
+        }
+        for (final DatasetTable existing : getModel().getTables())
+        {
+            if (!existing.getKey().equals(tableKey) && sameTableName(existing.getName(), newTableName))
+            {
+                throw new DatasetEditException("A table named '" + newTableName + "' already exists.");
+            }
+        }
+
+        final List<FlatXmlElement> elements = index.getAllElementsInOrder(tableKey);
+        final List<TextEdit> edits = new ArrayList<>();
+        for (final FlatXmlElement element : elements)
+        {
+            edits.add(new ReplaceEdit(element.offset() + 1, element.name().length(), newTableName));
+            if (!element.selfClosing())
+            {
+                edits.add(new ReplaceEdit(element.endTagOffset() + 2, element.name().length(),
+                        newTableName));
+            }
+        }
+        if (!edits.isEmpty())
+        {
+            apply(edits);
+        }
+
+        final List<String> pending = pendingColumns.remove(tableKey);
+        if (pending != null)
+        {
+            pendingColumns.put(tableKeyOf(newTableName), pending);
+        }
+        stale = true;
+        refreshInternal(ChangeOrigin.EDIT);
     }
 
     @Override
     public void deleteTable(final String tableKey)
     {
-        throw new UnsupportedOperationException("deleteTable is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+
+        final List<FlatXmlElement> elements = index.getAllElementsInOrder(tableKey);
+        final List<TextEdit> edits = new ArrayList<>();
+        for (final FlatXmlElement element : elements)
+        {
+            final IRegion region = layout.lineExtent(element);
+            edits.add(new DeleteEdit(region.getOffset(), region.getLength()));
+        }
+        if (!edits.isEmpty())
+        {
+            apply(edits);
+        }
+
+        pendingColumns.remove(tableKey);
+        stale = true;
+        refreshInternal(ChangeOrigin.EDIT);
+    }
+
+    private boolean isReservedRootName(final String tableName)
+    {
+        return sameTableName("dataset", tableName);
+    }
+
+    private boolean sameTableName(final String oneName, final String otherName)
+    {
+        return options.caseSensitiveTableNames() ? oneName.equals(otherName)
+                : oneName.equalsIgnoreCase(otherName);
+    }
+
+    @Override
+    public String tableKeyOf(final String tableName)
+    {
+        return options.caseSensitiveTableNames() ? tableName : tableName.toUpperCase(Locale.ENGLISH);
     }
 
     @Override
