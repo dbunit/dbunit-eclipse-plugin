@@ -25,6 +25,8 @@ import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -44,10 +46,19 @@ import org.dbunit.eclipse.dataset.core.edit.DatasetModelChangeEvent;
 import org.dbunit.eclipse.dataset.core.edit.DatasetModelListener;
 import org.dbunit.eclipse.dataset.core.edit.TextDatasetDocument;
 import org.dbunit.eclipse.dataset.core.model.CellAddress;
+import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetRow;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.eclipse.core.commands.ExecutionException;
+import org.eclipse.core.commands.operations.AbstractOperation;
+import org.eclipse.core.commands.operations.IOperationHistory;
+import org.eclipse.core.commands.operations.OperationHistoryFactory;
+import org.eclipse.core.runtime.IAdaptable;
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Status;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.DocumentRewriteSession;
@@ -77,6 +88,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
 {
     private static final int REWRITE_SESSION_EDIT_THRESHOLD = 50;
 
+    private static final int PENDING_COLUMNS_HISTORY_LIMIT = 200;
+
     private static final FlatXmlIndex EMPTY_INDEX =
             new FlatXmlIndex(null, null, "", List.of(), Map.of(), Map.of(), Map.of());
 
@@ -101,6 +114,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
 
     private final Map<String, List<String>> pendingColumns = new LinkedHashMap<>();
 
+    private final Map<Long, Map<String, List<String>>> pendingColumnsHistory = new LinkedHashMap<>();
+
     private final Supplier<Charset> charset;
 
     private IDocument document;
@@ -118,6 +133,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     private boolean stale;
 
     private int batchDepth;
+
+    private long lastRefreshModificationStamp = IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP;
 
     /**
      * Creates a dataset document bound to a text document.
@@ -527,19 +544,314 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     @Override
     public void addColumn(final String tableKey, final String columnName)
     {
-        throw new UnsupportedOperationException("addColumn is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        final DatasetTable table = getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        if (!XmlNames.isValidName(columnName))
+        {
+            throw new DatasetEditException("'" + columnName + "' is not a valid column name.");
+        }
+        if (table.getColumnIndex(columnName) >= 0)
+        {
+            throw new DatasetEditException(
+                    "Table '" + table.getName() + "' already has a column named '" + columnName + "'.");
+        }
+
+        applyPendingColumnsChange("Add pending column",
+                () -> pendingColumns.computeIfAbsent(tableKey, unused -> new ArrayList<>()).add(columnName),
+                () -> removePendingColumn(tableKey, columnName));
     }
 
     @Override
     public void renameColumn(final String tableKey, final String columnName, final String newColumnName)
     {
-        throw new UnsupportedOperationException("renameColumn is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        final DatasetTable table = getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        final int columnIndex = table.getColumnIndex(columnName);
+        if (columnIndex < 0)
+        {
+            throw new DatasetEditException(
+                    "Column '" + columnName + "' does not exist in table '" + table.getName() + "'.");
+        }
+        if (!XmlNames.isValidName(newColumnName))
+        {
+            throw new DatasetEditException("'" + newColumnName + "' is not a valid column name.");
+        }
+        final int conflictingIndex = table.getColumnIndex(newColumnName);
+        if (conflictingIndex >= 0 && conflictingIndex != columnIndex)
+        {
+            throw new DatasetEditException("Table '" + table.getName() + "' already has a column named '"
+                    + newColumnName + "'.");
+        }
+
+        final DatasetColumn column = table.getColumns().get(columnIndex);
+        final String key = columnName.toUpperCase(Locale.ENGLISH);
+        final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
+        for (final FlatXmlElement element : rowElements)
+        {
+            int matches = 0;
+            for (final FlatXmlAttribute attribute : element.attributes())
+            {
+                if (attribute.name().toUpperCase(Locale.ENGLISH).equals(key))
+                {
+                    matches++;
+                }
+            }
+            if (matches > 1)
+            {
+                throw new DatasetEditException("Cannot rename column '" + column.name() + "' in table '"
+                        + table.getName() + "' because a row has two attributes for it that differ only "
+                        + "in letter case; remove one of them on the Source page first.");
+            }
+        }
+
+        if (column.pending())
+        {
+            applyPendingColumnsChange("Rename pending column",
+                    () -> renamePendingColumn(tableKey, columnName, newColumnName),
+                    () -> renamePendingColumn(tableKey, newColumnName, columnName));
+            return;
+        }
+        if (column.declared() && !column.hasValues())
+        {
+            throw new DatasetEditException("Cannot rename column '" + column.name() + "' in table '"
+                    + table.getName() + "' because the DTD declares it but no row has a value for it; "
+                    + "change the DTD instead.");
+        }
+
+        final Map<String, String> renames = new LinkedHashMap<>();
+        renames.put(key, newColumnName);
+        final CharsetEncoder encoder = currentEncoder();
+        final String text = document.get();
+        final List<TextEdit> edits = new ArrayList<>();
+        for (final FlatXmlElement element : rowElements)
+        {
+            final String rewritten =
+                    StartTagRewriter.rewrite(text, element, table.getColumns(), Map.of(), renames, encoder);
+            if (rewritten != null)
+            {
+                edits.add(new ReplaceEdit(element.nameEndOffset(),
+                        element.attributesEndOffset() - element.nameEndOffset(), rewritten));
+            }
+        }
+        if (edits.isEmpty())
+        {
+            return;
+        }
+        apply(edits);
+        refreshInternal(ChangeOrigin.EDIT);
     }
 
     @Override
     public void deleteColumn(final String tableKey, final String columnName)
     {
-        throw new UnsupportedOperationException("deleteColumn is not implemented yet.");
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        final DatasetTable table = getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        final int columnIndex = table.getColumnIndex(columnName);
+        if (columnIndex < 0)
+        {
+            throw new DatasetEditException(
+                    "Column '" + columnName + "' does not exist in table '" + table.getName() + "'.");
+        }
+        final DatasetColumn column = table.getColumns().get(columnIndex);
+
+        if (column.pending())
+        {
+            final List<String> pending = pendingColumns.get(tableKey);
+            final int pendingIndex = pending == null ? -1 : indexOfColumn(pending, columnName);
+            applyPendingColumnsChange("Delete pending column",
+                    () -> removePendingColumn(tableKey, columnName),
+                    () -> restorePendingColumn(tableKey, pendingIndex, columnName));
+            return;
+        }
+
+        final String key = columnName.toUpperCase(Locale.ENGLISH);
+        final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
+        for (final FlatXmlElement element : rowElements)
+        {
+            boolean hasColumn = false;
+            int remaining = 0;
+            for (final FlatXmlAttribute attribute : element.attributes())
+            {
+                if (attribute.name().toUpperCase(Locale.ENGLISH).equals(key))
+                {
+                    hasColumn = true;
+                }
+                else
+                {
+                    remaining++;
+                }
+            }
+            if (hasColumn && remaining == 0)
+            {
+                throw new DatasetEditException("Cannot delete column '" + column.name() + "' from table '"
+                        + table.getName() + "' because it would leave a row with no values.");
+            }
+        }
+
+        final Map<String, String> changes = new LinkedHashMap<>();
+        changes.put(key, null);
+        final CharsetEncoder encoder = currentEncoder();
+        final String text = document.get();
+        final List<TextEdit> edits = new ArrayList<>();
+        for (final FlatXmlElement element : rowElements)
+        {
+            final String rewritten =
+                    StartTagRewriter.rewrite(text, element, table.getColumns(), changes, Map.of(), encoder);
+            if (rewritten != null)
+            {
+                edits.add(new ReplaceEdit(element.nameEndOffset(),
+                        element.attributesEndOffset() - element.nameEndOffset(), rewritten));
+            }
+        }
+        if (edits.isEmpty())
+        {
+            return;
+        }
+        apply(edits);
+        refreshInternal(ChangeOrigin.EDIT);
+    }
+
+    /**
+     * Runs a pendingColumns change that makes no text edit of its own: when a document undo manager is
+     * connected, through a custom operation on its undo context, so the change still becomes its own step
+     * in the document's undo history instead of being invisible to undo; otherwise directly.
+     */
+    private void applyPendingColumnsChange(final String label, final Runnable doIt, final Runnable undoIt)
+    {
+        final PendingColumnsOperation operation = new PendingColumnsOperation(label, doIt, undoIt);
+        final IDocumentUndoManager undoManager =
+                DocumentUndoManagerRegistry.getDocumentUndoManager(document);
+        try
+        {
+            if (undoManager == null)
+            {
+                operation.execute(null, null);
+            }
+            else
+            {
+                operation.addContext(undoManager.getUndoContext());
+                final IOperationHistory history = OperationHistoryFactory.getOperationHistory();
+                history.execute(operation, null, null);
+            }
+        }
+        catch (final ExecutionException e)
+        {
+            throw new IllegalStateException("A pending column change failed.", e);
+        }
+    }
+
+    private void removePendingColumn(final String tableKey, final String columnName)
+    {
+        final List<String> pending = pendingColumns.get(tableKey);
+        if (pending == null)
+        {
+            return;
+        }
+        final String columnKey = columnName.toUpperCase(Locale.ENGLISH);
+        pending.removeIf(name -> name.toUpperCase(Locale.ENGLISH).equals(columnKey));
+        if (pending.isEmpty())
+        {
+            pendingColumns.remove(tableKey);
+        }
+    }
+
+    private void restorePendingColumn(final String tableKey, final int index, final String columnName)
+    {
+        if (index < 0)
+        {
+            return;
+        }
+        pendingColumns.computeIfAbsent(tableKey, unused -> new ArrayList<>()).add(index, columnName);
+    }
+
+    private void renamePendingColumn(final String tableKey, final String oldName, final String newName)
+    {
+        final List<String> pending = pendingColumns.get(tableKey);
+        if (pending == null)
+        {
+            return;
+        }
+        final int index = indexOfColumn(pending, oldName);
+        if (index >= 0)
+        {
+            pending.set(index, newName);
+        }
+    }
+
+    private static int indexOfColumn(final List<String> names, final String name)
+    {
+        final String columnKey = name.toUpperCase(Locale.ENGLISH);
+        for (int i = 0; i < names.size(); i++)
+        {
+            if (names.get(i).toUpperCase(Locale.ENGLISH).equals(columnKey))
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * An undoable operation for a pendingColumns change that has no text edit of its own to carry it: it
+     * shares the connected document undo manager's own undo context, so undo and redo interleave with text
+     * edits in the same chronological order the user made them.
+     */
+    private final class PendingColumnsOperation extends AbstractOperation
+    {
+        private final Runnable doIt;
+
+        private final Runnable undoIt;
+
+        private PendingColumnsOperation(final String label, final Runnable doIt, final Runnable undoIt)
+        {
+            super(label);
+            this.doIt = doIt;
+            this.undoIt = undoIt;
+        }
+
+        @Override
+        public IStatus execute(final IProgressMonitor monitor, final IAdaptable info)
+        {
+            return runAndRefresh(doIt);
+        }
+
+        @Override
+        public IStatus redo(final IProgressMonitor monitor, final IAdaptable info)
+        {
+            return runAndRefresh(doIt);
+        }
+
+        @Override
+        public IStatus undo(final IProgressMonitor monitor, final IAdaptable info)
+        {
+            return runAndRefresh(undoIt);
+        }
+
+        private IStatus runAndRefresh(final Runnable action)
+        {
+            action.run();
+            stale = true;
+            refreshInternal(ChangeOrigin.EDIT);
+            return Status.OK_STATUS;
+        }
     }
 
     @Override
@@ -710,6 +1022,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         this.document = newDocument;
         this.dtdSource = newDtdSource;
         this.dtdCache.clear();
+        this.pendingColumnsHistory.clear();
+        this.lastRefreshModificationStamp = IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP;
         document.addDocumentListener(documentListener);
         stale = true;
         refresh();
@@ -721,11 +1035,15 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         {
             return;
         }
+        final long modificationStamp = currentModificationStamp();
+        restorePendingColumns(modificationStamp);
         final String text = document.get();
         final FlatXmlParseResult parse = FlatXmlParser.parse(text);
         final DtdResolution dtdResolution = resolveDtd(parse.doctype());
         final FlatXmlModelBuilder.Result built = FlatXmlModelBuilder.build(text, parse,
                 dtdResolution.declarations(), options, pendingColumns);
+        prunePendingColumns(built.model().getTables());
+        recordPendingColumns(modificationStamp);
         final List<DatasetProblem> problems = FlatXmlValidator.validate(parse, built.index(),
                 built.model().getTables(), dtdResolution.state(), dtdResolution.declarations(), options);
         final DatasetModel oldModel = model;
@@ -734,6 +1052,96 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         layout = new FlatXmlTextLayout(text, TextUtilities.getDefaultLineDelimiter(document));
         stale = false;
         notifyListeners(new DatasetModelChangeEvent(oldModel, model, origin));
+    }
+
+    /**
+     * Drops each table's pending columns that a fresh build now finds backed by data or the DTD, and
+     * drops a table's whole entry once the table itself no longer exists in the model, so a pending
+     * column never lingers once it is no longer needed.
+     */
+    private void prunePendingColumns(final List<DatasetTable> tables)
+    {
+        final Set<String> tableKeys = new HashSet<>();
+        for (final DatasetTable table : tables)
+        {
+            tableKeys.add(table.getKey());
+            final List<String> pending = pendingColumns.get(table.getKey());
+            if (pending == null)
+            {
+                continue;
+            }
+            pending.removeIf(name -> isBackedByRealColumn(table, name));
+            if (pending.isEmpty())
+            {
+                pendingColumns.remove(table.getKey());
+            }
+        }
+        pendingColumns.keySet().removeIf(key -> !tableKeys.contains(key));
+    }
+
+    private static boolean isBackedByRealColumn(final DatasetTable table, final String name)
+    {
+        final int columnIndex = table.getColumnIndex(name);
+        return columnIndex >= 0 && !table.getColumns().get(columnIndex).pending();
+    }
+
+    /**
+     * Returns the document's current modification stamp, or {@link IDocumentExtension4#UNKNOWN_MODIFICATION_STAMP}
+     * when it does not support one.
+     */
+    private long currentModificationStamp()
+    {
+        if (document instanceof final IDocumentExtension4 extension)
+        {
+            return extension.getModificationStamp();
+        }
+        return IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP;
+    }
+
+    /**
+     * Restores pendingColumns from the snapshot recorded for modificationStamp, when that stamp differs
+     * from the previous refresh's stamp and a snapshot was recorded for it. This is how the pending
+     * columns that belonged to an earlier document state come back once undo or redo, which restores the
+     * document's modification stamp along with its text, returns the document to that earlier state.
+     */
+    private void restorePendingColumns(final long modificationStamp)
+    {
+        if (modificationStamp == lastRefreshModificationStamp)
+        {
+            return;
+        }
+        final Map<String, List<String>> snapshot = pendingColumnsHistory.get(modificationStamp);
+        if (snapshot == null)
+        {
+            return;
+        }
+        pendingColumns.clear();
+        for (final Map.Entry<String, List<String>> entry : snapshot.entrySet())
+        {
+            pendingColumns.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+        }
+    }
+
+    /**
+     * Records a deep copy of pendingColumns under modificationStamp, so that a later undo or redo back to
+     * this exact modification stamp can restore it, then discards the oldest recorded snapshot once there
+     * are more than {@link #PENDING_COLUMNS_HISTORY_LIMIT} of them.
+     */
+    private void recordPendingColumns(final long modificationStamp)
+    {
+        final Map<String, List<String>> snapshot = new LinkedHashMap<>();
+        for (final Map.Entry<String, List<String>> entry : pendingColumns.entrySet())
+        {
+            snapshot.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+        }
+        pendingColumnsHistory.put(modificationStamp, snapshot);
+        lastRefreshModificationStamp = modificationStamp;
+        if (pendingColumnsHistory.size() > PENDING_COLUMNS_HISTORY_LIMIT)
+        {
+            final Iterator<Long> oldest = pendingColumnsHistory.keySet().iterator();
+            oldest.next();
+            oldest.remove();
+        }
     }
 
     private DtdResolution resolveDtd(final FlatXmlDoctype doctype)

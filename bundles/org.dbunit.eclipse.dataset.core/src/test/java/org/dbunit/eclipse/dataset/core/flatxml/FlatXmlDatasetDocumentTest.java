@@ -36,6 +36,7 @@ import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.edit.ChangeOrigin;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.model.CellAddress;
+import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
@@ -1200,6 +1201,422 @@ class FlatXmlDatasetDocumentTest
                 .as("Moving the last row down must be rejected.")
                 .isInstanceOf(DatasetEditException.class);
         assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testAddColumn_whenColumnDoesNotExist_addsAPendingColumnWithoutChangingText()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.addColumn("USERS", "NAME");
+
+        assertThat(document.get()).as("Adding a column must not change the text.").isEqualTo(original);
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        final int columnIndex = table.getColumnIndex("NAME");
+        assertThat(table.getColumns().get(columnIndex))
+                .as("The new column must be pending, undeclared, and without values.")
+                .isEqualTo(new DatasetColumn("NAME", false, false, true));
+    }
+
+    @Test
+    void testAddColumn_whenSettingAValueInIt_becomesADataColumnAndDropsThePendingEntry()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        datasetDocument.addColumn("USERS", "NAME");
+
+        datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Alice")));
+
+        assertThat(document.get()).as("Setting the value must write the new attribute.")
+                .isEqualTo("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        final int columnIndex = table.getColumnIndex("NAME");
+        assertThat(table.getColumns().get(columnIndex))
+                .as("The column must become a plain data column once it has a value.")
+                .isEqualTo(new DatasetColumn("NAME", false, true, false));
+    }
+
+    @Test
+    void testAddColumn_whenNameIsInvalid_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.addColumn("USERS", "1BAD"))
+                .as("An invalid column name must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumnIndex("1BAD"))
+                .as("No pending column must have been recorded.").isEqualTo(-1);
+    }
+
+    @Test
+    void testAddColumn_whenNameAlreadyExists_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.addColumn("USERS", "name"))
+                .as("A name that already exists, case-insensitively, must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testAddColumn_whenAnEarlierEditExists_undoRemovesOnlyThePendingColumn() throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Bob")));
+            final String afterCellEdit = document.get();
+
+            datasetDocument.addColumn("USERS", "EXTRA");
+
+            undoManager.undo();
+            assertThat(document.get())
+                    .as("One undo must remove the pending column, not the earlier cell edit.")
+                    .isEqualTo(afterCellEdit);
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumnIndex("EXTRA"))
+                    .as("The pending column must be gone after undo.").isEqualTo(-1);
+            undoManager.undo();
+            assertThat(document.get()).as("A second undo must revert the earlier cell edit.")
+                    .isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testAddColumn_whenPendingAddIsUndone_redoRestoresIt() throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "EXTRA");
+
+            undoManager.undo();
+            undoManager.redo();
+
+            final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+            assertThat(table.getColumns().get(table.getColumnIndex("EXTRA")))
+                    .as("Redo must bring the pending column back.")
+                    .isEqualTo(new DatasetColumn("EXTRA", false, false, true));
+        });
+    }
+
+    @Test
+    void testSetCells_whenFillingAPendingColumnIsUndone_theColumnStaysPending() throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "NAME");
+
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Alice")));
+            undoManager.undo();
+            datasetDocument.refresh();
+
+            final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+            assertThat(table.getColumns().get(table.getColumnIndex("NAME")))
+                    .as("Undoing the typed value must leave the column pending again, not remove it.")
+                    .isEqualTo(new DatasetColumn("NAME", false, false, true));
+        });
+    }
+
+    @Test
+    void testRenameColumn_whenColumnHasMatchingAttributes_renamesEveryOccurrenceCaseInsensitively()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n"
+                + "    <USERS ID=\"2\" name=\"Bob\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.renameColumn("USERS", "NAME", "FULL_NAME");
+
+            assertThat(document.get())
+                    .as("Every attribute matching the column, regardless of case, must be renamed and "
+                            + "nothing else changed.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"1\" FULL_NAME=\"Alice\"/>\n"
+                            + "    <USERS ID=\"2\" FULL_NAME=\"Bob\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testRenameColumn_whenColumnIsPending_renamesThePendingEntryWithoutChangingText()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        datasetDocument.addColumn("USERS", "EXTRA");
+
+        datasetDocument.renameColumn("USERS", "EXTRA", "NOTES");
+
+        assertThat(document.get()).as("Renaming a pending column must not change the text.")
+                .isEqualTo(original);
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getColumnIndex("EXTRA")).as("The old pending name must be gone.").isEqualTo(-1);
+        assertThat(table.getColumns().get(table.getColumnIndex("NOTES")))
+                .as("The pending column must be renamed in place.")
+                .isEqualTo(new DatasetColumn("NOTES", false, false, true));
+    }
+
+    @Test
+    void testRenameColumn_whenPendingColumnsAreEqualIgnoringCaseYetDistinct_renamesOnlyTheNamedOne()
+    {
+        final IDocument document = new Document("<dataset><USERS NAME=\"Alice\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        datasetDocument.addColumn("USERS", "ID");
+        datasetDocument.addColumn("USERS", "\u0130D");
+
+        datasetDocument.renameColumn("USERS", "\u0130D", "CODE");
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                .as("Renaming one pending column must not rename another whose name equals it only "
+                        + "ignoring case.")
+                .containsExactly(new DatasetColumn("NAME", false, true, false),
+                        new DatasetColumn("ID", false, false, true),
+                        new DatasetColumn("CODE", false, false, true));
+    }
+
+    @Test
+    void testRenameColumn_whenPendingRenameIsUndone_restoresTheOldPendingName() throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "EXTRA");
+
+            datasetDocument.renameColumn("USERS", "EXTRA", "NOTES");
+            undoManager.undo();
+
+            final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+            assertThat(table.getColumnIndex("NOTES")).as("The new pending name must be gone.")
+                    .isEqualTo(-1);
+            assertThat(table.getColumns().get(table.getColumnIndex("EXTRA")))
+                    .as("Undo must restore the old pending name.")
+                    .isEqualTo(new DatasetColumn("EXTRA", false, false, true));
+        });
+    }
+
+    @Test
+    void testRenameColumn_whenNewNameIsInvalid_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.renameColumn("USERS", "NAME", "1BAD"))
+                .as("An invalid new column name must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testRenameColumn_whenNewNameAlreadyExists_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.renameColumn("USERS", "NAME", "id"))
+                .as("Renaming to a name that already exists, case-insensitively, must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testRenameColumn_whenAnElementHasTwoAttributesForTheColumnDifferingOnlyInCase_throwsAndChangesNothing()
+    {
+        final IDocument document =
+                new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\" name=\"Bob\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.renameColumn("USERS", "NAME", "FULL_NAME"))
+                .as("Renaming must be rejected when a row has two attributes for the column.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testRenameColumn_whenColumnIsDeclaredWithoutValues_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED NAME CDATA #IMPLIED>\n]>\n"
+                        + "<dataset>\n    <USERS ID=\"1\"/>\n</dataset>\n");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.renameColumn("USERS", "NAME", "FULL_NAME"))
+                .as("A declared column with no values must be rejected instead of silently doing "
+                        + "nothing.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testDeleteColumn_whenColumnExistsInMultipleRows_removesTheAttributeEverywhere() throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n"
+                + "    <USERS ID=\"2\" NAME=\"Bob\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.deleteColumn("USERS", "NAME");
+
+            assertThat(document.get()).as("The attribute must be removed from every row.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"1\"/>\n    <USERS ID=\"2\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testDeleteColumn_whenItIsARowsOnlyValue_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS NAME=\"Alice\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.deleteColumn("USERS", "NAME"))
+                .as("Deleting a row's only value must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testDeleteColumn_whenColumnIsPending_dropsItWithoutChangingText()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        datasetDocument.addColumn("USERS", "EXTRA");
+
+        datasetDocument.deleteColumn("USERS", "EXTRA");
+
+        assertThat(document.get()).as("Deleting a pending column must not change the text.")
+                .isEqualTo(original);
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumnIndex("EXTRA"))
+                .as("The pending column must be gone.").isEqualTo(-1);
+    }
+
+    @Test
+    void testDeleteColumn_whenPendingColumnsAreEqualIgnoringCaseYetDistinct_dropsAndRestoresOnlyTheNamedOne()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS NAME=\"Alice\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "ID");
+            datasetDocument.addColumn("USERS", "\u0130D");
+            final List<DatasetColumn> beforeDelete =
+                    datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns();
+
+            datasetDocument.deleteColumn("USERS", "\u0130D");
+
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("Deleting one pending column must not drop another whose name equals it only "
+                            + "ignoring case.")
+                    .containsExactly(new DatasetColumn("NAME", false, true, false),
+                            new DatasetColumn("ID", false, false, true));
+
+            undoManager.undo();
+
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("Undo must restore the deleted pending column after the one it is equal to "
+                            + "only ignoring case.")
+                    .isEqualTo(beforeDelete);
+        });
+    }
+
+    @Test
+    void testDeleteColumn_whenPendingColumnDeleteIsUndone_restoresItAtItsOriginalPosition()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "FIRST");
+            datasetDocument.addColumn("USERS", "SECOND");
+            datasetDocument.addColumn("USERS", "THIRD");
+            final List<DatasetColumn> beforeDelete =
+                    datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns();
+
+            datasetDocument.deleteColumn("USERS", "SECOND");
+            undoManager.undo();
+
+            final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+            assertThat(table.getColumns())
+                    .as("Undo must restore the deleted pending column at its original position.")
+                    .isEqualTo(beforeDelete);
+        });
+    }
+
+    @Test
+    void testDeleteColumn_whenColumnIsDtdDeclared_keepsItInTheModel() throws Exception
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED NAME CDATA #REQUIRED>\n]>\n"
+                        + "<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.deleteColumn("USERS", "NAME");
+
+            assertThat(document.get()).as("The attribute must be removed from the row.").isEqualTo(
+                    "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                            + "<!ATTLIST USERS ID CDATA #REQUIRED NAME CDATA #REQUIRED>\n]>\n"
+                            + "<dataset>\n    <USERS ID=\"1\"/>\n</dataset>\n");
+            final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+            final int columnIndex = table.getColumnIndex("NAME");
+            assertThat(table.getColumns().get(columnIndex))
+                    .as("A DTD-declared column must stay in the model even without values.")
+                    .isEqualTo(new DatasetColumn("NAME", true, false, false));
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
     }
 
     private static void withUndoManager(final IDocument document, final UndoManagerConsumer consumer)
