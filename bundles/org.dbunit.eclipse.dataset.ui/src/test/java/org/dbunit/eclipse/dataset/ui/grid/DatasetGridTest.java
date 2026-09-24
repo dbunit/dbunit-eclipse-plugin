@@ -35,10 +35,14 @@ import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.config.CellConfigAttributes;
 import org.eclipse.nebula.widgets.nattable.coordinate.PositionCoordinate;
 import org.eclipse.nebula.widgets.nattable.data.convert.IDisplayConverter;
+import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
 import org.eclipse.nebula.widgets.nattable.layer.LabelStack;
+import org.eclipse.nebula.widgets.nattable.layer.cell.CellDisplayConversionUtils;
+import org.eclipse.nebula.widgets.nattable.layer.cell.ILayerCell;
 import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Display;
@@ -124,6 +128,23 @@ class DatasetGridTest
     }
 
     @Test
+    void testDisplayText_ofTheCornerHeadersAndBody_showsTheNullDisplayTextOnlyForNullBodyCells()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\"/></dataset>");
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(datasetDocument), "USERS");
+        shell.layout();
+        processEvents();
+
+        final List<String> texts = List.of(displayText(grid, 0, 0), displayText(grid, 0, 2),
+                displayText(grid, 1, 0), displayText(grid, 2, 2));
+
+        assertThat(texts).as("The corner must be blank, the headers must show row numbers and column names, "
+                + "and a NULL body cell must show the NULL display text.")
+                .containsExactly("", "2", "ID", "(null)");
+    }
+
+    @Test
     void testColumnHeaderLabels_whenColumnIsPending_getsThePendingColumnLabel()
     {
         final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
@@ -194,7 +215,18 @@ class DatasetGridTest
     private static IDisplayConverter normalConverter(final DatasetGrid grid)
     {
         return grid.getNatTable().getConfigRegistry().getConfigAttribute(
-                CellConfigAttributes.DISPLAY_CONVERTER, DisplayMode.NORMAL);
+                CellConfigAttributes.DISPLAY_CONVERTER, DisplayMode.NORMAL, GridRegion.BODY);
+    }
+
+    /**
+     * Returns the text that NatTable's text painters show for a cell: the cell's value, converted by the
+     * display converter that the cell's display mode and labels select.
+     */
+    private static String displayText(final DatasetGrid grid, final int columnPosition, final int rowPosition)
+    {
+        final NatTable natTable = grid.getNatTable();
+        final ILayerCell cell = natTable.getCellByPosition(columnPosition, rowPosition);
+        return CellDisplayConversionUtils.convertDataType(cell, natTable.getConfigRegistry());
     }
 
     private static FlatXmlDatasetDocument create(final String content)

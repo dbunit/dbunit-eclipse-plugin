@@ -114,6 +114,7 @@ public final class DatasetGrid
         natTable = new NatTable(parent, NatTable.DEFAULT_STYLE_OPTIONS, gridLayer, false);
         natTable.addConfiguration(new DefaultNatTableStyleConfiguration());
         natTable.addConfiguration(new GridEditConfiguration(context));
+        natTable.addConfiguration(new SpreadsheetEditBindings(selectionLayer));
         natTable.addConfiguration(new GridStyleConfiguration());
         natTable.configure();
         natTable.setTheme(context.isDarkTheme() ? new DarkNatTableThemeConfiguration()
@@ -128,6 +129,17 @@ public final class DatasetGrid
     public Control getControl()
     {
         return natTable;
+    }
+
+    /**
+     * Commits the value of an open cell editor, if there is one, and closes it.
+     *
+     * @return True when no cell editor is open anymore; false when the value failed validation and the
+     *         editor stays open.
+     */
+    public boolean commitActiveCellEditor()
+    {
+        return natTable.commitAndCloseActiveCellEditor();
     }
 
     NatTable getNatTable()
