@@ -37,9 +37,12 @@ import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
 import org.dbunit.eclipse.dataset.ui.actions.DeleteRowsAction;
+import org.dbunit.eclipse.dataset.ui.actions.DuplicateRowsAction;
 import org.dbunit.eclipse.dataset.ui.actions.GridAction;
 import org.dbunit.eclipse.dataset.ui.actions.InsertRowAboveAction;
 import org.dbunit.eclipse.dataset.ui.actions.InsertRowBelowAction;
+import org.dbunit.eclipse.dataset.ui.actions.MoveRowsDownAction;
+import org.dbunit.eclipse.dataset.ui.actions.MoveRowsUpAction;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGrid;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
@@ -145,6 +148,12 @@ final class TablesPage implements DatasetGridContext
 
     private final DeleteRowsAction deleteRowsAction;
 
+    private final DuplicateRowsAction duplicateRowsAction;
+
+    private final MoveRowsUpAction moveRowsUpAction;
+
+    private final MoveRowsDownAction moveRowsDownAction;
+
     private final List<GridAction> gridActions = new ArrayList<>();
 
     private final List<IHandlerActivation> handlerActivations = new ArrayList<>();
@@ -203,9 +212,15 @@ final class TablesPage implements DatasetGridContext
         insertRowAboveAction = new InsertRowAboveAction(this);
         insertRowBelowAction = new InsertRowBelowAction(this);
         deleteRowsAction = new DeleteRowsAction(this);
+        duplicateRowsAction = new DuplicateRowsAction(this);
+        moveRowsUpAction = new MoveRowsUpAction(this);
+        moveRowsDownAction = new MoveRowsDownAction(this);
         gridActions.add(insertRowAboveAction);
         gridActions.add(insertRowBelowAction);
         gridActions.add(deleteRowsAction);
+        gridActions.add(duplicateRowsAction);
+        gridActions.add(moveRowsUpAction);
+        gridActions.add(moveRowsDownAction);
 
         final ToolBarManager toolBarManager = new ToolBarManager(SWT.FLAT);
         toolBarManager.add(insertRowBelowAction);
@@ -395,7 +410,10 @@ final class TablesPage implements DatasetGridContext
         {
             menu.add(insertRowAboveAction);
             menu.add(insertRowBelowAction);
+            menu.add(duplicateRowsAction);
             menu.add(deleteRowsAction);
+            menu.add(moveRowsUpAction);
+            menu.add(moveRowsDownAction);
         }
     }
 

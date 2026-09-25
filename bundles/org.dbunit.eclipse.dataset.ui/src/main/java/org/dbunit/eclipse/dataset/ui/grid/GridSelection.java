@@ -34,6 +34,7 @@ import org.eclipse.nebula.widgets.nattable.selection.SelectionLayer;
  * cost grows with the number of selected cells.
  *
  * @param tableKey The key of the table the selection belongs to, or null when there is no active grid.
+ * @param rowCount The table's current row count.
  * @param columnCount The table's current column count.
  * @param anchorColumnIndex The selection anchor's column index, or {@code SelectionLayer.NO_SELECTION}.
  * @param anchorRowIndex The selection anchor's row index, or {@code SelectionLayer.NO_SELECTION}.
@@ -47,25 +48,26 @@ import org.eclipse.nebula.widgets.nattable.selection.SelectionLayer;
  *                          selected.
  * @since 1.0.0
  */
-public record GridSelection(String tableKey, int columnCount, int anchorColumnIndex, int anchorRowIndex,
-        List<Integer> rowIndexes, List<Integer> columnIndexes, int firstRowIndex, int lastRowIndex,
-        int firstColumnIndex, int lastColumnIndex, boolean wholeRowsSelected)
+public record GridSelection(String tableKey, int rowCount, int columnCount, int anchorColumnIndex,
+        int anchorRowIndex, List<Integer> rowIndexes, List<Integer> columnIndexes, int firstRowIndex,
+        int lastRowIndex, int firstColumnIndex, int lastColumnIndex, boolean wholeRowsSelected)
 {
     /**
      * The selection of a page with no active grid: no table, no anchor, no selected rows or columns.
      */
-    public static final GridSelection NONE = new GridSelection(null, 0, SelectionLayer.NO_SELECTION,
+    public static final GridSelection NONE = new GridSelection(null, 0, 0, SelectionLayer.NO_SELECTION,
             SelectionLayer.NO_SELECTION, List.of(), List.of(), -1, -1, -1, -1, false);
 
     /**
      * Computes a selection snapshot from a grid's current selection.
      *
      * @param tableKey The key of the table the grid displays.
+     * @param rowCount The table's current row count.
      * @param columnCount The table's current column count.
      * @param selectionLayer The layer to read the selection from.
      * @return The computed snapshot.
      */
-    public static GridSelection compute(final String tableKey, final int columnCount,
+    public static GridSelection compute(final String tableKey, final int rowCount, final int columnCount,
             final SelectionLayer selectionLayer)
     {
         final PositionCoordinate anchor = selectionLayer.getSelectionAnchor();
@@ -93,9 +95,19 @@ public record GridSelection(String tableKey, int columnCount, int anchorColumnIn
                 break;
             }
         }
-        return new GridSelection(tableKey, columnCount, anchor.columnPosition, anchor.rowPosition,
+        return new GridSelection(tableKey, rowCount, columnCount, anchor.columnPosition, anchor.rowPosition,
                 rowIndexes, columnIndexes, boundStart(rowIndexes), boundEnd(rowIndexes),
                 boundStart(columnIndexes), boundEnd(columnIndexes), wholeRowsSelected);
+    }
+
+    /**
+     * Returns whether the selected rows form one contiguous block, with no gaps.
+     *
+     * @return True when at least one row is selected and the selected row indexes have no gaps.
+     */
+    public boolean isContiguousRowSelection()
+    {
+        return !rowIndexes.isEmpty() && lastRowIndex - firstRowIndex + 1 == rowIndexes.size();
     }
 
     private static int boundStart(final List<Integer> indexes)

@@ -47,6 +47,21 @@ public final class DatasetCommandIds
      */
     public static final String DELETE_ROWS = PREFIX + "deleteRows";
 
+    /**
+     * Inserts copies of the selected rows directly after them.
+     */
+    public static final String DUPLICATE_ROWS = PREFIX + "duplicateRows";
+
+    /**
+     * Moves the selected rows up by one position.
+     */
+    public static final String MOVE_ROWS_UP = PREFIX + "moveRowsUp";
+
+    /**
+     * Moves the selected rows down by one position.
+     */
+    public static final String MOVE_ROWS_DOWN = PREFIX + "moveRowsDown";
+
     private DatasetCommandIds()
     {
     }

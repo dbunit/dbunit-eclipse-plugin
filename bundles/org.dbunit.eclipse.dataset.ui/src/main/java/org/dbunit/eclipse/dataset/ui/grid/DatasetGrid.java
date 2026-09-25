@@ -180,8 +180,8 @@ public final class DatasetGrid
      */
     public GridSelection getSelection()
     {
-        return GridSelection.compute(bodyDataProvider.getTableKey(), bodyDataProvider.getColumnCount(),
-                selectionLayer);
+        return GridSelection.compute(bodyDataProvider.getTableKey(), bodyDataProvider.getRowCount(),
+                bodyDataProvider.getColumnCount(), selectionLayer);
     }
 
     /**

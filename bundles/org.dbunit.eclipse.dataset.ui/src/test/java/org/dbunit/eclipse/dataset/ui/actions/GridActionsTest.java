@@ -31,6 +31,7 @@ import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlOptions;
+import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.core.commands.ExecutionException;
@@ -133,6 +134,99 @@ class GridActionsTest
 
         assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows())
                 .as("Insert Row Below must do nothing while a cell editor is active.").hasSize(1);
+    }
+
+    @Test
+    void testDuplicateRows_withTwoRowsSelected_insertsCopiesDirectlyAfterThemAndSelectsTheNewBlock()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/><USERS ID=\"3\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0, 1);
+        final DuplicateRowsAction action = new DuplicateRowsAction(context);
+
+        action.run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows()).as("Duplicating two rows must add two rows.").hasSize(5);
+        assertThat(table.getRows().get(2).getValue(0)).as("The duplicate block must copy the first row.")
+                .isEqualTo("1");
+        assertThat(table.getRows().get(3).getValue(0))
+                .as("The duplicate block must copy the second row, in order.").isEqualTo("2");
+        assertThat(context.pendingSelectionRow).as("Duplicate Rows must select the new block's first row.")
+                .isEqualTo(2);
+    }
+
+    @Test
+    void testMoveRowsUp_withAContiguousBlockSelected_movesItUpAndKeepsItSelected()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/><USERS ID=\"3\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(1, 2);
+        final MoveRowsUpAction action = new MoveRowsUpAction(context);
+
+        action.run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows().get(0).getValue(0)).as("Moving the block up must place it first.")
+                .isEqualTo("2");
+        assertThat(table.getRows().get(1).getValue(0)).isEqualTo("3");
+        assertThat(table.getRows().get(2).getValue(0))
+                .as("The row the block moved past must follow it.").isEqualTo("1");
+        assertThat(context.pendingSelectionRow).as("Move Rows Up must keep the block selected.")
+                .isEqualTo(0);
+    }
+
+    @Test
+    void testMoveRowsDown_withAContiguousBlockSelected_movesItDownAndKeepsItSelected()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/><USERS ID=\"3\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0, 1);
+        final MoveRowsDownAction action = new MoveRowsDownAction(context);
+
+        action.run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows().get(0).getValue(0))
+                .as("The row the block moved past must precede it.").isEqualTo("3");
+        assertThat(table.getRows().get(1).getValue(0)).as("Moving the block down must place it after.")
+                .isEqualTo("1");
+        assertThat(table.getRows().get(2).getValue(0)).isEqualTo("2");
+        assertThat(context.pendingSelectionRow).as("Move Rows Down must keep the block selected.")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void testUpdate_forMoveRowsUpAndDown_disabledWhenNotContiguousOrAtTheEdge()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/><USERS ID=\"3\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final MoveRowsUpAction up = new MoveRowsUpAction(context);
+        final MoveRowsDownAction down = new MoveRowsDownAction(context);
+
+        context.rowIndexes = List.of(0, 2);
+        up.update(context.getSelection());
+        down.update(context.getSelection());
+        assertThat(up.isEnabled()).as("A non-contiguous selection must disable Move Rows Up.").isFalse();
+        assertThat(down.isEnabled()).as("A non-contiguous selection must disable Move Rows Down.")
+                .isFalse();
+
+        context.rowIndexes = List.of(0, 1);
+        up.update(context.getSelection());
+        down.update(context.getSelection());
+        assertThat(up.isEnabled()).as("A block already at the top must disable Move Rows Up.").isFalse();
+        assertThat(down.isEnabled()).as("A block not at the bottom must enable Move Rows Down.").isTrue();
+
+        context.rowIndexes = List.of(1, 2);
+        up.update(context.getSelection());
+        down.update(context.getSelection());
+        assertThat(up.isEnabled()).as("A block not at the top must enable Move Rows Up.").isTrue();
+        assertThat(down.isEnabled()).as("A block already at the bottom must disable Move Rows Down.")
+                .isFalse();
     }
 
     private static FlatXmlDatasetDocument create(final String content)
@@ -239,12 +333,13 @@ class GridActionsTest
         @Override
         public GridSelection getSelection()
         {
-            final int columnCount =
-                    datasetDocument.getModel().findTable(tableKey).orElseThrow().getColumns().size();
+            final DatasetTable table = datasetDocument.getModel().findTable(tableKey).orElseThrow();
+            final int rowCount = table.getRows().size();
+            final int columnCount = table.getColumns().size();
             final int firstRow = rowIndexes.isEmpty() ? -1 : rowIndexes.get(0);
             final int lastRow = rowIndexes.isEmpty() ? -1 : rowIndexes.get(rowIndexes.size() - 1);
-            return new GridSelection(tableKey, columnCount, anchorColumnIndex, anchorRowIndex, rowIndexes,
-                    List.of(), firstRow, lastRow, -1, -1, !rowIndexes.isEmpty());
+            return new GridSelection(tableKey, rowCount, columnCount, anchorColumnIndex, anchorRowIndex,
+                    rowIndexes, List.of(), firstRow, lastRow, -1, -1, !rowIndexes.isEmpty());
         }
 
         @Override

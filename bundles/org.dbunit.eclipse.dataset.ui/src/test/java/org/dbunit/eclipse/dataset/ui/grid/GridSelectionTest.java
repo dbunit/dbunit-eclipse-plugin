@@ -53,7 +53,8 @@ class GridSelectionTest
         };
         selectionLayer.doCommand(new SelectAllCommand());
 
-        final GridSelection selection = GridSelection.compute("USERS", columnCount, selectionLayer);
+        final GridSelection selection =
+                GridSelection.compute("USERS", rowCount, columnCount, selectionLayer);
 
         assertThat(selection.rowIndexes()).as("Select All must select every row.").hasSize(rowCount);
         assertThat(selection.firstRowIndex()).as("The first selected row must be 0.").isZero();
