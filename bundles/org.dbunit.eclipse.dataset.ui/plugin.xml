@@ -131,4 +131,11 @@
             class="org.dbunit.eclipse.dataset.ui.source.XmlDocumentSetupParticipant"
             contentTypeId="org.dbunit.eclipse.dataset.flatxml"/>
    </extension>
+
+   <extension point="org.eclipse.ui.preferencePages">
+      <page
+            id="org.dbunit.eclipse.dataset.ui.preferencePage"
+            name="%preferencePage.name"
+            class="org.dbunit.eclipse.dataset.ui.preferences.DatasetPreferencePage"/>
+   </extension>
 </plugin>

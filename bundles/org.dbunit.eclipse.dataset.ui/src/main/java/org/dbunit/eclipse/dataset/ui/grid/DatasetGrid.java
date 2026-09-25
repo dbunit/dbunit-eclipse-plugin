@@ -284,6 +284,15 @@ public final class DatasetGrid
     }
 
     /**
+     * Repaints every cell without changing the table or the selection, for example after the NULL display
+     * text changed.
+     */
+    public void repaint()
+    {
+        natTable.refresh(false);
+    }
+
+    /**
      * Tells the grid its table was renamed, so it keeps showing the same table under its new key.
      *
      * @param newTableKey The table's key after the rename.

@@ -26,11 +26,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
+import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
 import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.preferences.PreferenceKeys;
 import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IFindReplaceTarget;
+import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
@@ -154,6 +157,22 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         }
     };
 
+    private final IPreferenceStore preferenceStore = DatasetUiPlugin.getDefault().getPreferenceStore();
+
+    private final IPropertyChangeListener preferenceListener = event ->
+    {
+        final String property = event.getProperty();
+        // Preferences can change on any thread, for example when a setup tool applies them in a job.
+        if (Display.getCurrent() == null)
+        {
+            Display.getDefault().asyncExec(() -> preferenceChanged(property));
+        }
+        else
+        {
+            preferenceChanged(property);
+        }
+    };
+
     private FlatXmlSourceEditor sourceEditor;
 
     private TablesPage tablesPage;
@@ -203,6 +222,7 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         sourceEditor.getDocumentProvider().addElementStateListener(elementStateListener);
         getSite().getPage().addPartListener(partListener);
         getSite().getWorkbenchWindow().getWorkbench().addWindowListener(windowListener);
+        preferenceStore.addPropertyChangeListener(preferenceListener);
     }
 
     @Override
@@ -299,23 +319,9 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
     @Override
     public void dispose()
     {
-        if (sourceEditor != null)
-        {
-            sourceEditor.removePropertyListener(sourceInputListener);
-            final IDocumentProvider documentProvider = sourceEditor.getDocumentProvider();
-            if (documentProvider != null)
-            {
-                documentProvider.removeElementStateListener(elementStateListener);
-            }
-        }
-        if (getSite() != null && getSite().getPage() != null)
-        {
-            getSite().getPage().removePartListener(partListener);
-        }
-        if (getSite() != null && getSite().getWorkbenchWindow() != null)
-        {
-            getSite().getWorkbenchWindow().getWorkbench().removeWindowListener(windowListener);
-        }
+        removeSourceEditorListeners();
+        removeWorkbenchListeners();
+        preferenceStore.removePropertyChangeListener(preferenceListener);
         if (datasetDocument != null)
         {
             datasetDocument.dispose();
@@ -325,6 +331,31 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
             tablesPage.dispose();
         }
         super.dispose();
+    }
+
+    private void removeSourceEditorListeners()
+    {
+        if (sourceEditor != null)
+        {
+            sourceEditor.removePropertyListener(sourceInputListener);
+            final IDocumentProvider documentProvider = sourceEditor.getDocumentProvider();
+            if (documentProvider != null)
+            {
+                documentProvider.removeElementStateListener(elementStateListener);
+            }
+        }
+    }
+
+    private void removeWorkbenchListeners()
+    {
+        if (getSite() != null && getSite().getPage() != null)
+        {
+            getSite().getPage().removePartListener(partListener);
+        }
+        if (getSite() != null && getSite().getWorkbenchWindow() != null)
+        {
+            getSite().getWorkbenchWindow().getWorkbench().removeWindowListener(windowListener);
+        }
     }
 
     private void handleInputChanged()
@@ -358,6 +389,23 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
     {
         sourceEditor.checkExternalModification();
         datasetDocument.reloadDtd();
+    }
+
+    private void preferenceChanged(final String property)
+    {
+        if (tablesPage.getControl().isDisposed())
+        {
+            return;
+        }
+        if (PreferenceKeys.NULL_DISPLAY_TEXT.equals(property))
+        {
+            tablesPage.repaintGrids();
+        }
+        else if (PreferenceKeys.ASSUME_COLUMN_SENSING.equals(property)
+                || PreferenceKeys.CASE_SENSITIVE_TABLE_NAMES.equals(property))
+        {
+            datasetDocument.setOptions(PreferenceKeys.readOptions());
+        }
     }
 
     Charset currentCharset()
