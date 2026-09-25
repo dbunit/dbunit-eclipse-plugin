@@ -305,7 +305,8 @@ class GridActionsTest
         final AddColumnAction action = new AddColumnAction(context)
         {
             @Override
-            String openNameDialog(final Shell shell, final IInputValidator validator)
+            String openNameDialog(final Shell shell, final IInputValidator validator,
+                    final DatasetTable table)
             {
                 return "EMAIL";
             }

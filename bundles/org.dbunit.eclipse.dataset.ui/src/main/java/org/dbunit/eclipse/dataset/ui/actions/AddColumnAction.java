@@ -41,6 +41,9 @@ import org.eclipse.swt.widgets.Shell;
  */
 public class AddColumnAction extends GridAction
 {
+    private static final String DTD_WARNING = "\n\ndbUnit reads a flat XML dataset's columns from its "
+            + "DTD; add this column there too, or it will have no effect.";
+
     /**
      * Creates the action.
      *
@@ -65,7 +68,7 @@ public class AddColumnAction extends GridAction
             existingNames.add(column.name());
         }
         final String columnName =
-                openNameDialog(context.getShell(), new DatasetNameValidator(existingNames));
+                openNameDialog(context.getShell(), new DatasetNameValidator(existingNames), table);
         if (columnName == null)
         {
             return;
@@ -78,12 +81,27 @@ public class AddColumnAction extends GridAction
      *
      * @param shell The shell to parent the dialog on.
      * @param validator The validator for the entered name.
+     * @param table The table the column would be added to, to decide whether to show the DTD warning.
      * @return The entered name, or null when the dialog was cancelled.
      */
-    String openNameDialog(final Shell shell, final IInputValidator validator)
+    String openNameDialog(final Shell shell, final IInputValidator validator, final DatasetTable table)
     {
-        final InputDialog dialog = new InputDialog(shell, "Add Column", "Column name:", "", validator);
+        final InputDialog dialog =
+                new InputDialog(shell, "Add Column", nameDialogMessage(table), "", validator);
         return dialog.open() == Window.OK ? dialog.getValue() : null;
+    }
+
+    /**
+     * Builds the dialog message, warning that dbUnit reads columns from the DTD when the table already
+     * has columns declared there.
+     *
+     * @param table The table the column would be added to.
+     * @return The dialog message.
+     */
+    static String nameDialogMessage(final DatasetTable table)
+    {
+        final boolean hasDtdColumns = table.getColumns().stream().anyMatch(DatasetColumn::declared);
+        return hasDtdColumns ? "Column name:" + DTD_WARNING : "Column name:";
     }
 
     @Override
