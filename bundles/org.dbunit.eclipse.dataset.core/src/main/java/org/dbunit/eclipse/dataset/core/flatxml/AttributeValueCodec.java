@@ -62,8 +62,14 @@ public final class AttributeValueCodec
      */
     public static String decode(final CharSequence raw) throws AttributeValueException
     {
+        final int plainLength = plainPrefixLength(raw);
+        if (plainLength == raw.length())
+        {
+            return raw.toString();
+        }
         final StringBuilder result = new StringBuilder(raw.length());
-        int index = 0;
+        result.append(raw, 0, plainLength);
+        int index = plainLength;
         while (index < raw.length())
         {
             final char current = raw.charAt(index);
@@ -89,6 +95,25 @@ public final class AttributeValueCodec
             }
         }
         return result.toString();
+    }
+
+    /**
+     * Returns the length of a raw value's leading characters that decode to themselves, which is the whole
+     * raw value for most values.
+     */
+    private static int plainPrefixLength(final CharSequence raw)
+    {
+        int index = 0;
+        while (index < raw.length() && !needsDecoding(raw.charAt(index)))
+        {
+            index++;
+        }
+        return index;
+    }
+
+    private static boolean needsDecoding(final char character)
+    {
+        return character == '&' || character == '\t' || character == '\n' || character == '\r';
     }
 
     /**

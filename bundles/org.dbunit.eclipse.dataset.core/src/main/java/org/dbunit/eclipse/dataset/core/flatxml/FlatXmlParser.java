@@ -21,8 +21,10 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
@@ -64,6 +66,18 @@ final class FlatXmlParser
         private final List<FlatXmlElement> elements = new ArrayList<>();
 
         private final List<DatasetProblem> problems = new ArrayList<>();
+
+        /**
+         * Each distinct element and attribute name, so that the elements share one string per name
+         * instead of holding one per occurrence.
+         */
+        private final Map<String, String> names = new HashMap<>();
+
+        /**
+         * The attribute names of the start tag being scanned; start tags never nest, so one set serves
+         * them all.
+         */
+        private final Set<String> startTagAttributeNames = new HashSet<>();
 
         private int pos;
 
@@ -217,7 +231,7 @@ final class FlatXmlParser
             final String name = scanName();
             final int nameEndOffset = pos;
             final List<FlatXmlAttribute> attributes = new ArrayList<>();
-            final Set<String> seenNames = new HashSet<>();
+            startTagAttributeNames.clear();
             int attributesEndOffset = nameEndOffset;
             while (true)
             {
@@ -250,7 +264,7 @@ final class FlatXmlParser
                             pos);
                 }
                 final FlatXmlAttribute attribute = scanAttribute(segmentOffset);
-                if (!seenNames.add(attribute.name()))
+                if (!startTagAttributeNames.add(attribute.name()))
                 {
                     throw blockingError(ProblemCode.NOT_WELL_FORMED,
                             "Duplicate attribute '" + attribute.name() + "'.", attribute.nameOffset());
@@ -560,7 +574,9 @@ final class FlatXmlParser
                 }
                 pos += Character.charCount(codePoint);
             }
-            return text.subSequence(start, pos).toString();
+            final String name = text.subSequence(start, pos).toString();
+            final String sharedName = names.putIfAbsent(name, name);
+            return sharedName != null ? sharedName : name;
         }
 
         private void skipWhitespace()

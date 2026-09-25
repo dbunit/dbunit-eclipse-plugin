@@ -39,6 +39,23 @@ import org.junit.jupiter.api.Test;
 class AttributeValueCodecTest
 {
     @Test
+    void testDecode_whenGivenPlainText_returnsItUnchanged() throws AttributeValueException
+    {
+        assertThat(AttributeValueCodec.decode("Alice Smith, 42 > 7"))
+                .as("Text without references or literal whitespace other than spaces must decode to itself.")
+                .isEqualTo("Alice Smith, 42 > 7");
+    }
+
+    @Test
+    void testDecode_whenPlainTextPrecedesTextToDecode_keepsThePlainTextAndDecodesTheRest()
+            throws AttributeValueException
+    {
+        assertThat(AttributeValueCodec.decode("Tom &amp; Jerry\tsay &lt;hi&gt;"))
+                .as("The plain text before the first reference must be kept, and the rest decoded.")
+                .isEqualTo("Tom & Jerry say <hi>");
+    }
+
+    @Test
     void testDecode_whenGivenEachPredefinedEntity_returnsItsCharacter() throws AttributeValueException
     {
         assertThat(AttributeValueCodec.decode("&lt;&gt;&amp;&quot;&apos;"))
