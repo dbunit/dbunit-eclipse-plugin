@@ -911,8 +911,8 @@ final class TablesPage implements DatasetGridContext
     private void updateTab(final CTabItem item, final DatasetTable table, final DatasetModel model)
     {
         item.setText(table.getName());
-        item.setToolTipText(
-                table.getRows().size() + " rows, " + table.getColumns().size() + " columns");
+        item.setToolTipText(table.isDeclaredOnly() ? "Declared in the DTD; no rows"
+                : table.getRows().size() + " rows, " + table.getColumns().size() + " columns");
         item.setFont(table.getRows().isEmpty() ? italicFont() : null);
         item.setImage(problemImage(model.getProblems(table.getKey())));
     }

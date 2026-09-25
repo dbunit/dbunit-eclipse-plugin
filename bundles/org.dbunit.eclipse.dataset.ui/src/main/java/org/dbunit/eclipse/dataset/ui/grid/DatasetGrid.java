@@ -75,6 +75,8 @@ public final class DatasetGrid
 
     private final ColumnHeaderLabels columnHeaderLabels;
 
+    private final ColumnHeaderTooltip columnHeaderTooltip;
+
     private final ColumnWidths columnWidths = new ColumnWidths();
 
     private DatasetTable currentTable;
@@ -126,6 +128,7 @@ public final class DatasetGrid
         natTable.configure();
         natTable.setTheme(context.isDarkTheme() ? new DarkNatTableThemeConfiguration()
                 : new ModernNatTableThemeConfiguration());
+        columnHeaderTooltip = new ColumnHeaderTooltip(natTable, bodyDataProvider);
         wireContextMenu(context);
     }
 
@@ -170,6 +173,11 @@ public final class DatasetGrid
     TableBodyDataProvider getBodyDataProvider()
     {
         return bodyDataProvider;
+    }
+
+    ColumnHeaderTooltip getColumnHeaderTooltip()
+    {
+        return columnHeaderTooltip;
     }
 
     SelectionLayer getSelectionLayer()

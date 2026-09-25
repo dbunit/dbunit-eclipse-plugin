@@ -268,7 +268,8 @@ class GridActionsTest
         final AddColumnAction action = new AddColumnAction(context)
         {
             @Override
-            String openNameDialog(final Shell shell, final IInputValidator validator)
+            String openNameDialog(final Shell shell, final IInputValidator validator,
+                    final DatasetTable table)
             {
                 return "EMAIL";
             }
@@ -279,6 +280,31 @@ class GridActionsTest
         assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
                 .extracting(DatasetColumn::name).as("Add Column must add the entered name.")
                 .contains("EMAIL");
+    }
+
+    @Test
+    void testAddColumnNameDialogMessage_whenTheTableHasNoDtdDeclaredColumns_isJustThePrompt()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+
+        assertThat(AddColumnAction.nameDialogMessage(table))
+                .as("A table with no DTD-declared columns must get a plain prompt.")
+                .isEqualTo("Column name:");
+    }
+
+    @Test
+    void testAddColumnNameDialogMessage_whenTheTableHasDtdDeclaredColumns_warnsThatDbUnitReadsTheDtd()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset>\n    <USERS ID=\"1\"/>\n"
+                        + "</dataset>\n");
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+
+        assertThat(AddColumnAction.nameDialogMessage(table))
+                .as("A table with DTD-declared columns must warn that dbUnit reads columns from the DTD.")
+                .contains("dbUnit reads a flat XML dataset's columns from its DTD");
     }
 
     @Test

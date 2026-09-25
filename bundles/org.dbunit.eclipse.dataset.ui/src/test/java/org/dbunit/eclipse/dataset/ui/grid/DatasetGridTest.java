@@ -49,6 +49,7 @@ import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 import org.junit.jupiter.api.AfterEach;
@@ -182,6 +183,40 @@ class DatasetGridTest
                 .isFalse();
         assertThat(extraLabels.hasLabel("PENDING_COLUMN")).as("A pending column must get the label.")
                 .isTrue();
+    }
+
+    @Test
+    void testColumnHeaderTooltip_overTheEmptyAreaBeyondTheCells_hasNoText()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(datasetDocument), "USERS");
+        grid.tableChanged(datasetDocument.getModel().findTable("USERS").orElseThrow());
+        shell.layout();
+        processEvents();
+        final Event hover = new Event();
+        hover.x = grid.getNatTable().getClientArea().width - 2;
+        hover.y = grid.getNatTable().getClientArea().height - 2;
+
+        assertThat(grid.getColumnHeaderTooltip().getText(hover))
+                .as("Hovering beyond the last column and row must show no tooltip instead of failing.")
+                .isNull();
+    }
+
+    @Test
+    void testColumnHeaderTooltip_forADeclaredColumnWithoutValues_showsTheDtdText()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED NAME CDATA #IMPLIED>\n]>\n"
+                        + "<dataset>\n    <USERS ID=\"1\"/>\n</dataset>\n");
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(datasetDocument), "USERS");
+
+        final String idText = grid.getColumnHeaderTooltip().textForColumn(0);
+        final String nameText = grid.getColumnHeaderTooltip().textForColumn(1);
+
+        assertThat(idText).as("A declared column with a value must get no tooltip.").isNull();
+        assertThat(nameText).as("A declared column without values must explain why it is empty.")
+                .isEqualTo("Declared in the DTD; no values yet");
     }
 
     @Test
