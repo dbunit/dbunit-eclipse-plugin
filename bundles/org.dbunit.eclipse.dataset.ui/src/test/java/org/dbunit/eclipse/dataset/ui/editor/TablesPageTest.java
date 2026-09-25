@@ -21,11 +21,13 @@
 package org.dbunit.eclipse.dataset.ui.editor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
+import org.dbunit.eclipse.dataset.ui.actions.DatasetCommandIds;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.swt.SWT;
@@ -39,6 +41,8 @@ import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.actions.ActionFactory;
+import org.eclipse.ui.contexts.IContextService;
+import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.ITextEditorActionConstants;
 import org.junit.jupiter.api.Test;
@@ -217,6 +221,34 @@ class TablesPageTest
 
             assertThat(editor.getDatasetDocument().isStale())
                     .as("Activating the Tables page must refresh the stale model.").isFalse();
+        }
+    }
+
+    @Test
+    void testActivate_whenTheTablesPageIsActive_activatesTheContextAndHandlers() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IContextService contextService =
+                    editor.getEditorSite().getService(IContextService.class);
+            final IHandlerService handlerService =
+                    editor.getEditorSite().getService(IHandlerService.class);
+
+            assertThat(contextService.getActiveContextIds())
+                    .as("Opening on the Tables page must activate its context.")
+                    .contains("org.dbunit.eclipse.dataset.ui.tablesPageContext");
+            assertThatCode(() -> handlerService.executeCommand(DatasetCommandIds.INSERT_ROW_ABOVE, null))
+                    .as("The Tables page's command handlers must be active.")
+                    .doesNotThrowAnyException();
+
+            editor.showOnSourcePage(0, 0);
+            UiTestWorkspace.processEvents();
+
+            assertThat(contextService.getActiveContextIds())
+                    .as("Switching to the Source page must deactivate the Tables page's context.")
+                    .doesNotContain("org.dbunit.eclipse.dataset.ui.tablesPageContext");
         }
     }
 

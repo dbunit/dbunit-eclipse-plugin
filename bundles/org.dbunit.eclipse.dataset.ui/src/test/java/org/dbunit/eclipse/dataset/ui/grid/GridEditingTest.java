@@ -325,7 +325,30 @@ class GridEditingTest
         }
 
         @Override
+        public boolean executeMultiCellEdit(final String title, final Runnable edit)
+        {
+            return executeEdit(edit);
+        }
+
+        @Override
         public void fillContextMenu(final IMenuManager menu, final String region)
+        {
+        }
+
+        @Override
+        public boolean hasActiveCellEditor()
+        {
+            return false;
+        }
+
+        @Override
+        public GridSelection getSelection()
+        {
+            return GridSelection.NONE;
+        }
+
+        @Override
+        public void setPendingSelection(final int columnIndex, final int rowIndex)
         {
         }
     }

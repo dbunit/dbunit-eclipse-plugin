@@ -27,11 +27,13 @@ import org.eclipse.nebula.widgets.nattable.selection.SelectionLayer;
 import org.eclipse.nebula.widgets.nattable.ui.binding.UiBindingRegistry;
 import org.eclipse.nebula.widgets.nattable.ui.matcher.CellEditorMouseEventMatcher;
 import org.eclipse.nebula.widgets.nattable.ui.matcher.KeyEventMatcher;
+import org.eclipse.nebula.widgets.nattable.ui.matcher.MouseEventMatcher;
 import org.eclipse.swt.SWT;
 
 /**
  * Replaces NatTable's default single-click editing with spreadsheet-style editing: F2 or a typed character
- * edits the selection anchor, and a double-click edits the clicked cell.
+ * edits the selection anchor, and a double-click edits the clicked cell. A right-click selects the cell,
+ * row, or column it hits, unless it is already selected, before the context menu opens.
  *
  * @since 1.0.0
  */
@@ -52,5 +54,12 @@ final class SpreadsheetEditBindings extends AbstractUiBindingConfiguration
         uiBindingRegistry.registerKeyBinding(new PrintableCharacterKeyEventMatcher(), editAnchorCell);
         uiBindingRegistry.registerDoubleClickBinding(new CellEditorMouseEventMatcher(GridRegion.BODY),
                 new MouseEditAction());
+        final ContextMenuTarget contextMenuTarget = new ContextMenuTarget(selectionLayer);
+        uiBindingRegistry.registerMouseDownBinding(MouseEventMatcher.bodyRightClick(SWT.NONE),
+                contextMenuTarget);
+        uiBindingRegistry.registerMouseDownBinding(MouseEventMatcher.rowHeaderRightClick(SWT.NONE),
+                contextMenuTarget);
+        uiBindingRegistry.registerMouseDownBinding(MouseEventMatcher.columnHeaderRightClick(SWT.NONE),
+                contextMenuTarget);
     }
 }
