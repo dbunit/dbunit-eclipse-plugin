@@ -262,6 +262,11 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         return getPageText(pageIndex);
     }
 
+    boolean isSourcePageActive()
+    {
+        return getActivePage() == SOURCE_PAGE_INDEX;
+    }
+
     void showOnSourcePage(final int offset, final int length)
     {
         setActivePage(SOURCE_PAGE_INDEX);
@@ -315,6 +320,10 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         {
             datasetDocument.dispose();
         }
+        if (tablesPage != null)
+        {
+            tablesPage.dispose();
+        }
         super.dispose();
     }
 
@@ -325,6 +334,7 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         setPartName(newInput.getName());
         final IDocument document = sourceEditor.getDocumentProvider().getDocument(newInput);
         datasetDocument.rebind(document, new EditorInputDtdSource(newInput));
+        tablesPage.inputChanged();
     }
 
     private void commitActiveCellEditor()
