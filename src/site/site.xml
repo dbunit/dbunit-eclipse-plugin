@@ -40,6 +40,7 @@
     <menu name="Overview">
       <item name="Introduction" href="index.html" />
       <item name="Installation" href="install.html" />
+      <item name="User Guide" href="usage.html" />
       <item name="Changes" href="changes.html" />
     </menu>
     <menu name="Developing the dbUnit Eclipse Plugin">
