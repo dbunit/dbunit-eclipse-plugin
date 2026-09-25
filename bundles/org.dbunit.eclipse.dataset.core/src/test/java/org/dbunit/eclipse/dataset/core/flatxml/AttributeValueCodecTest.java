@@ -39,6 +39,23 @@ import org.junit.jupiter.api.Test;
 class AttributeValueCodecTest
 {
     @Test
+    void testDecode_whenGivenPlainText_returnsItUnchanged() throws AttributeValueException
+    {
+        assertThat(AttributeValueCodec.decode("Alice Smith, 42 > 7"))
+                .as("Text without references or literal whitespace other than spaces must decode to itself.")
+                .isEqualTo("Alice Smith, 42 > 7");
+    }
+
+    @Test
+    void testDecode_whenPlainTextPrecedesTextToDecode_keepsThePlainTextAndDecodesTheRest()
+            throws AttributeValueException
+    {
+        assertThat(AttributeValueCodec.decode("Tom &amp; Jerry\tsay &lt;hi&gt;"))
+                .as("The plain text before the first reference must be kept, and the rest decoded.")
+                .isEqualTo("Tom & Jerry say <hi>");
+    }
+
+    @Test
     void testDecode_whenGivenEachPredefinedEntity_returnsItsCharacter() throws AttributeValueException
     {
         assertThat(AttributeValueCodec.decode("&lt;&gt;&amp;&quot;&apos;"))
@@ -156,6 +173,40 @@ class AttributeValueCodecTest
         assertThat(exception).as("U+0001 is not an XML 1.0 Char, so the reference must throw.")
                 .isNotNull();
         assertThat(exception.getOffset()).as("The offset must point at the '&'.").isEqualTo(1);
+    }
+
+    @Test
+    void testDecode_whenEntireValueIsALiteralNonXmlCharacter_throwsAtItsOffset()
+    {
+        final AttributeValueException exception = catchThrowableOfType(
+                () -> AttributeValueCodec.decode("\u000B"), AttributeValueException.class);
+
+        assertThat(exception).as("U+000B is not an XML 1.0 Char, so a literal one must throw.")
+                .isNotNull();
+        assertThat(exception.getOffset()).as("The offset must point at the character.").isEqualTo(0);
+    }
+
+    @Test
+    void testDecode_whenALiteralNonXmlCharacterPrecedesAReference_throwsAtItsOffset()
+    {
+        final AttributeValueException exception = catchThrowableOfType(
+                () -> AttributeValueCodec.decode("a\u000B&amp;"), AttributeValueException.class);
+
+        assertThat(exception)
+                .as("A literal non-XML character before the first reference must still throw.")
+                .isNotNull();
+        assertThat(exception.getOffset()).as("The offset must point at the character.").isEqualTo(1);
+    }
+
+    @Test
+    void testDecode_whenALiteralNonXmlCharacterFollowsADecodedReference_throwsAtItsOffset()
+    {
+        final AttributeValueException exception = catchThrowableOfType(
+                () -> AttributeValueCodec.decode("&amp;\u000B"), AttributeValueException.class);
+
+        assertThat(exception).as("A literal non-XML character after a reference must still throw.")
+                .isNotNull();
+        assertThat(exception.getOffset()).as("The offset must point at the character.").isEqualTo(5);
     }
 
     @Test

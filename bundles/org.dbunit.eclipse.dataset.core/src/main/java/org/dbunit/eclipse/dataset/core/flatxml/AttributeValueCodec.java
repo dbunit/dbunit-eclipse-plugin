@@ -81,8 +81,16 @@ public final class AttributeValueCodec
      */
     public static String decode(final CharSequence raw) throws AttributeValueException
     {
+        final int plainLength = plainPrefixLength(raw);
+        if (plainLength == raw.length())
+        {
+            validateLiteralRun(raw, 0, raw.length());
+            return raw.toString();
+        }
         final StringBuilder result = new StringBuilder(raw.length());
-        int index = 0;
+        validateLiteralRun(raw, 0, plainLength);
+        result.append(raw, 0, plainLength);
+        int index = plainLength;
         while (index < raw.length())
         {
             final char current = raw.charAt(index);
@@ -97,11 +105,58 @@ public final class AttributeValueCodec
             }
             else
             {
-                result.append(current);
-                index++;
+                final int codePoint = Character.codePointAt(raw, index);
+                validateLiteralCodePoint(codePoint, index);
+                result.appendCodePoint(codePoint);
+                index += Character.charCount(codePoint);
             }
         }
         return result.toString();
+    }
+
+    /**
+     * Throws when a code point anywhere in raw's [start, end) range is not an XML 1.0 {@code Char}.
+     */
+    private static void validateLiteralRun(final CharSequence raw, final int start, final int end)
+            throws AttributeValueException
+    {
+        int index = start;
+        while (index < end)
+        {
+            final int codePoint = Character.codePointAt(raw, index);
+            validateLiteralCodePoint(codePoint, index);
+            index += Character.charCount(codePoint);
+        }
+    }
+
+    private static void validateLiteralCodePoint(final int codePoint, final int offset)
+            throws AttributeValueException
+    {
+        if (!isXmlChar(codePoint))
+        {
+            final String hexadecimal = Integer.toHexString(codePoint).toUpperCase(Locale.ROOT);
+            throw new AttributeValueException(NLS.bind(Messages.Codec_notXmlCharacter, hexadecimal), offset,
+                    false);
+        }
+    }
+
+    /**
+     * Returns the length of a raw value's leading characters that decode to themselves, which is the whole
+     * raw value for most values.
+     */
+    private static int plainPrefixLength(final CharSequence raw)
+    {
+        int index = 0;
+        while (index < raw.length() && !needsDecoding(raw.charAt(index)))
+        {
+            index++;
+        }
+        return index;
+    }
+
+    private static boolean needsDecoding(final char character)
+    {
+        return character == '&' || character == '\t' || character == '\n' || character == '\r';
     }
 
     /**

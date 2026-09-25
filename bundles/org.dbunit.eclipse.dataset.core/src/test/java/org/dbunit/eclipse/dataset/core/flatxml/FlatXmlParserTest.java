@@ -123,6 +123,21 @@ class FlatXmlParserTest
     }
 
     @Test
+    void testParse_whenElementsRepeatNames_sharesOneStringPerName()
+    {
+        final FlatXmlParseResult result =
+                FlatXmlParser.parse("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>");
+
+        final FlatXmlElement first = result.elements().get(0);
+        final FlatXmlElement second = result.elements().get(1);
+        assertThat(second.name()).as("Elements with the same name must share one name string.")
+                .isSameAs(first.name());
+        assertThat(second.attributes().get(0).name())
+                .as("Attributes with the same name must share one name string.")
+                .isSameAs(first.attributes().get(0).name());
+    }
+
+    @Test
     void testParse_whenElementHasNoAttributes_hasEmptyAttributesList()
     {
         final FlatXmlParseResult result = FlatXmlParser.parse("<dataset><AUDIT_LOG/></dataset>");
