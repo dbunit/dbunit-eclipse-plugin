@@ -48,22 +48,55 @@ public final class DatasetEditorContributor extends MultiPageEditorActionBarCont
 
     private FlatXmlDatasetEditor multiPageEditor;
 
+    /**
+     * Remembers the dataset editor that became active, then installs the global action handlers of its
+     * active page.
+     *
+     * @param part The editor that became active.
+     */
     @Override
     public void setActiveEditor(final IEditorPart part)
     {
+        multiPageEditor = part instanceof FlatXmlDatasetEditor ? (FlatXmlDatasetEditor) part : null;
         super.setActiveEditor(part);
-        multiPageEditor = (FlatXmlDatasetEditor) part;
     }
 
+    /**
+     * Installs the global action handlers of the active dataset editor's active page: the text editor's
+     * actions for the Source page, and the Tables page's actions for the Tables page. The page comes from
+     * the active dataset editor rather than from the argument, because every open dataset editor reports
+     * its page changes to this contributor, which the editors share.
+     *
+     * @param activeEditor The nested editor of the page that became active, or null for the Tables page.
+     */
     @Override
     public void setActivePage(final IEditorPart activeEditor)
     {
+        if (multiPageEditor == null || multiPageEditor.getTablesPage() == null)
+        {
+            return;
+        }
         final IActionBars actionBars = getActionBars();
+        final boolean sourcePageActive = multiPageEditor.isSourcePageActive();
+        final ITextEditor sourceEditor = multiPageEditor.getSourceEditor();
+        final TablesPage tablesPage = multiPageEditor.getTablesPage();
         for (int index = 0; index < GLOBAL_ACTION_IDS.length; index++)
         {
-            final IAction action = activeEditor instanceof ITextEditor
-                    ? ((ITextEditor) activeEditor).getAction(TEXT_EDITOR_ACTION_IDS[index]) : null;
-            actionBars.setGlobalActionHandler(GLOBAL_ACTION_IDS[index], action);
+            final String globalActionId = GLOBAL_ACTION_IDS[index];
+            final IAction action;
+            if (sourcePageActive)
+            {
+                action = sourceEditor.getAction(TEXT_EDITOR_ACTION_IDS[index]);
+            }
+            else if (ActionFactory.FIND.getId().equals(globalActionId))
+            {
+                action = null;
+            }
+            else
+            {
+                action = tablesPage.getGlobalActionHandler(globalActionId);
+            }
+            actionBars.setGlobalActionHandler(globalActionId, action);
         }
         actionBars.updateActionBars();
     }

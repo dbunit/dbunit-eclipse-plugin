@@ -24,8 +24,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 
+import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.eclipse.core.resources.IFile;
+import org.eclipse.jface.text.IDocument;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
@@ -33,7 +35,12 @@ import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Event;
+import org.eclipse.ui.IEditorInput;
+import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.actions.ActionFactory;
 import org.eclipse.ui.texteditor.ITextEditor;
+import org.eclipse.ui.texteditor.ITextEditorActionConstants;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -211,5 +218,103 @@ class TablesPageTest
             assertThat(editor.getDatasetDocument().isStale())
                     .as("Activating the Tables page must refresh the stale model.").isFalse();
         }
+    }
+
+    @Test
+    void testGlobalActionHandler_undoAfterAGridEdit_restoresTheTextAndRedoReappliesIt() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final String originalText = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
+            final IFile file = workspace.createFile("dataset.xml", originalText);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final FlatXmlDatasetDocument datasetDocument = editor.getDatasetDocument();
+            final IDocument document = sourceDocument(editor);
+
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Carol")));
+            UiTestWorkspace.processEvents();
+
+            tablesPage.getGlobalActionHandler(ActionFactory.UNDO.getId()).run();
+            UiTestWorkspace.processEvents();
+
+            assertThat(document.get()).as("Undo must restore the original text.")
+                    .isEqualTo(originalText);
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows().get(0)
+                    .getValue(1)).as("Undo must restore the grid's model value.").isEqualTo("Alice");
+
+            tablesPage.getGlobalActionHandler(ActionFactory.REDO.getId()).run();
+            UiTestWorkspace.processEvents();
+
+            assertThat(document.get()).as("Redo must reapply the edit.")
+                    .isEqualTo("<dataset><USERS ID=\"1\" NAME=\"Carol\"/></dataset>");
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows().get(0)
+                    .getValue(1)).as("Redo must restore the grid's model value.").isEqualTo("Carol");
+        }
+    }
+
+    @Test
+    void testGlobalActionHandler_undoFromTheSourcePage_undoesATablesPageEditTooBecauseHistoryIsShared()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final String originalText = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
+            final IFile file = workspace.createFile("dataset.xml", originalText);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final FlatXmlDatasetDocument datasetDocument = editor.getDatasetDocument();
+            final ITextEditor sourceEditor = editor.getSourceEditor();
+            final IDocument document = sourceDocument(editor);
+
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Carol")));
+            UiTestWorkspace.processEvents();
+
+            sourceEditor.getAction(ITextEditorActionConstants.UNDO).run();
+            UiTestWorkspace.processEvents();
+
+            assertThat(document.get())
+                    .as("The Source page's undo action must undo a Tables-page edit: they share one history.")
+                    .isEqualTo(originalText);
+        }
+    }
+
+    @Test
+    void testTablesPage_afterTheEditorInputChanges_undoesAndRefreshesWithTheNewDocument() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final String originalText = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
+            final IEditorPart otherEditor =
+                    workspace.open(workspace.createFile("saved-as.xml", originalText));
+            final IEditorInput savedAsInput = otherEditor.getEditorInput();
+            PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage()
+                    .closeEditor(otherEditor, false);
+            final FlatXmlDatasetEditor editor =
+                    (FlatXmlDatasetEditor) workspace.open(workspace.createFile("dataset.xml", originalText));
+            final TablesPage tablesPage = editor.getTablesPage();
+            final FlatXmlDatasetDocument datasetDocument = editor.getDatasetDocument();
+
+            editor.getSourceEditor().setInput(savedAsInput);
+            UiTestWorkspace.processEvents();
+            final IDocument newDocument = sourceDocument(editor);
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Carol")));
+            tablesPage.getGlobalActionHandler(ActionFactory.UNDO.getId()).run();
+
+            assertThat(newDocument.get()).as("Undo on the Tables page must undo the new document's edit.")
+                    .isEqualTo(originalText);
+
+            newDocument.replace(newDocument.get().indexOf("Alice"), "Alice".length(), "Dave");
+            UiTestWorkspace.processEvents();
+
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows().get(0)
+                    .getValue(1)).as("A change to the new document must refresh the Tables page.")
+                    .isEqualTo("Dave");
+        }
+    }
+
+    private static IDocument sourceDocument(final FlatXmlDatasetEditor editor)
+    {
+        final ITextEditor sourceEditor = editor.getSourceEditor();
+        return sourceEditor.getDocumentProvider().getDocument(sourceEditor.getEditorInput());
     }
 }

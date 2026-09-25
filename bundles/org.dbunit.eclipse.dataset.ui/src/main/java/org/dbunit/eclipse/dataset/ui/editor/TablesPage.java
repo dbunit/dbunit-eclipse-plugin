@@ -38,6 +38,7 @@ import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGrid;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.preferences.PreferenceKeys;
+import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.resource.FontDescriptor;
 import org.eclipse.jface.resource.JFaceResources;
@@ -45,6 +46,7 @@ import org.eclipse.jface.resource.LocalResourceManager;
 import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentListener;
+import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
@@ -62,6 +64,7 @@ import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.ui.ISharedImages;
 import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.actions.ActionFactory;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 /**
@@ -106,6 +109,7 @@ final class TablesPage implements DatasetGridContext
         @Override
         public void documentChanged(final DocumentEvent event)
         {
+            updateUndoRedoActions();
             refreshPending = true;
             if (active)
             {
@@ -114,11 +118,17 @@ final class TablesPage implements DatasetGridContext
         }
     };
 
+    private final DocumentUndoAction undoAction;
+
+    private final DocumentUndoAction redoAction;
+
     private boolean active;
 
     private boolean refreshPending;
 
     private boolean refreshScheduled;
+
+    private IDocument listenedDocument;
 
     private boolean editable;
 
@@ -159,8 +169,12 @@ final class TablesPage implements DatasetGridContext
 
         tabFolder = new CTabFolder(contentStack, SWT.TOP | SWT.BORDER | SWT.FLAT);
 
-        sourceDocument().addDocumentListener(sourceDocumentListener);
+        final IDocument document = sourceDocument();
+        listenedDocument = document;
+        document.addDocumentListener(sourceDocumentListener);
         datasetDocument.addModelListener(event -> reconcile());
+        undoAction = new DocumentUndoAction(this::sourceDocument, false, this::hasActiveCellEditor);
+        redoAction = new DocumentUndoAction(this::sourceDocument, true, this::hasActiveCellEditor);
 
         reconcile();
     }
@@ -185,6 +199,7 @@ final class TablesPage implements DatasetGridContext
     void activate()
     {
         active = true;
+        updateUndoRedoActions();
         if (refreshPending)
         {
             refreshPending = false;
@@ -195,6 +210,45 @@ final class TablesPage implements DatasetGridContext
     void deactivate()
     {
         active = false;
+    }
+
+    /**
+     * Follows the editor to the document of its new input, after Save As or a move of its file.
+     */
+    void inputChanged()
+    {
+        listenedDocument.removeDocumentListener(sourceDocumentListener);
+        listenedDocument = sourceDocument();
+        listenedDocument.addDocumentListener(sourceDocumentListener);
+        updateUndoRedoActions();
+    }
+
+    /**
+     * Stops listening to the document, which can outlive the editor when another editor shares it.
+     */
+    void dispose()
+    {
+        listenedDocument.removeDocumentListener(sourceDocumentListener);
+    }
+
+    /**
+     * Returns this page's action for a global action id, for {@link DatasetEditorContributor} to install
+     * while the Tables page is active.
+     *
+     * @param actionDefinitionId One of {@link ActionFactory}'s global action ids.
+     * @return The action, or null when this page has none for that id.
+     */
+    IAction getGlobalActionHandler(final String actionDefinitionId)
+    {
+        if (ActionFactory.UNDO.getId().equals(actionDefinitionId))
+        {
+            return undoAction;
+        }
+        if (ActionFactory.REDO.getId().equals(actionDefinitionId))
+        {
+            return redoAction;
+        }
+        return null;
     }
 
     /**
@@ -296,6 +350,19 @@ final class TablesPage implements DatasetGridContext
     {
         final ITextEditor sourceEditor = editor.getSourceEditor();
         return sourceEditor.getDocumentProvider().getDocument(sourceEditor.getEditorInput());
+    }
+
+    private void updateUndoRedoActions()
+    {
+        undoAction.update();
+        redoAction.update();
+    }
+
+    private boolean hasActiveCellEditor()
+    {
+        final CTabItem selected = tabFolder.getSelection();
+        return selected != null && selected.getControl() instanceof NatTable
+                && ((NatTable) selected.getControl()).getActiveCellEditor() != null;
     }
 
     private void scheduleRefresh()
