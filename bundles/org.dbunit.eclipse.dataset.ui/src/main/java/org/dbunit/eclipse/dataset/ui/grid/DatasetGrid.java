@@ -197,6 +197,17 @@ public final class DatasetGrid
     }
 
     /**
+     * Selects one cell, moves the selection anchor to it, and scrolls it into view.
+     *
+     * @param columnIndex The column to select.
+     * @param rowIndex The row to select.
+     */
+    public void selectCell(final int columnIndex, final int rowIndex)
+    {
+        selectRegion(columnIndex, rowIndex, 1, 1);
+    }
+
+    /**
      * Notifies a listener whenever this grid's selection changes.
      *
      * @param listener The listener to notify; it is not told what changed.

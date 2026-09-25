@@ -20,7 +20,11 @@
  */
 package org.dbunit.eclipse.dataset.ui.grid;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
+import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.eclipse.jface.window.DefaultToolTip;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
@@ -28,8 +32,8 @@ import org.eclipse.nebula.widgets.nattable.layer.LabelStack;
 import org.eclipse.swt.widgets.Event;
 
 /**
- * Shows the tooltip "Declared in the DTD; no values yet" over a column header whose column is declared in
- * the DTD but has no values.
+ * Shows a column header's problems and why a column has no values, when it is declared in the DTD without
+ * values or pending, as a tooltip.
  *
  * @since 1.0.0
  */
@@ -67,12 +71,39 @@ final class ColumnHeaderTooltip extends DefaultToolTip
      * Returns the tooltip text for a column header, by column index.
      *
      * @param columnIndex The column's index.
-     * @return The tooltip text, or null when the column is not declared in the DTD without values.
+     * @return The tooltip text, or null when the column has no problems, is not declared in the DTD
+     *         without values, and is not pending.
      */
     String textForColumn(final int columnIndex)
     {
         final DatasetColumn column = bodyDataProvider.getColumn(columnIndex);
-        return column != null && column.declared() && !column.hasValues()
-                ? "Declared in the DTD; no values yet" : null;
+        if (column == null)
+        {
+            return null;
+        }
+        final List<String> lines = problemMessages(column);
+        if (column.declared() && !column.hasValues())
+        {
+            lines.add("Declared in the DTD; no values yet");
+        }
+        if (column.pending())
+        {
+            lines.add("This column has no values yet; it is saved when at least one row has a value.");
+        }
+        return lines.isEmpty() ? null : String.join("\n", lines);
+    }
+
+    private List<String> problemMessages(final DatasetColumn column)
+    {
+        final List<String> messages = new ArrayList<>();
+        for (final DatasetProblem problem : bodyDataProvider.getContext().getDatasetDocument().getModel()
+                .getProblems(bodyDataProvider.getTableKey()))
+        {
+            if (column.name().equals(problem.columnName()))
+            {
+                messages.add(problem.message());
+            }
+        }
+        return messages;
     }
 }
