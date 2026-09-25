@@ -17,6 +17,7 @@ link:building.html[Building] covers the command-line build, and link:releasing.h
 |`releng/org.dbunit.eclipse.repository` |The p2 repository (update site) definition, `category.xml`
 |`releng/icons` |A generator of the editor's icons, run with `java releng/icons/GenerateIcons.java`
 |`releng/marketplace` |Eclipse Marketplace listing content
+|`releng/perf` |A generator of large datasets for checking the editor's performance
 |`src/site` |This documentation site, published to GitHub Pages
 |`.github/workflows` |CI build, release, and site/update-site publishing
 |===
@@ -27,3 +28,21 @@ link:building.html[Building] covers the command-line build, and link:releasing.h
 . *File > Import... > Maven > Existing Maven Projects*, then select the repository's root directory.
 . Open `releng/org.dbunit.eclipse.target/latest.target` and click *Set as Active Target Platform*.
 . Run or debug with *Run As > Eclipse Application* from the `org.dbunit.eclipse.dataset.ui` project.
+
+== Checking Performance
+
+`releng/perf/GenerateLargeDataset.java` writes a large dataset with five tables in a given dbUnit dataset format,
+for example 100,000 rows of 20 columns;
+the same arguments always produce the same file.
+Its first argument names the format; `flatxml`, the flat XML format, is the only one so far.
+Run it from the repository root with a JDK 17 or newer:
+
+[source,shell]
+----
+java releng/perf/GenerateLargeDataset.java flatxml 100000 20 target/perf/dataset-100000.xml
+----
+
+Open the generated file in a runtime workbench,
+then edit, insert, delete, undo, and paste on the Tables page, and type on the Source page.
+The editor should open a dataset of 100,000 rows and 10 MB within 3 seconds and apply each edit within 1 second,
+and should apply a cell edit to a dataset of 10,000 rows within 150 ms.
