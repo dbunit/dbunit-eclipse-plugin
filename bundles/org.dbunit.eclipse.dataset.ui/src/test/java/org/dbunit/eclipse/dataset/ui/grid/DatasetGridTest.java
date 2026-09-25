@@ -312,5 +312,25 @@ class DatasetGridTest
         {
             return null;
         }
+
+        @Override
+        public void expectRename(final String oldKey, final String newKey)
+        {
+        }
+
+        @Override
+        public void cancelExpectedRename()
+        {
+        }
+
+        @Override
+        public void cancelExpectedNewTableSelected()
+        {
+        }
+
+        @Override
+        public void expectNewTableSelected(final String tableName)
+        {
+        }
     }
 }

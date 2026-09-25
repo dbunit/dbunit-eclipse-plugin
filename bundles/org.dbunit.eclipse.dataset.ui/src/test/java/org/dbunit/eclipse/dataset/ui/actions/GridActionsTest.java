@@ -33,6 +33,7 @@ import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlOptions;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.dbunit.eclipse.dataset.ui.dialogs.AddTableDialog;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.core.commands.ExecutionException;
@@ -443,6 +444,276 @@ class GridActionsTest
                 .contains("NAME");
     }
 
+    @Test
+    void testAddTable_whenTheDialogReturnsANameAndColumns_addsTheTableAndSelectsItsTab()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final AddTableAction action = new AddTableAction(context)
+        {
+            @Override
+            AddTableDialog openDialog(final Shell shell, final IInputValidator nameValidator)
+            {
+                return new AddTableDialog(shell, nameValidator)
+                {
+                    @Override
+                    public String getTableName()
+                    {
+                        return "Accounts";
+                    }
+
+                    @Override
+                    public List<String> getColumnNames()
+                    {
+                        return List.of("ID", "BALANCE");
+                    }
+                };
+            }
+        };
+
+        action.run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("ACCOUNTS").orElseThrow();
+        assertThat(table.getColumns()).extracting(DatasetColumn::name)
+                .as("Add Table must create the table with the entered columns.")
+                .containsExactly("ID", "BALANCE");
+        assertThat(context.expectedNewTableKey)
+                .as("Add Table must select the new table's tab by its case-folded key.")
+                .isEqualTo("ACCOUNTS");
+    }
+
+    @Test
+    void testAddTable_whenTheEditIsRejected_cancelsTheNewTableExpectation()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.editable = false;
+        final AddTableAction action = new AddTableAction(context)
+        {
+            @Override
+            AddTableDialog openDialog(final Shell shell, final IInputValidator nameValidator)
+            {
+                return new AddTableDialog(shell, nameValidator)
+                {
+                    @Override
+                    public String getTableName()
+                    {
+                        return "Accounts";
+                    }
+
+                    @Override
+                    public List<String> getColumnNames()
+                    {
+                        return List.of();
+                    }
+                };
+            }
+        };
+
+        action.run();
+
+        assertThat(datasetDocument.getModel().findTable("ACCOUNTS"))
+                .as("A rejected edit must not create the table.").isEmpty();
+        assertThat(context.expectedNewTableKey)
+                .as("A rejected edit must cancel the new-table expectation so a later reconciliation "
+                        + "cannot match it by coincidence.")
+                .isNull();
+    }
+
+    @Test
+    void testAddTable_whenTheEnteredNameIsTheReservedRootName_theDialogValidatorRejectsIt()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final List<IInputValidator> capturedValidator = new ArrayList<>();
+        final AddTableAction action = new AddTableAction(context)
+        {
+            @Override
+            AddTableDialog openDialog(final Shell shell, final IInputValidator nameValidator)
+            {
+                capturedValidator.add(nameValidator);
+                return null;
+            }
+        };
+
+        action.run();
+
+        assertThat(capturedValidator.get(0).isValid("dataset"))
+                .as("Add Table must reject the name reserved for the root element.").isNotNull();
+    }
+
+    @Test
+    void testRenameTableNameDialogMessage_whenTheTableIsNotDeclaredOnly_isJustThePrompt()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+
+        assertThat(RenameTableAction.nameDialogMessage(table))
+                .as("A table that is not declared-only must get a plain prompt.")
+                .isEqualTo("Table name:");
+    }
+
+    @Test
+    void testRenameTableNameDialogMessage_whenTheTableIsDeclaredOnly_warnsThatDbUnitReadsTheDtd()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset>\n</dataset>\n");
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+
+        assertThat(RenameTableAction.nameDialogMessage(table))
+                .as("A declared-only table must warn that dbUnit reads tables from the DTD.")
+                .contains("dbUnit reads a flat XML dataset's tables from its DTD");
+    }
+
+    @Test
+    void testRenameTable_whenTheDialogReturnsANewName_renamesTheTableAndKeepsItsTab()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final RenameTableAction action = new RenameTableAction(context)
+        {
+            @Override
+            String openNameDialog(final Shell shell, final String currentName,
+                    final IInputValidator validator, final DatasetTable table)
+            {
+                return "Customers";
+            }
+        };
+
+        action.run();
+
+        assertThat(datasetDocument.getModel().findTable("CUSTOMERS")).as("Rename Table must apply the entered name.")
+                .isPresent();
+        assertThat(context.expectedRenameOldKey).as("Rename Table must record the old tab key.")
+                .isEqualTo("USERS");
+        assertThat(context.expectedRenameNewKey)
+                .as("Rename Table must record the new tab's case-folded key.").isEqualTo("CUSTOMERS");
+    }
+
+    @Test
+    void testRenameTable_whenTheEditIsRejected_cancelsTheRenameExpectation()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.editable = false;
+        final RenameTableAction action = new RenameTableAction(context)
+        {
+            @Override
+            String openNameDialog(final Shell shell, final String currentName,
+                    final IInputValidator validator, final DatasetTable table)
+            {
+                return "Customers";
+            }
+        };
+
+        action.run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS"))
+                .as("A rejected edit must not rename the table.").isPresent();
+        assertThat(context.expectedRenameOldKey)
+                .as("A rejected edit must cancel the rename expectation so a later reconciliation cannot "
+                        + "match it by coincidence.")
+                .isNull();
+        assertThat(context.expectedRenameNewKey).isNull();
+    }
+
+    @Test
+    void testRenameTable_whenCaseSensitiveAndAnotherTableHasTheTargetNameExactly_theDialogValidatorRejectsIt()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                createCaseSensitive("<dataset><users ID=\"1\"/><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "users");
+        final List<IInputValidator> capturedValidator = new ArrayList<>();
+        final RenameTableAction action = new RenameTableAction(context)
+        {
+            @Override
+            String openNameDialog(final Shell shell, final String currentName,
+                    final IInputValidator validator, final DatasetTable table)
+            {
+                capturedValidator.add(validator);
+                return null;
+            }
+        };
+
+        action.run();
+
+        assertThat(capturedValidator.get(0).isValid("USERS"))
+                .as("Renaming 'users' to 'USERS' must be rejected because a separate table already has "
+                        + "that exact name, even though the validator excludes the table being renamed.")
+                .isNotNull();
+    }
+
+    @Test
+    void testDeleteTableConfirmMessage_whenTheTableIsNotDeclaredOnly_hasNoDtdNote()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+
+        assertThat(DeleteTableAction.confirmMessage(table))
+                .as("A table that is not declared-only must not mention the DTD.")
+                .doesNotContain("DTD");
+    }
+
+    @Test
+    void testDeleteTableConfirmMessage_whenTheTableIsDeclaredOnly_warnsThatDbUnitReadsTheDtd()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset>\n</dataset>\n");
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+
+        assertThat(DeleteTableAction.confirmMessage(table))
+                .as("A declared-only table's confirmation must warn that dbUnit reads tables from the "
+                        + "DTD.")
+                .contains("dbUnit reads tables from the DTD");
+    }
+
+    @Test
+    void testDeleteTable_whenConfirmed_removesTheTable()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(
+                "<dataset><USERS ID=\"1\"/><ACCOUNTS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final DeleteTableAction action = new DeleteTableAction(context)
+        {
+            @Override
+            boolean confirmDelete(final Shell shell, final DatasetTable table)
+            {
+                assertThat(table.getName()).as("The confirmation must name the active table.")
+                        .isEqualTo("USERS");
+                return true;
+            }
+        };
+
+        action.run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS"))
+                .as("Confirmed deletion must remove the table.").isEmpty();
+        assertThat(datasetDocument.getModel().findTable("ACCOUNTS"))
+                .as("Deleting one table must not affect the others.").isPresent();
+    }
+
+    @Test
+    void testDeleteTable_whenNotConfirmed_changesNothing()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final DeleteTableAction action = new DeleteTableAction(context)
+        {
+            @Override
+            boolean confirmDelete(final Shell shell, final DatasetTable table)
+            {
+                return false;
+            }
+        };
+
+        action.run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS"))
+                .as("Declining the confirmation must change nothing.").isPresent();
+    }
+
     private static FlatXmlDatasetDocument create(final String content)
     {
         return create(new Document(content));
@@ -452,6 +723,15 @@ class GridActionsTest
     {
         final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, DtdSource.NONE,
                 FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+        return datasetDocument;
+    }
+
+    private static FlatXmlDatasetDocument createCaseSensitive(final String content)
+    {
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(new Document(content),
+                DtdSource.NONE, new FlatXmlOptions(true, FlatXmlOptions.DBUNIT_DEFAULTS.columnSensing()),
+                () -> StandardCharsets.UTF_8);
         datasetDocument.refresh();
         return datasetDocument;
     }
@@ -477,6 +757,12 @@ class GridActionsTest
         private int pendingSelectionColumn = -1;
 
         private int pendingSelectionRow = -1;
+
+        private String expectedRenameOldKey;
+
+        private String expectedRenameNewKey;
+
+        private String expectedNewTableKey;
 
         TestContext(final DatasetDocument datasetDocument, final String tableKey)
         {
@@ -567,6 +853,32 @@ class GridActionsTest
         public Shell getShell()
         {
             return null;
+        }
+
+        @Override
+        public void expectRename(final String oldKey, final String newKey)
+        {
+            expectedRenameOldKey = oldKey;
+            expectedRenameNewKey = newKey;
+        }
+
+        @Override
+        public void cancelExpectedRename()
+        {
+            expectedRenameOldKey = null;
+            expectedRenameNewKey = null;
+        }
+
+        @Override
+        public void cancelExpectedNewTableSelected()
+        {
+            expectedNewTableKey = null;
+        }
+
+        @Override
+        public void expectNewTableSelected(final String tableKey)
+        {
+            expectedNewTableKey = tableKey;
         }
     }
 }

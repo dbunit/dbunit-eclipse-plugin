@@ -22,12 +22,15 @@ package org.dbunit.eclipse.dataset.ui.editor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.ui.actions.DatasetCommandIds;
+import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
+import org.eclipse.core.commands.NotEnabledException;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.text.IDocument;
@@ -92,6 +95,33 @@ class TablesPageTest
                     .as("Deleting a table must remove its tab.").isEqualTo(1);
             assertThat(tablesPage.getTabFolder().getItem(0).getText())
                     .as("The remaining table's tab must survive.").isEqualTo("ORDERS");
+        }
+    }
+
+    @Test
+    void testTablesPage_whenTheLastTableIsDeleted_disposesTheStaleGridAndDisablesItsCommands()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final IHandlerService handlerService =
+                    editor.getEditorSite().getService(IHandlerService.class);
+
+            editor.getDatasetDocument().deleteTable("USERS");
+
+            assertThat(tablesPage.getSelection())
+                    .as("Deleting the last table must clear the selection, not keep the disposed "
+                            + "grid's.")
+                    .isEqualTo(GridSelection.NONE);
+            assertThat(tablesPage.getAddTableButton().getEnabled())
+                    .as("Add Table must stay available with no tables.").isTrue();
+            assertThatThrownBy(
+                    () -> handlerService.executeCommand(DatasetCommandIds.EDIT_CELL_IN_DIALOG, null))
+                    .as("Edit Cell in Dialog must not run on the disposed grid.")
+                    .isInstanceOf(NotEnabledException.class);
         }
     }
 
@@ -220,6 +250,56 @@ class TablesPageTest
             assertThat(editor.getDatasetDocument().isBlank())
                     .as("Create Empty Dataset must not change a file whose input state does not validate.")
                     .isTrue();
+        }
+    }
+
+    @Test
+    void testTablesPage_whenDatasetHasNoTables_showsTheNoTablesStateWithTheButtonEnabled() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset/>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+
+            assertThat(tablesPage.isShowingNoTablesState())
+                    .as("A dataset without tables must show the no-tables state.").isTrue();
+            assertThat(tablesPage.getAddTableButton().getEnabled())
+                    .as("The Add Table button must be enabled for an editable dataset.").isTrue();
+        }
+    }
+
+    @Test
+    void testTablesPage_whenATableIsAddedToAnEmptyDataset_showsTheTabFolderAgain() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset/>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+
+            editor.getDatasetDocument().addTable("USERS", List.of());
+
+            assertThat(tablesPage.isShowingNoTablesState())
+                    .as("Adding a table must leave the no-tables state.").isFalse();
+            assertThat(tablesPage.getTabFolder().getItemCount()).as("Adding a table must show its tab.")
+                    .isEqualTo(1);
+        }
+    }
+
+    @Test
+    void testTablesPage_whenNoTablesStateIsReadOnly_disablesTheAddTableButton() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final FlatXmlDatasetEditor editor =
+                    (FlatXmlDatasetEditor) workspace.openReadOnlyExternalFile("<dataset/>");
+            final TablesPage tablesPage = editor.getTablesPage();
+
+            assertThat(tablesPage.isShowingNoTablesState())
+                    .as("A read-only dataset without tables must still show the no-tables state.").isTrue();
+            assertThat(tablesPage.getAddTableButton().getEnabled())
+                    .as("A read-only dataset must disable the Add Table button.").isFalse();
         }
     }
 
