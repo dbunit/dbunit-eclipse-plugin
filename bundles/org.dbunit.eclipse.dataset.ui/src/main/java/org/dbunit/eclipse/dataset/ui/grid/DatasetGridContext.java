@@ -115,4 +115,21 @@ public interface DatasetGridContext
      * @return The page's shell.
      */
     Shell getShell();
+
+    /**
+     * Tells the page that the table currently keyed {@code oldKey} is about to become {@code newKey}, so
+     * the next reconciliation keeps its tab instead of disposing and recreating it.
+     *
+     * @param oldKey The table's key before the rename.
+     * @param newKey The table's key after the rename.
+     */
+    void expectRename(String oldKey, String newKey);
+
+    /**
+     * Tells the page that a table with this key is about to be added, so the next reconciliation selects
+     * its new tab.
+     *
+     * @param tableKey The key of the table about to be added.
+     */
+    void expectNewTableSelected(String tableKey);
 }

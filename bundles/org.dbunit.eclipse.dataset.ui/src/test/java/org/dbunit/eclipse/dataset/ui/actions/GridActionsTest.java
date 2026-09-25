@@ -33,6 +33,8 @@ import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlOptions;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.dbunit.eclipse.dataset.ui.dialogs.AddTableDialog;
+import org.dbunit.eclipse.dataset.ui.dialogs.DatasetNameValidator;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.core.commands.ExecutionException;
@@ -325,6 +327,114 @@ class GridActionsTest
                 .contains("NAME");
     }
 
+    @Test
+    void testAddTable_whenTheDialogReturnsANameAndColumns_addsTheTableAndSelectsItsTab()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final AddTableAction action = new AddTableAction(context)
+        {
+            @Override
+            AddTableDialog openDialog(final Shell shell, final DatasetNameValidator nameValidator)
+            {
+                return new AddTableDialog(shell, nameValidator)
+                {
+                    @Override
+                    public String getTableName()
+                    {
+                        return "Accounts";
+                    }
+
+                    @Override
+                    public List<String> getColumnNames()
+                    {
+                        return List.of("ID", "BALANCE");
+                    }
+                };
+            }
+        };
+
+        action.run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("ACCOUNTS").orElseThrow();
+        assertThat(table.getColumns()).extracting(DatasetColumn::name)
+                .as("Add Table must create the table with the entered columns.")
+                .containsExactly("ID", "BALANCE");
+        assertThat(context.expectedNewTableKey)
+                .as("Add Table must select the new table's tab by its case-folded key.")
+                .isEqualTo("ACCOUNTS");
+    }
+
+    @Test
+    void testRenameTable_whenTheDialogReturnsANewName_renamesTheTableAndKeepsItsTab()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final RenameTableAction action = new RenameTableAction(context)
+        {
+            @Override
+            String openNameDialog(final Shell shell, final String currentName,
+                    final IInputValidator validator)
+            {
+                return "Customers";
+            }
+        };
+
+        action.run();
+
+        assertThat(datasetDocument.getModel().findTable("CUSTOMERS")).as("Rename Table must apply the entered name.")
+                .isPresent();
+        assertThat(context.expectedRenameOldKey).as("Rename Table must record the old tab key.")
+                .isEqualTo("USERS");
+        assertThat(context.expectedRenameNewKey)
+                .as("Rename Table must record the new tab's case-folded key.").isEqualTo("CUSTOMERS");
+    }
+
+    @Test
+    void testDeleteTable_whenConfirmed_removesTheTable()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(
+                "<dataset><USERS ID=\"1\"/><ACCOUNTS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final DeleteTableAction action = new DeleteTableAction(context)
+        {
+            @Override
+            boolean confirmDelete(final Shell shell, final DatasetTable table)
+            {
+                assertThat(table.getName()).as("The confirmation must name the active table.")
+                        .isEqualTo("USERS");
+                return true;
+            }
+        };
+
+        action.run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS"))
+                .as("Confirmed deletion must remove the table.").isEmpty();
+        assertThat(datasetDocument.getModel().findTable("ACCOUNTS"))
+                .as("Deleting one table must not affect the others.").isPresent();
+    }
+
+    @Test
+    void testDeleteTable_whenNotConfirmed_changesNothing()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final DeleteTableAction action = new DeleteTableAction(context)
+        {
+            @Override
+            boolean confirmDelete(final Shell shell, final DatasetTable table)
+            {
+                return false;
+            }
+        };
+
+        action.run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS"))
+                .as("Declining the confirmation must change nothing.").isPresent();
+    }
+
     private static FlatXmlDatasetDocument create(final String content)
     {
         return create(new Document(content));
@@ -359,6 +469,12 @@ class GridActionsTest
         private int pendingSelectionColumn = -1;
 
         private int pendingSelectionRow = -1;
+
+        private String expectedRenameOldKey;
+
+        private String expectedRenameNewKey;
+
+        private String expectedNewTableKey;
 
         TestContext(final DatasetDocument datasetDocument, final String tableKey)
         {
@@ -449,6 +565,19 @@ class GridActionsTest
         public Shell getShell()
         {
             return null;
+        }
+
+        @Override
+        public void expectRename(final String oldKey, final String newKey)
+        {
+            expectedRenameOldKey = oldKey;
+            expectedRenameNewKey = newKey;
+        }
+
+        @Override
+        public void expectNewTableSelected(final String tableKey)
+        {
+            expectedNewTableKey = tableKey;
         }
     }
 }

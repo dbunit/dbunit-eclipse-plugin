@@ -77,6 +77,21 @@ public final class DatasetCommandIds
      */
     public static final String DELETE_COLUMN = PREFIX + "deleteColumn";
 
+    /**
+     * Appends a new table.
+     */
+    public static final String ADD_TABLE = PREFIX + "addTable";
+
+    /**
+     * Renames the active table.
+     */
+    public static final String RENAME_TABLE = PREFIX + "renameTable";
+
+    /**
+     * Deletes the active table.
+     */
+    public static final String DELETE_TABLE = PREFIX + "deleteTable";
+
     private DatasetCommandIds()
     {
     }

@@ -199,6 +199,56 @@ class TablesPageTest
     }
 
     @Test
+    void testTablesPage_whenDatasetHasNoTables_showsTheNoTablesStateWithTheButtonEnabled() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset/>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+
+            assertThat(tablesPage.isShowingNoTablesState())
+                    .as("A dataset without tables must show the no-tables state.").isTrue();
+            assertThat(tablesPage.getAddTableButton().getEnabled())
+                    .as("The Add Table button must be enabled for an editable dataset.").isTrue();
+        }
+    }
+
+    @Test
+    void testTablesPage_whenATableIsAddedToAnEmptyDataset_showsTheTabFolderAgain() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset/>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+
+            editor.getDatasetDocument().addTable("USERS", List.of());
+
+            assertThat(tablesPage.isShowingNoTablesState())
+                    .as("Adding a table must leave the no-tables state.").isFalse();
+            assertThat(tablesPage.getTabFolder().getItemCount()).as("Adding a table must show its tab.")
+                    .isEqualTo(1);
+        }
+    }
+
+    @Test
+    void testTablesPage_whenNoTablesStateIsReadOnly_disablesTheAddTableButton() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final FlatXmlDatasetEditor editor =
+                    (FlatXmlDatasetEditor) workspace.openReadOnlyExternalFile("<dataset/>");
+            final TablesPage tablesPage = editor.getTablesPage();
+
+            assertThat(tablesPage.isShowingNoTablesState())
+                    .as("A read-only dataset without tables must still show the no-tables state.").isTrue();
+            assertThat(tablesPage.getAddTableButton().getEnabled())
+                    .as("A read-only dataset must disable the Add Table button.").isFalse();
+        }
+    }
+
+    @Test
     void testRefreshScheduling_whenTablesPageIsNotActive_refreshesOnlyOnActivation() throws Exception
     {
         try (UiTestWorkspace workspace = new UiTestWorkspace())

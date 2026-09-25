@@ -37,8 +37,10 @@ import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
 import org.dbunit.eclipse.dataset.ui.actions.AddColumnAction;
+import org.dbunit.eclipse.dataset.ui.actions.AddTableAction;
 import org.dbunit.eclipse.dataset.ui.actions.DeleteColumnAction;
 import org.dbunit.eclipse.dataset.ui.actions.DeleteRowsAction;
+import org.dbunit.eclipse.dataset.ui.actions.DeleteTableAction;
 import org.dbunit.eclipse.dataset.ui.actions.DuplicateRowsAction;
 import org.dbunit.eclipse.dataset.ui.actions.GridAction;
 import org.dbunit.eclipse.dataset.ui.actions.InsertRowAboveAction;
@@ -46,12 +48,14 @@ import org.dbunit.eclipse.dataset.ui.actions.InsertRowBelowAction;
 import org.dbunit.eclipse.dataset.ui.actions.MoveRowsDownAction;
 import org.dbunit.eclipse.dataset.ui.actions.MoveRowsUpAction;
 import org.dbunit.eclipse.dataset.ui.actions.RenameColumnAction;
+import org.dbunit.eclipse.dataset.ui.actions.RenameTableAction;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGrid;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.dbunit.eclipse.dataset.ui.preferences.PreferenceKeys;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.action.IMenuManager;
+import org.eclipse.jface.action.MenuManager;
 import org.eclipse.jface.action.ToolBarManager;
 import org.eclipse.jface.commands.ActionHandler;
 import org.eclipse.jface.dialogs.MessageDialog;
@@ -71,6 +75,7 @@ import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.Image;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
@@ -119,6 +124,10 @@ final class TablesPage implements DatasetGridContext
 
     private final Button createEmptyDatasetButton;
 
+    private final Composite noTablesComposite;
+
+    private final Button addTableButton;
+
     private final Map<String, CTabItem> tabsByKey = new LinkedHashMap<>();
 
     private final Map<String, DatasetGrid> gridsByKey = new LinkedHashMap<>();
@@ -164,6 +173,12 @@ final class TablesPage implements DatasetGridContext
 
     private final DeleteColumnAction deleteColumnAction;
 
+    private final AddTableAction addTableAction;
+
+    private final RenameTableAction renameTableAction;
+
+    private final DeleteTableAction deleteTableAction;
+
     private final List<GridAction> gridActions = new ArrayList<>();
 
     private final List<IHandlerActivation> handlerActivations = new ArrayList<>();
@@ -183,6 +198,8 @@ final class TablesPage implements DatasetGridContext
     private String expectedRenameOldKey;
 
     private String expectedRenameNewKey;
+
+    private String expectedNewTableKey;
 
     TablesPage(final Composite parent, final FlatXmlDatasetEditor editor,
             final FlatXmlDatasetDocument datasetDocument)
@@ -215,6 +232,17 @@ final class TablesPage implements DatasetGridContext
         createEmptyDatasetButton.addSelectionListener(
                 SelectionListener.widgetSelectedAdapter(event -> createEmptyDataset()));
 
+        noTablesComposite = new Composite(contentStack, SWT.NONE);
+        noTablesComposite.setLayout(new GridLayout(1, false));
+        final Label noTablesLabel = new Label(noTablesComposite, SWT.CENTER);
+        noTablesLabel.setText("The dataset has no tables.");
+        noTablesLabel.setLayoutData(new GridData(SWT.CENTER, SWT.BOTTOM, true, true));
+        addTableButton = new Button(noTablesComposite, SWT.PUSH);
+        addTableButton.setText("Add Table...");
+        addTableButton.setLayoutData(new GridData(SWT.CENTER, SWT.TOP, true, true));
+        addTableButton.addSelectionListener(
+                SelectionListener.widgetSelectedAdapter(event -> runAddTableAction()));
+
         tabFolder = new CTabFolder(contentStack, SWT.TOP | SWT.BORDER | SWT.FLAT);
         tabFolder.addSelectionListener(
                 SelectionListener.widgetSelectedAdapter(event -> updateGridActionsEnablement()));
@@ -228,6 +256,9 @@ final class TablesPage implements DatasetGridContext
         addColumnAction = new AddColumnAction(this);
         renameColumnAction = new RenameColumnAction(this);
         deleteColumnAction = new DeleteColumnAction(this);
+        addTableAction = new AddTableAction(this);
+        renameTableAction = new RenameTableAction(this);
+        deleteTableAction = new DeleteTableAction(this);
         gridActions.add(insertRowAboveAction);
         gridActions.add(insertRowBelowAction);
         gridActions.add(deleteRowsAction);
@@ -237,14 +268,38 @@ final class TablesPage implements DatasetGridContext
         gridActions.add(addColumnAction);
         gridActions.add(renameColumnAction);
         gridActions.add(deleteColumnAction);
+        gridActions.add(addTableAction);
+        gridActions.add(renameTableAction);
+        gridActions.add(deleteTableAction);
 
         final ToolBarManager toolBarManager = new ToolBarManager(SWT.FLAT);
         toolBarManager.add(insertRowBelowAction);
         toolBarManager.add(deleteRowsAction);
         toolBarManager.add(addColumnAction);
         toolBarManager.add(deleteColumnAction);
+        toolBarManager.add(addTableAction);
         final ToolBar toolBar = toolBarManager.createControl(tabFolder);
         tabFolder.setTopRight(toolBar);
+
+        tabFolder.addMenuDetectListener(event ->
+        {
+            final Point point = tabFolder.toControl(event.x, event.y);
+            final CTabItem item = tabFolder.getItem(point);
+            if (item != null)
+            {
+                tabFolder.setSelection(item);
+                updateGridActionsEnablement();
+            }
+        });
+        final MenuManager tabMenuManager = new MenuManager();
+        tabMenuManager.setRemoveAllWhenShown(true);
+        tabMenuManager.addMenuListener(manager ->
+        {
+            manager.add(addTableAction);
+            manager.add(renameTableAction);
+            manager.add(deleteTableAction);
+        });
+        tabFolder.setMenu(tabMenuManager.createContextMenu(tabFolder));
 
         final IDocument document = sourceDocument();
         listenedDocument = document;
@@ -343,17 +398,17 @@ final class TablesPage implements DatasetGridContext
         return null;
     }
 
-    /**
-     * Tells the page that the table currently keyed {@code oldKey} is about to become {@code newKey}, so
-     * the next reconciliation keeps its tab instead of disposing and recreating it.
-     *
-     * @param oldKey The table's key before the rename.
-     * @param newKey The table's key after the rename.
-     */
-    void expectRename(final String oldKey, final String newKey)
+    @Override
+    public void expectRename(final String oldKey, final String newKey)
     {
         expectedRenameOldKey = oldKey;
         expectedRenameNewKey = newKey;
+    }
+
+    @Override
+    public void expectNewTableSelected(final String tableKey)
+    {
+        expectedNewTableKey = tableKey;
     }
 
     @Override
@@ -504,6 +559,16 @@ final class TablesPage implements DatasetGridContext
         return createEmptyDatasetButton;
     }
 
+    boolean isShowingNoTablesState()
+    {
+        return contentStackLayout.topControl == noTablesComposite;
+    }
+
+    Button getAddTableButton()
+    {
+        return addTableButton;
+    }
+
     private IDocument sourceDocument()
     {
         final ITextEditor sourceEditor = editor.getSourceEditor();
@@ -579,6 +644,11 @@ final class TablesPage implements DatasetGridContext
             createEmptyDatasetButton.setEnabled(inputModifiable);
             contentStackLayout.topControl = blankComposite;
         }
+        else if (model.getTables().isEmpty())
+        {
+            addTableButton.setEnabled(editable);
+            contentStackLayout.topControl = noTablesComposite;
+        }
         else
         {
             reconcileTabs(model);
@@ -608,6 +678,10 @@ final class TablesPage implements DatasetGridContext
                 item = new CTabItem(tabFolder, SWT.NONE, index);
                 item.setControl(grid.getControl());
                 tabsByKey.put(key, item);
+                if (key.equals(expectedNewTableKey))
+                {
+                    tabFolder.setSelection(item);
+                }
             }
             else if (tabFolder.indexOf(item) != index)
             {
@@ -620,6 +694,7 @@ final class TablesPage implements DatasetGridContext
         }
         expectedRenameOldKey = null;
         expectedRenameNewKey = null;
+        expectedNewTableKey = null;
 
         final Iterator<Map.Entry<String, CTabItem>> iterator = tabsByKey.entrySet().iterator();
         while (iterator.hasNext())
@@ -723,6 +798,11 @@ final class TablesPage implements DatasetGridContext
         {
             datasetDocument.createEmptyDataset();
         }
+    }
+
+    private void runAddTableAction()
+    {
+        addTableAction.run();
     }
 
     private static Image sharedImage(final String key)
