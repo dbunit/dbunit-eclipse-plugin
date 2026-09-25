@@ -132,6 +132,8 @@ final class TablesPage implements DatasetGridContext
 
     private final StackLayout contentStackLayout;
 
+    private final ProblemsSection problemsSection;
+
     private final Composite blankComposite;
 
     private final CTabFolder tabFolder;
@@ -254,6 +256,8 @@ final class TablesPage implements DatasetGridContext
         contentStack.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
         contentStackLayout = new StackLayout();
         contentStack.setLayout(contentStackLayout);
+
+        problemsSection = new ProblemsSection(control, this::selectProblem);
 
         blankComposite = new Composite(contentStack, SWT.NONE);
         blankComposite.setLayout(new GridLayout(1, false));
@@ -716,6 +720,11 @@ final class TablesPage implements DatasetGridContext
         return errorBanner;
     }
 
+    ProblemsSection getProblemsSection()
+    {
+        return problemsSection;
+    }
+
     boolean isShowingBlankState()
     {
         return contentStackLayout.topControl == blankComposite;
@@ -778,6 +787,32 @@ final class TablesPage implements DatasetGridContext
         return null;
     }
 
+    void selectProblem(final DatasetProblem problem)
+    {
+        if (problem.tableKey() == null)
+        {
+            editor.showOnSourcePage(problem.offset(), problem.length());
+            return;
+        }
+        final CTabItem item = tabsByKey.get(problem.tableKey());
+        if (item != null)
+        {
+            tabFolder.setSelection(item);
+            updateGridActionsEnablement();
+        }
+        final DatasetGrid grid = gridsByKey.get(problem.tableKey());
+        if (grid == null || problem.columnName() == null)
+        {
+            return;
+        }
+        final int columnIndex = datasetDocument.getModel().findTable(problem.tableKey())
+                .map(table -> table.getColumnIndex(problem.columnName())).orElse(-1);
+        if (columnIndex >= 0)
+        {
+            grid.selectCell(columnIndex, Math.max(problem.rowIndex(), 0));
+        }
+    }
+
     private void scheduleRefresh()
     {
         if (refreshScheduled)
@@ -828,6 +863,9 @@ final class TablesPage implements DatasetGridContext
         contentStack.layout();
 
         updateBanner(model);
+        // A blank document's only problem is its missing root element, which the blank state explains.
+        final DatasetModel listedModel = datasetDocument.isBlank() ? DatasetModel.EMPTY : model;
+        problemsSection.update(listedModel);
         updateGridActionsEnablement();
     }
 
@@ -844,6 +882,7 @@ final class TablesPage implements DatasetGridContext
             if (item == null)
             {
                 grid = new DatasetGrid(tabFolder, this, key);
+                grid.selectCell(0, 0);
                 grid.addSelectionListener(this::updateGridActionsEnablement);
                 gridsByKey.put(key, grid);
                 item = new CTabItem(tabFolder, SWT.NONE, index);

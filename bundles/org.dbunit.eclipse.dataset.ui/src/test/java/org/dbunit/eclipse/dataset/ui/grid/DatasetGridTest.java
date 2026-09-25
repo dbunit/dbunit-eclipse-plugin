@@ -220,6 +220,37 @@ class DatasetGridTest
     }
 
     @Test
+    void testColumnHeaderTooltip_forAPendingColumn_explainsWhenTheColumnIsSaved()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        datasetDocument.addColumn("USERS", "EXTRA");
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(datasetDocument), "USERS");
+
+        final String idText = grid.getColumnHeaderTooltip().textForColumn(0);
+        final String extraText = grid.getColumnHeaderTooltip().textForColumn(1);
+
+        assertThat(idText).as("A column with values must get no tooltip.").isNull();
+        assertThat(extraText).as("A pending column must explain that it is saved once a row has a value.")
+                .isEqualTo("This column has no values yet; it is saved when at least one row has a value.");
+    }
+
+    @Test
+    void testColumnHeaderLabelsAndTooltip_whenAColumnIsMissingFromTheFirstRow_warnAndListTheProblem()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(datasetDocument), "USERS");
+
+        assertThat(grid.columnHeaderLabelsFor(0).hasLabel("COLUMN_WARNING"))
+                .as("A column with no problems must not get the warning label.").isFalse();
+        assertThat(grid.columnHeaderLabelsFor(1).hasLabel("COLUMN_WARNING"))
+                .as("A column missing from the first row must get the warning label.").isTrue();
+        assertThat(grid.getColumnHeaderTooltip().textForColumn(1))
+                .as("The column header tooltip must list the problem.")
+                .contains("Column \"NAME\" of table \"USERS\" is missing from the first element");
+    }
+
+    @Test
     void testTableChanged_whenStructureIsUnchanged_keepsTheSelection()
     {
         final FlatXmlDatasetDocument datasetDocument = create(
@@ -277,6 +308,31 @@ class DatasetGridTest
         final PositionCoordinate anchor = grid.getSelectionLayer().getSelectionAnchor();
         assertThat(List.of(anchor.columnPosition, anchor.rowPosition))
                 .as("The block's first cell must become the selection anchor.").isEqualTo(List.of(1, 1));
+    }
+
+    @Test
+    void testSelectCell_inARowBelowTheVisibleRows_scrollsItIntoView()
+    {
+        final StringBuilder text = new StringBuilder("<dataset>");
+        for (int row = 1; row <= 100; row++)
+        {
+            text.append("<USERS ID=\"").append(row).append("\"/>");
+        }
+        final FlatXmlDatasetDocument datasetDocument = create(text.append("</dataset>").toString());
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(datasetDocument), "USERS");
+        grid.tableChanged(datasetDocument.getModel().findTable("USERS").orElseThrow());
+        shell.layout();
+        processEvents();
+
+        grid.selectCell(0, 90);
+
+        final NatTable natTable = grid.getNatTable();
+        final List<Integer> visibleRowIndexes = new ArrayList<>();
+        for (int position = 1; position < natTable.getRowCount(); position++)
+        {
+            visibleRowIndexes.add(natTable.getRowIndexByPosition(position));
+        }
+        assertThat(visibleRowIndexes).as("Selecting a cell must scroll its row into view.").contains(90);
     }
 
     private static List<List<Integer>> selectedCells(final DatasetGrid grid)

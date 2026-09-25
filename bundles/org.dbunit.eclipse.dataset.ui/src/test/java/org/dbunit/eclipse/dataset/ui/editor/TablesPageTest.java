@@ -448,6 +448,41 @@ class TablesPageTest
         }
     }
 
+    @Test
+    void testTablesPage_whenOpened_selectsTheFirstCellOfTheFirstTable() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\" NAME=\"A\"/><USERS ID=\"2\" NAME=\"B\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+
+            assertThat(tablesPage.getSelection())
+                    .as("Opening a dataset must select the first cell of the first table.")
+                    .isEqualTo(new GridSelection("USERS", 2, 2, 0, 0, List.of(0), List.of(0), 0, 0, 0, 0,
+                            false));
+        }
+    }
+
+    @Test
+    void testTablesPage_whenATableHasNoRows_hasNoInitialSelection() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<!DOCTYPE dataset [\n<!ELEMENT dataset (ORDERS*)>\n<!ELEMENT ORDERS EMPTY>\n"
+                            + "<!ATTLIST ORDERS ID CDATA #REQUIRED>\n]>\n<dataset>\n</dataset>\n");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+
+            assertThat(tablesPage.getSelection())
+                    .as("A table without rows must start with no cell selected.")
+                    .isEqualTo(new GridSelection("ORDERS", 0, 1, -1, -1, List.of(), List.of(), -1, -1, -1,
+                            -1, false));
+        }
+    }
+
     private static IDocument sourceDocument(final FlatXmlDatasetEditor editor)
     {
         final ITextEditor sourceEditor = editor.getSourceEditor();
