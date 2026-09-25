@@ -71,6 +71,26 @@ public final class Messages extends NLS
      */
     public static String PreferencePage_caseSensitiveTableNames;
 
+    /**
+     * The window title of the New dbUnit Flat XML Dataset wizard.
+     */
+    public static String NewDatasetWizard_windowTitle;
+
+    /**
+     * The title of the New dbUnit Flat XML Dataset wizard's page.
+     */
+    public static String NewDatasetWizard_pageTitle;
+
+    /**
+     * The description of the New dbUnit Flat XML Dataset wizard's page.
+     */
+    public static String NewDatasetWizard_pageDescription;
+
+    /**
+     * The title of the dialog shown when the new dataset file fails to open in an editor.
+     */
+    public static String NewDatasetWizard_openErrorTitle;
+
     static
     {
         NLS.initializeMessages(BUNDLE_NAME, Messages.class);

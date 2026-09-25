@@ -138,4 +138,16 @@
             name="%preferencePage.name"
             class="org.dbunit.eclipse.dataset.ui.preferences.DatasetPreferencePage"/>
    </extension>
+
+   <extension point="org.eclipse.ui.newWizards">
+      <category id="org.dbunit.eclipse.ui.newWizards" name="%newWizards.category.name"/>
+      <wizard
+            id="org.dbunit.eclipse.dataset.ui.newFlatXmlDatasetWizard"
+            name="%newWizard.flatXml.name"
+            category="org.dbunit.eclipse.ui.newWizards"
+            icon="icons/obj16/dataset.png"
+            class="org.dbunit.eclipse.dataset.ui.wizards.NewFlatXmlDatasetWizard">
+         <description>%newWizard.flatXml.description</description>
+      </wizard>
+   </extension>
 </plugin>

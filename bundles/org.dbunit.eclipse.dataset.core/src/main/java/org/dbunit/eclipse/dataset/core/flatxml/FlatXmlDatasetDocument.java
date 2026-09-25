@@ -869,10 +869,22 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
                     + "blank.");
         }
         final String delimiter = TextUtilities.getDefaultLineDelimiter(document);
-        final String newText = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" + delimiter + "<dataset>"
-                + delimiter + "</dataset>" + delimiter;
+        final String newText = emptyDatasetText(delimiter);
         apply(List.of(new ReplaceEdit(0, document.getLength(), newText)));
         refreshInternal(ChangeOrigin.EDIT);
+    }
+
+    /**
+     * Returns the text of an empty flat XML dataset: an XML declaration for UTF-8, then the start and end
+     * tags of the {@code dataset} root element, each on its own line.
+     *
+     * @param lineDelimiter The delimiter that ends each of the three lines.
+     * @return The text of an empty dataset.
+     */
+    public static String emptyDatasetText(final String lineDelimiter)
+    {
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" + lineDelimiter + "<dataset>" + lineDelimiter
+                + "</dataset>" + lineDelimiter;
     }
 
     @Override

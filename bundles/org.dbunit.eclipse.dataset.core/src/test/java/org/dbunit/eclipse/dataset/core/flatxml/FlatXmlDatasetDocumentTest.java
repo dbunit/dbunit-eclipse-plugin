@@ -138,6 +138,29 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testCreateEmptyDataset_whenDocumentDelimiterIsCrLf_writesTheEmptyDatasetTextWithCrLf()
+    {
+        final Document document = new Document("");
+        document.setInitialLineDelimiter("\r\n");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.createEmptyDataset();
+
+        assertThat(document.get()).as("createEmptyDataset must end every line with the document's delimiter.")
+                .isEqualTo("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<dataset>\r\n</dataset>\r\n");
+    }
+
+    @Test
+    void testEmptyDatasetText_withLf_returnsTheXmlDeclarationAndAnEmptyDatasetRoot()
+    {
+        final String text = FlatXmlDatasetDocument.emptyDatasetText("\n");
+
+        assertThat(text).as("The empty dataset must be the UTF-8 declaration and an empty dataset root.")
+                .isEqualTo("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<dataset>\n</dataset>\n");
+    }
+
+    @Test
     void testCreateEmptyDataset_whenDocumentIsNotBlank_throwsAndChangesNothing()
     {
         final IDocument document = new Document("<dataset></dataset>");
