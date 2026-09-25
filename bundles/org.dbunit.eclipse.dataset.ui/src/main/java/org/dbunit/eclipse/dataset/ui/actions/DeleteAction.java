@@ -20,55 +20,67 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
-import org.dbunit.eclipse.dataset.ui.DatasetImages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
+import org.eclipse.swt.widgets.Text;
 
 /**
- * Inserts a blank row below the selection anchor and selects it.
+ * The global Delete action: sets the selected cells to NULL, or, while a cell editor is active, deletes
+ * the editor's text selection or the character after the caret.
  *
  * @since 1.0.0
  */
-public final class InsertRowBelowAction extends GridAction
+public final class DeleteAction extends GridAction
 {
     /**
      * Creates the action.
      *
      * @param context What this action needs from the page that hosts the grid.
      */
-    public InsertRowBelowAction(final DatasetGridContext context)
+    public DeleteAction(final DatasetGridContext context)
     {
-        super(DatasetCommandIds.INSERT_ROW_BELOW, context);
-        setText("Insert Row Below");
-        setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_INSERT_ROW_BELOW));
+        super(context);
+        setText("Delete");
     }
 
     @Override
     protected void runOnGrid(final DatasetGridContext context)
     {
-        final GridSelection selection = context.getSelection();
-        final int rowIndex = Math.max(selection.anchorRowIndex() + 1, 0);
-        final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);
-        final List<String> blankRow = new ArrayList<>(Collections.nCopies(selection.columnCount(), null));
-        if (!blankRow.isEmpty())
+        SetNullAction.setSelectedCellsToNull(context);
+    }
+
+    @Override
+    protected boolean isEnabledWhileEditing()
+    {
+        return true;
+    }
+
+    @Override
+    protected void runWhileEditing(final DatasetGridContext context)
+    {
+        final Text text = context.getActiveCellEditorText();
+        if (text == null)
         {
-            blankRow.set(0, "");
+            return;
         }
-        final boolean applied = context.executeEdit(() -> context.getDatasetDocument()
-                .insertRows(selection.tableKey(), rowIndex, List.of(blankRow)));
-        if (applied)
+        if (text.getSelectionCount() > 0)
         {
-            context.selectRegion(columnIndex, rowIndex, 1, 1);
+            text.insert("");
+            return;
+        }
+        final int caretPosition = text.getCaretPosition();
+        if (caretPosition < text.getCharCount())
+        {
+            final int codePoint = Character.codePointAt(text.getText(), caretPosition);
+            final int charCount = Character.charCount(codePoint);
+            text.setSelection(caretPosition, caretPosition + charCount);
+            text.insert("");
         }
     }
 
     @Override
     protected boolean isEnabledFor(final GridSelection selection)
     {
-        return selection.tableKey() != null && selection.columnCount() > 0;
+        return !selection.rowIndexes().isEmpty() && !selection.columnIndexes().isEmpty();
     }
 }

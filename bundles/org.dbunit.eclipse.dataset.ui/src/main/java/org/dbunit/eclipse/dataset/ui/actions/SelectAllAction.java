@@ -20,55 +20,60 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
-import org.dbunit.eclipse.dataset.ui.DatasetImages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
+import org.eclipse.swt.widgets.Text;
 
 /**
- * Inserts a blank row below the selection anchor and selects it.
+ * The global Select All action: selects every cell of the active grid, or, while a cell editor is active,
+ * selects all of the editor's text.
  *
  * @since 1.0.0
  */
-public final class InsertRowBelowAction extends GridAction
+public final class SelectAllAction extends GridAction
 {
     /**
      * Creates the action.
      *
      * @param context What this action needs from the page that hosts the grid.
      */
-    public InsertRowBelowAction(final DatasetGridContext context)
+    public SelectAllAction(final DatasetGridContext context)
     {
-        super(DatasetCommandIds.INSERT_ROW_BELOW, context);
-        setText("Insert Row Below");
-        setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_INSERT_ROW_BELOW));
+        super(context);
+        setText("Select All");
     }
 
     @Override
     protected void runOnGrid(final DatasetGridContext context)
     {
-        final GridSelection selection = context.getSelection();
-        final int rowIndex = Math.max(selection.anchorRowIndex() + 1, 0);
-        final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);
-        final List<String> blankRow = new ArrayList<>(Collections.nCopies(selection.columnCount(), null));
-        if (!blankRow.isEmpty())
+        context.selectAll();
+    }
+
+    @Override
+    protected boolean changesDataset()
+    {
+        return false;
+    }
+
+    @Override
+    protected boolean isEnabledWhileEditing()
+    {
+        return true;
+    }
+
+    @Override
+    protected void runWhileEditing(final DatasetGridContext context)
+    {
+        final Text text = context.getActiveCellEditorText();
+        if (text != null)
         {
-            blankRow.set(0, "");
-        }
-        final boolean applied = context.executeEdit(() -> context.getDatasetDocument()
-                .insertRows(selection.tableKey(), rowIndex, List.of(blankRow)));
-        if (applied)
-        {
-            context.selectRegion(columnIndex, rowIndex, 1, 1);
+            text.selectAll();
         }
     }
 
     @Override
     protected boolean isEnabledFor(final GridSelection selection)
     {
-        return selection.tableKey() != null && selection.columnCount() > 0;
+        return selection.rowCount() > 0 && selection.columnCount() > 0;
     }
 }

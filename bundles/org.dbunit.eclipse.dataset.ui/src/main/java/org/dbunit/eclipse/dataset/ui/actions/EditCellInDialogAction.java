@@ -20,55 +20,36 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
-import org.dbunit.eclipse.dataset.ui.DatasetImages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 
 /**
- * Inserts a blank row below the selection anchor and selects it.
+ * Opens the anchor cell's value in a multi-line dialog editor, so values with line breaks can be entered.
  *
  * @since 1.0.0
  */
-public final class InsertRowBelowAction extends GridAction
+public final class EditCellInDialogAction extends GridAction
 {
     /**
      * Creates the action.
      *
      * @param context What this action needs from the page that hosts the grid.
      */
-    public InsertRowBelowAction(final DatasetGridContext context)
+    public EditCellInDialogAction(final DatasetGridContext context)
     {
-        super(DatasetCommandIds.INSERT_ROW_BELOW, context);
-        setText("Insert Row Below");
-        setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_INSERT_ROW_BELOW));
+        super(DatasetCommandIds.EDIT_CELL_IN_DIALOG, context);
+        setText("Edit Cell in Dialog...");
     }
 
     @Override
     protected void runOnGrid(final DatasetGridContext context)
     {
-        final GridSelection selection = context.getSelection();
-        final int rowIndex = Math.max(selection.anchorRowIndex() + 1, 0);
-        final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);
-        final List<String> blankRow = new ArrayList<>(Collections.nCopies(selection.columnCount(), null));
-        if (!blankRow.isEmpty())
-        {
-            blankRow.set(0, "");
-        }
-        final boolean applied = context.executeEdit(() -> context.getDatasetDocument()
-                .insertRows(selection.tableKey(), rowIndex, List.of(blankRow)));
-        if (applied)
-        {
-            context.selectRegion(columnIndex, rowIndex, 1, 1);
-        }
+        context.editCellInDialog();
     }
 
     @Override
     protected boolean isEnabledFor(final GridSelection selection)
     {
-        return selection.tableKey() != null && selection.columnCount() > 0;
+        return selection.anchorColumnIndex() >= 0 && selection.anchorRowIndex() >= 0;
     }
 }

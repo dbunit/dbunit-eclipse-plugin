@@ -20,55 +20,65 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
-import org.dbunit.eclipse.dataset.ui.DatasetImages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
+import org.eclipse.swt.widgets.Text;
 
 /**
- * Inserts a blank row below the selection anchor and selects it.
+ * Copies the selection, then sets it to NULL; when the selection consists of whole rows, deletes those
+ * rows instead, since a row cannot be all NULL and cutting rows to move them is the common intent.
  *
  * @since 1.0.0
  */
-public final class InsertRowBelowAction extends GridAction
+public final class CutAction extends GridAction
 {
     /**
      * Creates the action.
      *
      * @param context What this action needs from the page that hosts the grid.
      */
-    public InsertRowBelowAction(final DatasetGridContext context)
+    public CutAction(final DatasetGridContext context)
     {
-        super(DatasetCommandIds.INSERT_ROW_BELOW, context);
-        setText("Insert Row Below");
-        setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_INSERT_ROW_BELOW));
+        super(context);
+        setText("Cut");
     }
 
     @Override
     protected void runOnGrid(final DatasetGridContext context)
     {
         final GridSelection selection = context.getSelection();
-        final int rowIndex = Math.max(selection.anchorRowIndex() + 1, 0);
-        final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);
-        final List<String> blankRow = new ArrayList<>(Collections.nCopies(selection.columnCount(), null));
-        if (!blankRow.isEmpty())
+        CopyAction.copySelectedCellsToClipboard(context);
+        if (selection.wholeRowsSelected())
         {
-            blankRow.set(0, "");
+            final int[] rowIndexes = selection.rowIndexes().stream().mapToInt(Integer::intValue).toArray();
+            context.executeEdit(
+                    () -> context.getDatasetDocument().deleteRows(selection.tableKey(), rowIndexes));
         }
-        final boolean applied = context.executeEdit(() -> context.getDatasetDocument()
-                .insertRows(selection.tableKey(), rowIndex, List.of(blankRow)));
-        if (applied)
+        else
         {
-            context.selectRegion(columnIndex, rowIndex, 1, 1);
+            SetNullAction.setSelectedCellsToNull(context);
+        }
+    }
+
+    @Override
+    protected boolean isEnabledWhileEditing()
+    {
+        return true;
+    }
+
+    @Override
+    protected void runWhileEditing(final DatasetGridContext context)
+    {
+        final Text text = context.getActiveCellEditorText();
+        if (text != null)
+        {
+            text.cut();
         }
     }
 
     @Override
     protected boolean isEnabledFor(final GridSelection selection)
     {
-        return selection.tableKey() != null && selection.columnCount() > 0;
+        return !selection.rowIndexes().isEmpty() && !selection.columnIndexes().isEmpty();
     }
 }

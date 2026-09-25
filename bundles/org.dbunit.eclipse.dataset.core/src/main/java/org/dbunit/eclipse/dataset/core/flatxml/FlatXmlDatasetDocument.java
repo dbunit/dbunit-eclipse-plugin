@@ -272,7 +272,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             {
                 throw new DatasetEditException(
                         "This change would leave row " + rowIndex + " of table '" + table.getName()
-                                + "' with no values.");
+                                + "' with no values. Use Delete Rows to remove it instead.");
             }
             final String rewritten = StartTagRewriter.rewrite(text, element, table.getColumns(),
                     rowChanges, Map.of(), encoder);

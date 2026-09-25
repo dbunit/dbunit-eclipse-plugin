@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
 import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
@@ -41,9 +42,11 @@ import org.eclipse.nebula.widgets.nattable.selection.SelectionLayer.MoveDirectio
 import org.eclipse.nebula.widgets.nattable.selection.command.SelectCellCommand;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.KeyEvent;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.swt.widgets.Text;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,15 +59,19 @@ class GridEditingTest
 {
     private Shell shell;
 
+    private ModalDialogDriver dialogDriver;
+
     @BeforeEach
     void createShell()
     {
         shell = new Shell(Display.getDefault());
+        dialogDriver = new ModalDialogDriver(shell);
     }
 
     @AfterEach
     void disposeShell()
     {
+        dialogDriver.disarm();
         shell.dispose();
     }
 
@@ -130,7 +137,8 @@ class GridEditingTest
                 .isEqualTo(originalText);
         assertThat(context.lastErrorMessage)
                 .as("A rejected edit must set the status line error message.")
-                .isEqualTo("This change would leave row 0 of table 'USERS' with no values.");
+                .isEqualTo("This change would leave row 0 of table 'USERS' with no values. Use Delete "
+                        + "Rows to remove it instead.");
     }
 
     @Test
@@ -145,6 +153,36 @@ class GridEditingTest
         provider.setDataValue(1, 0, "Carol");
 
         assertThat(document.get()).as("A read-only input must reject the edit.").isEqualTo(originalText);
+    }
+
+    @Test
+    void testSetDataValue_whenTheEditorTurnedLineFeedsIntoCrLf_keepsTheLineFeeds()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\" NOTE=\"first&#xA;second\"/></dataset>";
+        final IDocument document = new Document(originalText);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final TestContext context = new TestContext(datasetDocument);
+        final TableBodyDataProvider provider = new TableBodyDataProvider(context, "USERS");
+
+        provider.setDataValue(1, 0, "first\r\nsecond");
+
+        assertThat(document.get())
+                .as("A text widget that writes CR LF must not change a value with line feeds.")
+                .isEqualTo(originalText);
+    }
+
+    @Test
+    void testSetDataValue_whenTheValueUsedCrLf_keepsCrLf()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NOTE=\"a&#xD;&#xA;b\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final TestContext context = new TestContext(datasetDocument);
+        final TableBodyDataProvider provider = new TableBodyDataProvider(context, "USERS");
+
+        provider.setDataValue(1, 0, "a\r\nb\r\nc");
+
+        assertThat(document.get()).as("A value that used CR LF line breaks must keep them.")
+                .isEqualTo("<dataset><USERS ID=\"1\" NOTE=\"a&#xD;&#xA;b&#xD;&#xA;c\"/></dataset>");
     }
 
     @Test
@@ -168,6 +206,40 @@ class GridEditingTest
     }
 
     @Test
+    void testCommit_whenTheTextOfTheInPlaceEditorIsCleared_storesTheEmptyString()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final NatTable natTable = openGrid(create(document), "USERS").getNatTable();
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 1, false, false));
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+        final ICellEditor cellEditor = natTable.getActiveCellEditor();
+        cellEditor.setEditorValue("");
+
+        cellEditor.commit(MoveDirectionEnum.NONE);
+
+        assertThat(document.get())
+                .as("Clearing the text of a cell with a value must store the empty string, not NULL.")
+                .isEqualTo("<dataset><USERS ID=\"1\" NAME=\"\"/></dataset>");
+    }
+
+    @Test
+    void testCommit_whenTheInPlaceEditorOfANullCellIsUntouched_keepsItNull()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\"/></dataset>";
+        final IDocument document = new Document(originalText);
+        final NatTable natTable = openGrid(create(document), "USERS").getNatTable();
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 2, false, false));
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+        final ICellEditor cellEditor = natTable.getActiveCellEditor();
+
+        cellEditor.commit(MoveDirectionEnum.NONE);
+
+        assertThat(document.get())
+                .as("Committing the editor of a NULL cell without typing anything must keep it NULL.")
+                .isEqualTo(originalText);
+    }
+
+    @Test
     void testCommitActiveCellEditor_whileACellIsBeingEdited_writesItsValueAndClosesTheEditor()
     {
         final IDocument document = new Document("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>");
@@ -184,6 +256,71 @@ class GridEditingTest
         assertThat(natTable.getActiveCellEditor()).as("No cell editor may stay open.").isNull();
         assertThat(document.get()).as("The open editor's value must reach the document, as saving needs.")
                 .isEqualTo("<dataset><USERS ID=\"1\"/><USERS ID=\"20\"/></dataset>");
+    }
+
+    @Test
+    void testEditCellInDialog_whenAnEmptyStringIsConfirmedUnchanged_keepsTheEmptyString()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\" NAME=\"\"/></dataset>";
+        final IDocument document = new Document(originalText);
+        final DatasetGrid grid = openGrid(create(document), "USERS");
+        grid.selectRegion(1, 0, 1, 1);
+        dialogDriver.confirmNextDialog();
+
+        grid.editCellInDialog();
+
+        assertThat(dialogDriver.hasConfirmed()).as("The dialog must open and be confirmed.").isTrue();
+        assertThat(document.get())
+                .as("Confirming the dialog without a change must keep the empty string, not make it NULL.")
+                .isEqualTo(originalText);
+    }
+
+    @Test
+    void testEditCellInDialog_whenTheDialogTextIsCleared_storesTheEmptyString()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final DatasetGrid grid = openGrid(create(document), "USERS");
+        grid.selectRegion(1, 0, 1, 1);
+        dialogDriver.confirmNextDialogWithText("");
+
+        grid.editCellInDialog();
+
+        assertThat(dialogDriver.hasConfirmed()).as("The dialog must open and be confirmed.").isTrue();
+        assertThat(document.get())
+                .as("Clearing the text of a cell with a value must store the empty string, not NULL.")
+                .isEqualTo("<dataset><USERS ID=\"1\" NAME=\"\"/></dataset>");
+    }
+
+    @Test
+    void testEditCellInDialog_whenTheCellIsNullAndTheDialogIsConfirmedUnchanged_keepsItNull()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\"/></dataset>";
+        final IDocument document = new Document(originalText);
+        final DatasetGrid grid = openGrid(create(document), "USERS");
+        grid.selectRegion(1, 1, 1, 1);
+        dialogDriver.confirmNextDialog();
+
+        grid.editCellInDialog();
+
+        assertThat(dialogDriver.hasConfirmed()).as("The dialog must open and be confirmed.").isTrue();
+        assertThat(document.get())
+                .as("Confirming the dialog of a NULL cell without typing anything must keep it NULL.")
+                .isEqualTo(originalText);
+    }
+
+    @Test
+    void testEditCellInDialog_whenTheDialogTextIsChanged_storesTheNewValue()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final DatasetGrid grid = openGrid(create(document), "USERS");
+        grid.selectRegion(1, 0, 1, 1);
+        dialogDriver.confirmNextDialogWithText("Bob");
+
+        grid.editCellInDialog();
+
+        assertThat(dialogDriver.hasConfirmed()).as("The dialog must open and be confirmed.").isTrue();
+        assertThat(document.get()).as("The text entered in the dialog must reach the document.")
+                .isEqualTo("<dataset><USERS ID=\"1\" NAME=\"Bob\"/></dataset>");
     }
 
     @Test
@@ -386,7 +523,8 @@ class GridEditingTest
         }
 
         @Override
-        public void setPendingSelection(final int columnIndex, final int rowIndex)
+        public void selectRegion(final int firstColumnIndex, final int firstRowIndex, final int columnCount,
+                final int rowCount)
         {
         }
 
@@ -414,6 +552,44 @@ class GridEditingTest
         @Override
         public void expectNewTableSelected(final String tableName)
         {
+        }
+
+        @Override
+        public Text getActiveCellEditorText()
+        {
+            return null;
+        }
+
+        @Override
+        public List<Point> getSelectedCellPositions()
+        {
+            return List.of();
+        }
+
+        @Override
+        public void selectAll()
+        {
+        }
+
+        @Override
+        public void editCellInDialog()
+        {
+        }
+
+        @Override
+        public void setStatusMessage(final String message)
+        {
+        }
+
+        @Override
+        public void writeClipboardText(final String text)
+        {
+        }
+
+        @Override
+        public String readClipboardText()
+        {
+            return null;
         }
     }
 }

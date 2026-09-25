@@ -48,13 +48,13 @@ public final class DuplicateRowsAction extends GridAction
     {
         final GridSelection selection = context.getSelection();
         final int[] rowIndexes = selection.rowIndexes().stream().mapToInt(Integer::intValue).toArray();
-        final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);
         final int newBlockStart = selection.lastRowIndex() + 1;
         final boolean applied = context.executeEdit(
                 () -> context.getDatasetDocument().duplicateRows(selection.tableKey(), rowIndexes));
         if (applied)
         {
-            context.setPendingSelection(columnIndex, newBlockStart);
+            context.selectRegion(selection.firstColumnIndex(), newBlockStart, selection.columnSpan(),
+                    rowIndexes.length);
         }
     }
 

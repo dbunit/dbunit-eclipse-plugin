@@ -21,54 +21,62 @@
 package org.dbunit.eclipse.dataset.ui.actions;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
+import org.dbunit.eclipse.dataset.core.edit.CellChange;
+import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
+import org.eclipse.swt.graphics.Point;
 
 /**
- * Inserts a blank row below the selection anchor and selects it.
+ * Sets every selected cell to NULL.
  *
  * @since 1.0.0
  */
-public final class InsertRowBelowAction extends GridAction
+public final class SetNullAction extends GridAction
 {
     /**
      * Creates the action.
      *
      * @param context What this action needs from the page that hosts the grid.
      */
-    public InsertRowBelowAction(final DatasetGridContext context)
+    public SetNullAction(final DatasetGridContext context)
     {
-        super(DatasetCommandIds.INSERT_ROW_BELOW, context);
-        setText("Insert Row Below");
-        setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_INSERT_ROW_BELOW));
+        super(DatasetCommandIds.SET_NULL, context);
+        setText("Set to NULL");
+        setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_SET_NULL));
     }
 
     @Override
     protected void runOnGrid(final DatasetGridContext context)
     {
+        setSelectedCellsToNull(context);
+    }
+
+    /**
+     * Sets every cell the active grid has selected to NULL, for reuse by {@link CutAction} and
+     * {@link DeleteAction}.
+     *
+     * @param context What this needs from the page that hosts the grid.
+     */
+    static void setSelectedCellsToNull(final DatasetGridContext context)
+    {
         final GridSelection selection = context.getSelection();
-        final int rowIndex = Math.max(selection.anchorRowIndex() + 1, 0);
-        final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);
-        final List<String> blankRow = new ArrayList<>(Collections.nCopies(selection.columnCount(), null));
-        if (!blankRow.isEmpty())
+        final DatasetTable table =
+                context.getDatasetDocument().getModel().findTable(selection.tableKey()).orElseThrow();
+        final List<CellChange> changes = new ArrayList<>();
+        for (final Point cell : context.getSelectedCellPositions())
         {
-            blankRow.set(0, "");
+            changes.add(new CellChange(cell.y, table.getColumns().get(cell.x).name(), null));
         }
-        final boolean applied = context.executeEdit(() -> context.getDatasetDocument()
-                .insertRows(selection.tableKey(), rowIndex, List.of(blankRow)));
-        if (applied)
-        {
-            context.selectRegion(columnIndex, rowIndex, 1, 1);
-        }
+        context.executeEdit(() -> context.getDatasetDocument().setCells(selection.tableKey(), changes));
     }
 
     @Override
     protected boolean isEnabledFor(final GridSelection selection)
     {
-        return selection.tableKey() != null && selection.columnCount() > 0;
+        return !selection.rowIndexes().isEmpty() && !selection.columnIndexes().isEmpty();
     }
 }

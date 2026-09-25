@@ -54,7 +54,7 @@ public final class DeleteRowsAction extends GridAction
                 () -> context.getDatasetDocument().deleteRows(selection.tableKey(), rowIndexes));
         if (applied)
         {
-            context.setPendingSelection(columnIndex, rowIndex);
+            context.selectRegion(columnIndex, rowIndex, 1, 1);
         }
     }
 
