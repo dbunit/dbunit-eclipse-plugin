@@ -489,6 +489,17 @@ final class TablesPage implements DatasetGridContext
         return null;
     }
 
+    /**
+     * Repaints every grid, for example after the NULL display text changed.
+     */
+    void repaintGrids()
+    {
+        for (final DatasetGrid grid : gridsByKey.values())
+        {
+            grid.repaint();
+        }
+    }
+
     @Override
     public void expectRename(final String oldKey, final String newKey)
     {

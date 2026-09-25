@@ -46,6 +46,31 @@ public final class Messages extends NLS
      */
     public static String Editor_sourcePageText;
 
+    /**
+     * The description at the top of the preference page.
+     */
+    public static String PreferencePage_description;
+
+    /**
+     * The label of the preference page's NULL display text field.
+     */
+    public static String PreferencePage_nullDisplayText;
+
+    /**
+     * The preference page's error message for a blank NULL display text.
+     */
+    public static String PreferencePage_nullDisplayTextBlank;
+
+    /**
+     * The label of the preference page's column sensing option.
+     */
+    public static String PreferencePage_assumeColumnSensing;
+
+    /**
+     * The label of the preference page's table name case option.
+     */
+    public static String PreferencePage_caseSensitiveTableNames;
+
     static
     {
         NLS.initializeMessages(BUNDLE_NAME, Messages.class);

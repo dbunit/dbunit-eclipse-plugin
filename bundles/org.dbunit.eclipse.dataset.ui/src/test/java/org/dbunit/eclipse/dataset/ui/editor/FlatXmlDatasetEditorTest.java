@@ -24,9 +24,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
+import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
+import org.dbunit.eclipse.dataset.core.model.ProblemCode;
+import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
+import org.dbunit.eclipse.dataset.ui.preferences.PreferenceKeys;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.nebula.widgets.nattable.NatTable;
+import org.eclipse.nebula.widgets.nattable.config.CellConfigAttributes;
+import org.eclipse.nebula.widgets.nattable.data.convert.IDisplayConverter;
+import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
+import org.eclipse.nebula.widgets.nattable.layer.event.ILayerEvent;
+import org.eclipse.nebula.widgets.nattable.layer.event.VisualRefreshEvent;
+import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
+import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbenchPage;
@@ -34,16 +49,27 @@ import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.ide.IGotoMarker;
 import org.eclipse.ui.texteditor.ITextEditor;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests {@link FlatXmlDatasetEditor} against the Editor Structure lifecycle rules.
+ * Tests {@link FlatXmlDatasetEditor} against the Editor Structure lifecycle rules and its reaction to
+ * preference changes.
  */
 class FlatXmlDatasetEditorTest
 {
     private static final int TABLES_PAGE_INDEX = 0;
 
     private static final int SOURCE_PAGE_INDEX = 1;
+
+    @AfterEach
+    void restoreDefaultPreferences()
+    {
+        final IPreferenceStore store = preferenceStore();
+        store.setToDefault(PreferenceKeys.NULL_DISPLAY_TEXT);
+        store.setToDefault(PreferenceKeys.ASSUME_COLUMN_SENSING);
+        store.setToDefault(PreferenceKeys.CASE_SENSITIVE_TABLE_NAMES);
+    }
 
     @Test
     void testOpen_whenFileIsFlatXml_showsTablesAndSourcePages() throws Exception
@@ -182,5 +208,119 @@ class FlatXmlDatasetEditorTest
                     .as("Requesting IGotoMarker must switch to the Source page.")
                     .isEqualTo(SOURCE_PAGE_INDEX);
         }
+    }
+
+    @Test
+    void testPreferenceChange_ofCaseSensitiveTableNames_regroupsTheTablesOfTheOpenEditor() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\"/><users ID=\"2\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            assertThat(tabItems(editor)).extracting(CTabItem::getText)
+                    .as("By default, table names that differ only in case must be one table.")
+                    .containsExactly("USERS");
+
+            preferenceStore().setValue(PreferenceKeys.CASE_SENSITIVE_TABLE_NAMES, true);
+            UiTestWorkspace.processEvents();
+
+            assertThat(tabItems(editor)).extracting(CTabItem::getText)
+                    .as("Case-sensitive table names must split the open editor's table in two.")
+                    .containsExactly("USERS", "users");
+
+            preferenceStore().setValue(PreferenceKeys.CASE_SENSITIVE_TABLE_NAMES, false);
+            UiTestWorkspace.processEvents();
+
+            assertThat(tabItems(editor)).extracting(CTabItem::getText)
+                    .as("Case-insensitive table names must merge the open editor's tables again.")
+                    .containsExactly("USERS");
+        }
+    }
+
+    @Test
+    void testPreferenceChange_ofAssumeColumnSensing_revalidatesTheOpenEditor() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            assertThat(problems(editor)).extracting(DatasetProblem::code)
+                    .as("Without column sensing, a column missing from the first row must be reported.")
+                    .contains(ProblemCode.COLUMN_NOT_IN_FIRST_ROW);
+
+            preferenceStore().setValue(PreferenceKeys.ASSUME_COLUMN_SENSING, true);
+            UiTestWorkspace.processEvents();
+
+            assertThat(problems(editor)).extracting(DatasetProblem::code)
+                    .as("With column sensing, dbUnit reads the column, so the editor must stop reporting it.")
+                    .doesNotContain(ProblemCode.COLUMN_NOT_IN_FIRST_ROW);
+        }
+    }
+
+    @Test
+    void testPreferenceChange_ofNullDisplayText_repaintsTheGridsWithTheNewText() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final NatTable natTable = (NatTable) tabItems(editor).get(0).getControl();
+            final List<ILayerEvent> events = new ArrayList<>();
+            natTable.addLayerListener(events::add);
+
+            preferenceStore().setValue(PreferenceKeys.NULL_DISPLAY_TEXT, "<NULL>");
+            UiTestWorkspace.processEvents();
+
+            assertThat(events).as("Changing the NULL display text must repaint the open grids.")
+                    .anyMatch(VisualRefreshEvent.class::isInstance);
+            final IDisplayConverter converter = natTable.getConfigRegistry().getConfigAttribute(
+                    CellConfigAttributes.DISPLAY_CONVERTER, DisplayMode.NORMAL, GridRegion.BODY);
+            assertThat(converter.canonicalToDisplayValue(null))
+                    .as("The repainted grids must show NULL cells with the new text.").isEqualTo("<NULL>");
+        }
+    }
+
+    @Test
+    void testPreferenceChange_onABackgroundThread_regroupsTheTablesOnTheUiThread() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\"/><users ID=\"2\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+
+            final Thread thread = new Thread(
+                    () -> preferenceStore().setValue(PreferenceKeys.CASE_SENSITIVE_TABLE_NAMES, true));
+            thread.start();
+            thread.join();
+
+            assertThat(editor.getDatasetDocument().getModel().getTables())
+                    .as("A change on a background thread must not touch the editor on that thread.")
+                    .hasSize(1);
+
+            UiTestWorkspace.processEvents();
+
+            assertThat(tabItems(editor)).extracting(CTabItem::getText)
+                    .as("The UI thread must then regroup the open editor's tables.")
+                    .containsExactly("USERS", "users");
+        }
+    }
+
+    private static IPreferenceStore preferenceStore()
+    {
+        return DatasetUiPlugin.getDefault().getPreferenceStore();
+    }
+
+    private static List<CTabItem> tabItems(final FlatXmlDatasetEditor editor)
+    {
+        return List.of(editor.getTablesPage().getTabFolder().getItems());
+    }
+
+    private static List<DatasetProblem> problems(final FlatXmlDatasetEditor editor)
+    {
+        return editor.getDatasetDocument().getModel().getProblems();
     }
 }
