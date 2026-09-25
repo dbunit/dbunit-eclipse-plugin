@@ -20,6 +20,7 @@
  */
 package org.dbunit.eclipse.dataset.ui.editor;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -35,14 +36,22 @@ import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
+import org.dbunit.eclipse.dataset.ui.actions.DeleteRowsAction;
+import org.dbunit.eclipse.dataset.ui.actions.GridAction;
+import org.dbunit.eclipse.dataset.ui.actions.InsertRowAboveAction;
+import org.dbunit.eclipse.dataset.ui.actions.InsertRowBelowAction;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGrid;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
+import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.dbunit.eclipse.dataset.ui.preferences.PreferenceKeys;
 import org.eclipse.core.commands.operations.IOperationHistoryListener;
 import org.eclipse.core.commands.operations.OperationHistoryEvent;
 import org.eclipse.core.commands.operations.OperationHistoryFactory;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.action.IMenuManager;
+import org.eclipse.jface.action.ToolBarManager;
+import org.eclipse.jface.commands.ActionHandler;
+import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.jface.resource.FontDescriptor;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.jface.resource.LocalResourceManager;
@@ -50,6 +59,7 @@ import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.nebula.widgets.nattable.NatTable;
+import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
@@ -65,11 +75,16 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
+import org.eclipse.swt.widgets.ToolBar;
 import org.eclipse.text.undo.DocumentUndoManagerRegistry;
 import org.eclipse.text.undo.IDocumentUndoManager;
 import org.eclipse.ui.ISharedImages;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.actions.ActionFactory;
+import org.eclipse.ui.contexts.IContextActivation;
+import org.eclipse.ui.contexts.IContextService;
+import org.eclipse.ui.handlers.IHandlerActivation;
+import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 /**
@@ -80,6 +95,8 @@ import org.eclipse.ui.texteditor.ITextEditor;
  */
 final class TablesPage implements DatasetGridContext
 {
+    private static final String TABLES_PAGE_CONTEXT_ID = "org.dbunit.eclipse.dataset.ui.tablesPageContext";
+
     private final FlatXmlDatasetEditor editor;
 
     private final FlatXmlDatasetDocument datasetDocument;
@@ -129,6 +146,18 @@ final class TablesPage implements DatasetGridContext
 
     private final IOperationHistoryListener operationHistoryListener;
 
+    private final InsertRowAboveAction insertRowAboveAction;
+
+    private final InsertRowBelowAction insertRowBelowAction;
+
+    private final DeleteRowsAction deleteRowsAction;
+
+    private final List<GridAction> gridActions = new ArrayList<>();
+
+    private final List<IHandlerActivation> handlerActivations = new ArrayList<>();
+
+    private IContextActivation contextActivation;
+
     private boolean active;
 
     private boolean refreshPending;
@@ -175,6 +204,21 @@ final class TablesPage implements DatasetGridContext
                 SelectionListener.widgetSelectedAdapter(event -> createEmptyDataset()));
 
         tabFolder = new CTabFolder(contentStack, SWT.TOP | SWT.BORDER | SWT.FLAT);
+        tabFolder.addSelectionListener(
+                SelectionListener.widgetSelectedAdapter(event -> updateGridActionsEnablement()));
+
+        insertRowAboveAction = new InsertRowAboveAction(this);
+        insertRowBelowAction = new InsertRowBelowAction(this);
+        deleteRowsAction = new DeleteRowsAction(this);
+        gridActions.add(insertRowAboveAction);
+        gridActions.add(insertRowBelowAction);
+        gridActions.add(deleteRowsAction);
+
+        final ToolBarManager toolBarManager = new ToolBarManager(SWT.FLAT);
+        toolBarManager.add(insertRowBelowAction);
+        toolBarManager.add(deleteRowsAction);
+        final ToolBar toolBar = toolBarManager.createControl(tabFolder);
+        tabFolder.setTopRight(toolBar);
 
         final IDocument document = sourceDocument();
         listenedDocument = document;
@@ -208,7 +252,16 @@ final class TablesPage implements DatasetGridContext
     void activate()
     {
         active = true;
+        final IContextService contextService = editor.getEditorSite().getService(IContextService.class);
+        contextActivation = contextService.activateContext(TABLES_PAGE_CONTEXT_ID);
+        final IHandlerService handlerService = editor.getEditorSite().getService(IHandlerService.class);
+        for (final GridAction action : gridActions)
+        {
+            handlerActivations.add(handlerService.activateHandler(action.getActionDefinitionId(),
+                    new ActionHandler(action)));
+        }
         updateUndoRedoActions();
+        updateGridActionsEnablement();
         if (refreshPending)
         {
             refreshPending = false;
@@ -219,6 +272,12 @@ final class TablesPage implements DatasetGridContext
     void deactivate()
     {
         active = false;
+        final IContextService contextService = editor.getEditorSite().getService(IContextService.class);
+        contextService.deactivateContext(contextActivation);
+        contextActivation = null;
+        final IHandlerService handlerService = editor.getEditorSite().getService(IHandlerService.class);
+        handlerService.deactivateHandlers(handlerActivations);
+        handlerActivations.clear();
     }
 
     /**
@@ -320,8 +379,59 @@ final class TablesPage implements DatasetGridContext
     }
 
     @Override
+    public boolean executeMultiCellEdit(final String title, final Runnable edit)
+    {
+        if (!editable || !editor.getSourceEditor().validateEditorInputState())
+        {
+            return false;
+        }
+        try
+        {
+            edit.run();
+        }
+        catch (final DatasetEditException e)
+        {
+            MessageDialog.openError(control.getShell(), title, e.getMessage());
+            return false;
+        }
+        editor.getEditorSite().getActionBars().getStatusLineManager().setErrorMessage(null);
+        return true;
+    }
+
+    @Override
     public void fillContextMenu(final IMenuManager menu, final String region)
     {
+        if (GridRegion.BODY.equals(region) || GridRegion.ROW_HEADER.equals(region))
+        {
+            menu.add(insertRowAboveAction);
+            menu.add(insertRowBelowAction);
+            menu.add(deleteRowsAction);
+        }
+    }
+
+    @Override
+    public boolean hasActiveCellEditor()
+    {
+        final CTabItem selected = tabFolder.getSelection();
+        return selected != null && selected.getControl() instanceof NatTable
+                && ((NatTable) selected.getControl()).getActiveCellEditor() != null;
+    }
+
+    @Override
+    public GridSelection getSelection()
+    {
+        final DatasetGrid grid = activeGrid();
+        return grid != null ? grid.getSelection() : GridSelection.NONE;
+    }
+
+    @Override
+    public void setPendingSelection(final int columnIndex, final int rowIndex)
+    {
+        final DatasetGrid grid = activeGrid();
+        if (grid != null)
+        {
+            grid.setPendingSelection(columnIndex, rowIndex);
+        }
     }
 
     private static double relativeLuminance(final Color color)
@@ -404,11 +514,30 @@ final class TablesPage implements DatasetGridContext
                 || eventType == OperationHistoryEvent.OPERATION_CHANGED;
     }
 
-    private boolean hasActiveCellEditor()
+    private void updateGridActionsEnablement()
+    {
+        final GridSelection selection = getSelection();
+        for (final GridAction action : gridActions)
+        {
+            action.update(selection);
+        }
+    }
+
+    private DatasetGrid activeGrid()
     {
         final CTabItem selected = tabFolder.getSelection();
-        return selected != null && selected.getControl() instanceof NatTable
-                && ((NatTable) selected.getControl()).getActiveCellEditor() != null;
+        if (selected == null)
+        {
+            return null;
+        }
+        for (final DatasetGrid grid : gridsByKey.values())
+        {
+            if (grid.getControl().equals(selected.getControl()))
+            {
+                return grid;
+            }
+        }
+        return null;
     }
 
     private void scheduleRefresh()
@@ -457,6 +586,7 @@ final class TablesPage implements DatasetGridContext
         contentStack.layout();
 
         updateBanner(model);
+        updateGridActionsEnablement();
     }
 
     private void reconcileTabs(final DatasetModel model)
@@ -475,6 +605,7 @@ final class TablesPage implements DatasetGridContext
             if (item == null)
             {
                 grid = new DatasetGrid(tabFolder, this, key);
+                grid.addSelectionListener(this::updateGridActionsEnablement);
                 gridsByKey.put(key, grid);
                 item = new CTabItem(tabFolder, SWT.NONE, index);
                 item.setControl(grid.getControl());
@@ -492,6 +623,12 @@ final class TablesPage implements DatasetGridContext
         expectedRenameOldKey = null;
         expectedRenameNewKey = null;
 
+        disposeStaleTabs(seenKeys);
+        selectFirstTabIfNoneSelected();
+    }
+
+    private void disposeStaleTabs(final Set<String> seenKeys)
+    {
         final Iterator<Map.Entry<String, CTabItem>> iterator = tabsByKey.entrySet().iterator();
         while (iterator.hasNext())
         {
@@ -503,6 +640,14 @@ final class TablesPage implements DatasetGridContext
                 iterator.remove();
                 gridsByKey.remove(entry.getKey());
             }
+        }
+    }
+
+    private void selectFirstTabIfNoneSelected()
+    {
+        if (tabFolder.getSelection() == null && tabFolder.getItemCount() > 0)
+        {
+            tabFolder.setSelection(0);
         }
     }
 

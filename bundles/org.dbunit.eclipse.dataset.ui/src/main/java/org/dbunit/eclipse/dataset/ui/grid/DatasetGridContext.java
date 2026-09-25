@@ -68,10 +68,43 @@ public interface DatasetGridContext
     boolean executeEdit(Runnable edit);
 
     /**
+     * Runs a multi-cell edit (paste, fill down, delete rows), reporting a rejected edit through a modal
+     * error dialog instead of just the status line, since the user expects a larger effect.
+     *
+     * @param title The dialog's title, naming the command.
+     * @param edit The edit to run.
+     * @return True when the edit ran; false when the page is not editable, the editor input could not be
+     *         validated, or the edit was rejected.
+     */
+    boolean executeMultiCellEdit(String title, Runnable edit);
+
+    /**
      * Adds this page's actions for a grid region to a context menu.
      *
      * @param menu The menu to add to.
      * @param region One of NatTable's {@code GridRegion} constants naming where the menu was requested.
      */
     void fillContextMenu(IMenuManager menu, String region);
+
+    /**
+     * Returns whether a grid cell editor is currently open.
+     *
+     * @return True while a cell editor is active, so row, column, and table actions must do nothing.
+     */
+    boolean hasActiveCellEditor();
+
+    /**
+     * Returns the active grid's current selection.
+     *
+     * @return The selection snapshot, or {@link GridSelection#NONE} when there is no active grid.
+     */
+    GridSelection getSelection();
+
+    /**
+     * Requests the cell to select on the active grid the next time it refreshes.
+     *
+     * @param columnIndex The column of the cell to select.
+     * @param rowIndex The row of the cell to select.
+     */
+    void setPendingSelection(int columnIndex, int rowIndex);
 }

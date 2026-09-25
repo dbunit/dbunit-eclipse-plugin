@@ -279,7 +279,31 @@ class DatasetGridTest
         }
 
         @Override
+        public boolean executeMultiCellEdit(final String title, final Runnable edit)
+        {
+            edit.run();
+            return true;
+        }
+
+        @Override
         public void fillContextMenu(final IMenuManager menu, final String region)
+        {
+        }
+
+        @Override
+        public boolean hasActiveCellEditor()
+        {
+            return false;
+        }
+
+        @Override
+        public GridSelection getSelection()
+        {
+            return GridSelection.NONE;
+        }
+
+        @Override
+        public void setPendingSelection(final int columnIndex, final int rowIndex)
         {
         }
     }

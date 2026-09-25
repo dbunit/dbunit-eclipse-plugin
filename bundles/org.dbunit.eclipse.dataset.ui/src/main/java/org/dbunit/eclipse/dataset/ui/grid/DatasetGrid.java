@@ -25,6 +25,7 @@ import java.util.Locale;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.eclipse.jface.action.MenuManager;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.config.DefaultNatTableStyleConfiguration;
 import org.eclipse.nebula.widgets.nattable.coordinate.PositionCoordinate;
@@ -41,9 +42,11 @@ import org.eclipse.nebula.widgets.nattable.grid.layer.RowHeaderLayer;
 import org.eclipse.nebula.widgets.nattable.layer.DataLayer;
 import org.eclipse.nebula.widgets.nattable.layer.LabelStack;
 import org.eclipse.nebula.widgets.nattable.selection.SelectionLayer;
+import org.eclipse.nebula.widgets.nattable.selection.event.ISelectionEvent;
 import org.eclipse.nebula.widgets.nattable.style.theme.DarkNatTableThemeConfiguration;
 import org.eclipse.nebula.widgets.nattable.style.theme.ModernNatTableThemeConfiguration;
 import org.eclipse.nebula.widgets.nattable.viewport.ViewportLayer;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 
@@ -119,6 +122,19 @@ public final class DatasetGrid
         natTable.configure();
         natTable.setTheme(context.isDarkTheme() ? new DarkNatTableThemeConfiguration()
                 : new ModernNatTableThemeConfiguration());
+        wireContextMenu(context);
+    }
+
+    private void wireContextMenu(final DatasetGridContext context)
+    {
+        final MenuManager menuManager = new MenuManager();
+        menuManager.setRemoveAllWhenShown(true);
+        menuManager.addMenuListener(manager ->
+        {
+            final Point cursor = natTable.toControl(natTable.getDisplay().getCursorLocation());
+            context.fillContextMenu(manager, ContextMenuTarget.regionAt(natTable, cursor.x, cursor.y));
+        });
+        natTable.setMenu(menuManager.createContextMenu(natTable));
     }
 
     /**
@@ -155,6 +171,33 @@ public final class DatasetGrid
     SelectionLayer getSelectionLayer()
     {
         return selectionLayer;
+    }
+
+    /**
+     * Returns this grid's current selection.
+     *
+     * @return The selection snapshot.
+     */
+    public GridSelection getSelection()
+    {
+        return GridSelection.compute(bodyDataProvider.getTableKey(), bodyDataProvider.getColumnCount(),
+                selectionLayer);
+    }
+
+    /**
+     * Notifies a listener whenever this grid's selection changes.
+     *
+     * @param listener The listener to notify; it is not told what changed.
+     */
+    public void addSelectionListener(final Runnable listener)
+    {
+        selectionLayer.addLayerListener(event ->
+        {
+            if (event instanceof ISelectionEvent)
+            {
+                listener.run();
+            }
+        });
     }
 
     LabelStack cellLabelsFor(final int columnIndex, final int rowIndex)

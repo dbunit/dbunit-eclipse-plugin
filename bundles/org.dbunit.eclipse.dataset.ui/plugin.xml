@@ -16,4 +16,34 @@
          <contentTypeBinding contentTypeId="org.dbunit.eclipse.dataset.flatxml"/>
       </editor>
    </extension>
+
+   <extension point="org.eclipse.ui.contexts">
+      <context
+            id="org.dbunit.eclipse.dataset.ui.tablesPageContext"
+            name="%context.tablesPage.name"
+            description="%context.tablesPage.description"
+            parentId="org.eclipse.ui.contexts.window"/>
+   </extension>
+   <extension point="org.eclipse.ui.commands">
+      <category
+            id="org.dbunit.eclipse.dataset.ui.category"
+            name="%command.category.name"/>
+      <command id="org.dbunit.eclipse.dataset.ui.insertRowAbove" name="%command.insertRowAbove.name"
+            categoryId="org.dbunit.eclipse.dataset.ui.category"/>
+      <command id="org.dbunit.eclipse.dataset.ui.insertRowBelow" name="%command.insertRowBelow.name"
+            categoryId="org.dbunit.eclipse.dataset.ui.category"/>
+      <command id="org.dbunit.eclipse.dataset.ui.deleteRows" name="%command.deleteRows.name"
+            categoryId="org.dbunit.eclipse.dataset.ui.category"/>
+   </extension>
+   <extension point="org.eclipse.ui.bindings">
+      <key sequence="M1+M2+ENTER" commandId="org.dbunit.eclipse.dataset.ui.insertRowAbove"
+            contextId="org.dbunit.eclipse.dataset.ui.tablesPageContext"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"/>
+      <key sequence="M1+ENTER" commandId="org.dbunit.eclipse.dataset.ui.insertRowBelow"
+            contextId="org.dbunit.eclipse.dataset.ui.tablesPageContext"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"/>
+      <key sequence="M1+DEL" commandId="org.dbunit.eclipse.dataset.ui.deleteRows"
+            contextId="org.dbunit.eclipse.dataset.ui.tablesPageContext"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"/>
+   </extension>
 </plugin>
