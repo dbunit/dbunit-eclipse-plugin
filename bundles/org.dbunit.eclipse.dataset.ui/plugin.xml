@@ -60,6 +60,8 @@
             categoryId="org.dbunit.eclipse.dataset.ui.category"/>
       <command id="org.dbunit.eclipse.dataset.ui.editCellInDialog" name="%command.editCellInDialog.name"
             categoryId="org.dbunit.eclipse.dataset.ui.category"/>
+      <command id="org.dbunit.eclipse.dataset.ui.showInSource" name="%command.showInSource.name"
+            categoryId="org.dbunit.eclipse.dataset.ui.category"/>
    </extension>
    <extension point="org.eclipse.ui.bindings">
       <key sequence="M1+M2+ENTER" commandId="org.dbunit.eclipse.dataset.ui.insertRowAbove"
@@ -84,6 +86,9 @@
             contextId="org.dbunit.eclipse.dataset.ui.tablesPageContext"
             schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"/>
       <key sequence="M2+F2" commandId="org.dbunit.eclipse.dataset.ui.editCellInDialog"
+            contextId="org.dbunit.eclipse.dataset.ui.tablesPageContext"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"/>
+      <key sequence="F3" commandId="org.dbunit.eclipse.dataset.ui.showInSource"
             contextId="org.dbunit.eclipse.dataset.ui.tablesPageContext"
             schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"/>
    </extension>

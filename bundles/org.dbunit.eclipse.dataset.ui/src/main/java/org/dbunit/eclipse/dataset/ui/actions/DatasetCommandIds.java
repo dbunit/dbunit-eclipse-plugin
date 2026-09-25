@@ -112,6 +112,11 @@ public final class DatasetCommandIds
      */
     public static final String EDIT_CELL_IN_DIALOG = PREFIX + "editCellInDialog";
 
+    /**
+     * Selects and reveals the anchor cell's range on the Source page, and switches to it.
+     */
+    public static final String SHOW_IN_SOURCE = PREFIX + "showInSource";
+
     private DatasetCommandIds()
     {
     }

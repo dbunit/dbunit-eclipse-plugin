@@ -511,6 +511,11 @@ class DatasetGridTest
         }
 
         @Override
+        public void showInSource()
+        {
+        }
+
+        @Override
         public void setStatusMessage(final String message)
         {
         }
