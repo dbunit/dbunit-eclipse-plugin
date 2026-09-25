@@ -22,6 +22,7 @@ package org.dbunit.eclipse.dataset.ui.grid;
 
 import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
 import org.eclipse.jface.action.IMenuManager;
+import org.eclipse.swt.widgets.Shell;
 
 /**
  * What a {@link DatasetGrid} needs from the page that hosts it.
@@ -107,4 +108,11 @@ public interface DatasetGridContext
      * @param rowIndex The row of the cell to select.
      */
     void setPendingSelection(int columnIndex, int rowIndex);
+
+    /**
+     * Returns the shell to parent dialogs on.
+     *
+     * @return The page's shell.
+     */
+    Shell getShell();
 }

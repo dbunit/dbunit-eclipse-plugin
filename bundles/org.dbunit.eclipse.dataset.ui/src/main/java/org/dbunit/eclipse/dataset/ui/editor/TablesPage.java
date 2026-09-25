@@ -36,6 +36,8 @@ import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
+import org.dbunit.eclipse.dataset.ui.actions.AddColumnAction;
+import org.dbunit.eclipse.dataset.ui.actions.DeleteColumnAction;
 import org.dbunit.eclipse.dataset.ui.actions.DeleteRowsAction;
 import org.dbunit.eclipse.dataset.ui.actions.DuplicateRowsAction;
 import org.dbunit.eclipse.dataset.ui.actions.GridAction;
@@ -43,6 +45,7 @@ import org.dbunit.eclipse.dataset.ui.actions.InsertRowAboveAction;
 import org.dbunit.eclipse.dataset.ui.actions.InsertRowBelowAction;
 import org.dbunit.eclipse.dataset.ui.actions.MoveRowsDownAction;
 import org.dbunit.eclipse.dataset.ui.actions.MoveRowsUpAction;
+import org.dbunit.eclipse.dataset.ui.actions.RenameColumnAction;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGrid;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
@@ -75,6 +78,7 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
+import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.ToolBar;
 import org.eclipse.ui.ISharedImages;
 import org.eclipse.ui.PlatformUI;
@@ -154,6 +158,12 @@ final class TablesPage implements DatasetGridContext
 
     private final MoveRowsDownAction moveRowsDownAction;
 
+    private final AddColumnAction addColumnAction;
+
+    private final RenameColumnAction renameColumnAction;
+
+    private final DeleteColumnAction deleteColumnAction;
+
     private final List<GridAction> gridActions = new ArrayList<>();
 
     private final List<IHandlerActivation> handlerActivations = new ArrayList<>();
@@ -215,16 +225,24 @@ final class TablesPage implements DatasetGridContext
         duplicateRowsAction = new DuplicateRowsAction(this);
         moveRowsUpAction = new MoveRowsUpAction(this);
         moveRowsDownAction = new MoveRowsDownAction(this);
+        addColumnAction = new AddColumnAction(this);
+        renameColumnAction = new RenameColumnAction(this);
+        deleteColumnAction = new DeleteColumnAction(this);
         gridActions.add(insertRowAboveAction);
         gridActions.add(insertRowBelowAction);
         gridActions.add(deleteRowsAction);
         gridActions.add(duplicateRowsAction);
         gridActions.add(moveRowsUpAction);
         gridActions.add(moveRowsDownAction);
+        gridActions.add(addColumnAction);
+        gridActions.add(renameColumnAction);
+        gridActions.add(deleteColumnAction);
 
         final ToolBarManager toolBarManager = new ToolBarManager(SWT.FLAT);
         toolBarManager.add(insertRowBelowAction);
         toolBarManager.add(deleteRowsAction);
+        toolBarManager.add(addColumnAction);
+        toolBarManager.add(deleteColumnAction);
         final ToolBar toolBar = toolBarManager.createControl(tabFolder);
         tabFolder.setTopRight(toolBar);
 
@@ -415,6 +433,12 @@ final class TablesPage implements DatasetGridContext
             menu.add(moveRowsUpAction);
             menu.add(moveRowsDownAction);
         }
+        else if (GridRegion.COLUMN_HEADER.equals(region))
+        {
+            menu.add(addColumnAction);
+            menu.add(renameColumnAction);
+            menu.add(deleteColumnAction);
+        }
     }
 
     @Override
@@ -440,6 +464,12 @@ final class TablesPage implements DatasetGridContext
         {
             grid.setPendingSelection(columnIndex, rowIndex);
         }
+    }
+
+    @Override
+    public Shell getShell()
+    {
+        return control.getShell();
     }
 
     private static double relativeLuminance(final Color color)

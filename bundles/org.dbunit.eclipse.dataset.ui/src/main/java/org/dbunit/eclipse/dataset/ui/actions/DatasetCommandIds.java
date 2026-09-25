@@ -62,6 +62,21 @@ public final class DatasetCommandIds
      */
     public static final String MOVE_ROWS_DOWN = PREFIX + "moveRowsDown";
 
+    /**
+     * Adds a pending column to the active table.
+     */
+    public static final String ADD_COLUMN = PREFIX + "addColumn";
+
+    /**
+     * Renames the anchor column.
+     */
+    public static final String RENAME_COLUMN = PREFIX + "renameColumn";
+
+    /**
+     * Deletes the anchor column.
+     */
+    public static final String DELETE_COLUMN = PREFIX + "deleteColumn";
+
     private DatasetCommandIds()
     {
     }
