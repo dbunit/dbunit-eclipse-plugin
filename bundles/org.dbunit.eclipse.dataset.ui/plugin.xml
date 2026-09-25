@@ -92,4 +92,43 @@
             contextId="org.dbunit.eclipse.dataset.ui.tablesPageContext"
             schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"/>
    </extension>
+
+   <extension point="org.eclipse.ui.themes">
+      <themeElementCategory
+            id="org.dbunit.eclipse.dataset.ui.themeCategory"
+            label="%theme.category.label"/>
+      <colorDefinition id="org.dbunit.eclipse.dataset.ui.source.tagColor" label="%theme.tagColor.label"
+            categoryId="org.dbunit.eclipse.dataset.ui.themeCategory" value="63,127,127">
+         <description>%theme.tagColor.description</description>
+      </colorDefinition>
+      <colorDefinition id="org.dbunit.eclipse.dataset.ui.source.attributeNameColor"
+            label="%theme.attributeNameColor.label"
+            categoryId="org.dbunit.eclipse.dataset.ui.themeCategory" value="127,0,127">
+         <description>%theme.attributeNameColor.description</description>
+      </colorDefinition>
+      <colorDefinition id="org.dbunit.eclipse.dataset.ui.source.attributeValueColor"
+            label="%theme.attributeValueColor.label"
+            categoryId="org.dbunit.eclipse.dataset.ui.themeCategory" value="42,0,255">
+         <description>%theme.attributeValueColor.description</description>
+      </colorDefinition>
+      <colorDefinition id="org.dbunit.eclipse.dataset.ui.source.commentColor" label="%theme.commentColor.label"
+            categoryId="org.dbunit.eclipse.dataset.ui.themeCategory" value="63,95,191">
+         <description>%theme.commentColor.description</description>
+      </colorDefinition>
+      <colorDefinition id="org.dbunit.eclipse.dataset.ui.source.declarationColor"
+            label="%theme.declarationColor.label"
+            categoryId="org.dbunit.eclipse.dataset.ui.themeCategory" value="128,128,128">
+         <description>%theme.declarationColor.description</description>
+      </colorDefinition>
+   </extension>
+   <extension point="org.eclipse.e4.ui.css.swt.theme">
+      <stylesheet uri="css/e4-dark_dbunit_dataset.css">
+         <themeid refid="org.eclipse.e4.ui.css.theme.e4_dark"/>
+      </stylesheet>
+   </extension>
+   <extension point="org.eclipse.core.filebuffers.documentSetup">
+      <participant
+            class="org.dbunit.eclipse.dataset.ui.source.XmlDocumentSetupParticipant"
+            contentTypeId="org.dbunit.eclipse.dataset.flatxml"/>
+   </extension>
 </plugin>

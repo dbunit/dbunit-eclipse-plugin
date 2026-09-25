@@ -20,16 +20,35 @@
  */
 package org.dbunit.eclipse.dataset.ui.editor;
 
+import org.dbunit.eclipse.dataset.ui.source.XmlSourceViewerConfiguration;
+import org.dbunit.eclipse.dataset.ui.source.XmlTokenColors;
+import org.eclipse.jface.text.source.ISourceViewer;
+import org.eclipse.swt.custom.StyledText;
+import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.editors.text.TextEditor;
+import org.eclipse.ui.themes.IThemeManager;
 
 /**
- * The Source page of {@link FlatXmlDatasetEditor}: a plain text editor over the same document, with the
- * one addition the multi-page editor needs to detect changes made outside the workbench.
+ * The Source page of {@link FlatXmlDatasetEditor}: a text editor over the same document that colors the
+ * XML syntax, with the one addition the multi-page editor needs to detect changes made outside the
+ * workbench.
  *
  * @since 1.0.0
  */
 public class FlatXmlSourceEditor extends TextEditor
 {
+    private final XmlTokenColors tokenColors;
+
+    /**
+     * Creates the Source page editor, which colors the XML syntax with the current theme's colors.
+     */
+    public FlatXmlSourceEditor()
+    {
+        final IThemeManager themeManager = PlatformUI.getWorkbench().getThemeManager();
+        tokenColors = new XmlTokenColors(themeManager, this::redrawSyntaxColors);
+        setSourceViewerConfiguration(new XmlSourceViewerConfiguration(getPreferenceStore(), tokenColors));
+    }
+
     /**
      * Checks whether the editor input changed or was deleted outside the workbench, prompting to reload
      * or save as needed. The multi-page editor calls this on the nested editor's behalf, because a nested
@@ -38,5 +57,29 @@ public class FlatXmlSourceEditor extends TextEditor
     public void checkExternalModification()
     {
         safelySanityCheckState(getEditorInput());
+    }
+
+    /**
+     * Stops following theme changes and disposes the editor.
+     */
+    @Override
+    public void dispose()
+    {
+        tokenColors.dispose();
+        super.dispose();
+    }
+
+    private void redrawSyntaxColors()
+    {
+        final ISourceViewer sourceViewer = getSourceViewer();
+        if (sourceViewer == null)
+        {
+            return;
+        }
+        final StyledText textWidget = sourceViewer.getTextWidget();
+        if (textWidget != null && !textWidget.isDisposed())
+        {
+            sourceViewer.invalidateTextPresentation();
+        }
     }
 }

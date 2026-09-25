@@ -1,0 +1,8 @@
+IEclipsePreferences#org-eclipse-ui-workbench:org-dbunit-eclipse-dataset-ui { /* pseudo attribute added to allow contributions without replacing this node, see Bug 466075 */
+    preferences:
+        'org.dbunit.eclipse.dataset.ui.source.tagColor=121,171,255'
+        'org.dbunit.eclipse.dataset.ui.source.attributeNameColor=190,174,255'
+        'org.dbunit.eclipse.dataset.ui.source.attributeValueColor=206,145,120'
+        'org.dbunit.eclipse.dataset.ui.source.commentColor=106,153,85'
+        'org.dbunit.eclipse.dataset.ui.source.declarationColor=160,160,160'
+}
