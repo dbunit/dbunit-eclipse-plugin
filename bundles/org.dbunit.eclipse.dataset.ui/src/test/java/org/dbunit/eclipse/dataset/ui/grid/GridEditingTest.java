@@ -389,5 +389,11 @@ class GridEditingTest
         public void setPendingSelection(final int columnIndex, final int rowIndex)
         {
         }
+
+        @Override
+        public Shell getShell()
+        {
+            return null;
+        }
     }
 }

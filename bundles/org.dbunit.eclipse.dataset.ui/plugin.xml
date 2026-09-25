@@ -40,6 +40,12 @@
             categoryId="org.dbunit.eclipse.dataset.ui.category"/>
       <command id="org.dbunit.eclipse.dataset.ui.moveRowsDown" name="%command.moveRowsDown.name"
             categoryId="org.dbunit.eclipse.dataset.ui.category"/>
+      <command id="org.dbunit.eclipse.dataset.ui.addColumn" name="%command.addColumn.name"
+            categoryId="org.dbunit.eclipse.dataset.ui.category"/>
+      <command id="org.dbunit.eclipse.dataset.ui.renameColumn" name="%command.renameColumn.name"
+            categoryId="org.dbunit.eclipse.dataset.ui.category"/>
+      <command id="org.dbunit.eclipse.dataset.ui.deleteColumn" name="%command.deleteColumn.name"
+            categoryId="org.dbunit.eclipse.dataset.ui.category"/>
    </extension>
    <extension point="org.eclipse.ui.bindings">
       <key sequence="M1+M2+ENTER" commandId="org.dbunit.eclipse.dataset.ui.insertRowAbove"

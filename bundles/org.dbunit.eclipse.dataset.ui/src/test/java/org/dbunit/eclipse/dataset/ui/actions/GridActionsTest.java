@@ -31,13 +31,16 @@ import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlOptions;
+import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.core.commands.ExecutionException;
 import org.eclipse.jface.action.IMenuManager;
+import org.eclipse.jface.dialogs.IInputValidator;
 import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.swt.widgets.Shell;
 import org.eclipse.text.undo.DocumentUndoManagerRegistry;
 import org.eclipse.text.undo.IDocumentUndoManager;
 import org.junit.jupiter.api.Test;
@@ -267,6 +270,179 @@ class GridActionsTest
                 .isFalse();
     }
 
+    @Test
+    void testAddColumn_whenTheDialogReturnsAName_addsThePendingColumn()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final AddColumnAction action = new AddColumnAction(context)
+        {
+            @Override
+            String openNameDialog(final Shell shell, final IInputValidator validator)
+            {
+                return "EMAIL";
+            }
+        };
+
+        action.run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                .extracting(DatasetColumn::name).as("Add Column must add the entered name.")
+                .contains("EMAIL");
+    }
+
+    @Test
+    void testAddColumnNameDialogMessage_whenTheTableHasNoDtdDeclaredColumns_isJustThePrompt()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+
+        assertThat(AddColumnAction.nameDialogMessage(table))
+                .as("A table with no DTD-declared columns must get a plain prompt.")
+                .isEqualTo("Column name:");
+    }
+
+    @Test
+    void testAddColumnNameDialogMessage_whenTheTableHasDtdDeclaredColumns_warnsThatDbUnitReadsTheDtd()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset>\n    <USERS ID=\"1\"/>\n"
+                        + "</dataset>\n");
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+
+        assertThat(AddColumnAction.nameDialogMessage(table))
+                .as("A table with DTD-declared columns must warn that dbUnit reads columns from the DTD.")
+                .contains("dbUnit reads a flat XML dataset's columns from its DTD");
+    }
+
+    @Test
+    void testRenameColumnNameDialogMessage_whenTheColumnIsNotDeclared_isJustThePrompt()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final DatasetColumn column =
+                datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns().get(0);
+
+        assertThat(RenameColumnAction.nameDialogMessage(column))
+                .as("A column that is not DTD-declared must get a plain prompt.")
+                .isEqualTo("Column name:");
+    }
+
+    @Test
+    void testRenameColumnNameDialogMessage_whenTheColumnIsDeclared_warnsThatDbUnitReadsTheDtd()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset>\n    <USERS ID=\"1\"/>\n"
+                        + "</dataset>\n");
+        final DatasetColumn column =
+                datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns().get(0);
+
+        assertThat(RenameColumnAction.nameDialogMessage(column))
+                .as("A DTD-declared column must warn that dbUnit reads columns from the DTD.")
+                .contains("dbUnit reads a flat XML dataset's columns from its DTD");
+    }
+
+    @Test
+    void testRenameColumn_whenTheDialogReturnsANewName_renamesTheAnchorColumn()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.anchorColumnIndex = 0;
+        final RenameColumnAction action = new RenameColumnAction(context)
+        {
+            @Override
+            String openNameDialog(final Shell shell, final String currentName,
+                    final IInputValidator validator, final DatasetColumn column)
+            {
+                return "USER_ID";
+            }
+        };
+
+        action.run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns().get(0).name())
+                .as("Rename Column must apply the entered name.").isEqualTo("USER_ID");
+    }
+
+    @Test
+    void testRenameColumn_whenAnotherColumnIsEqualIgnoringCaseYetDistinct_countsItsNameAsUsed()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" \u0130D=\"2\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.anchorColumnIndex = 1;
+        final List<IInputValidator> validators = new ArrayList<>();
+        final RenameColumnAction action = new RenameColumnAction(context)
+        {
+            @Override
+            String openNameDialog(final Shell shell, final String currentName,
+                    final IInputValidator validator, final DatasetColumn column)
+            {
+                validators.add(validator);
+                return null;
+            }
+        };
+
+        action.run();
+
+        assertThat(validators).as("Rename Column must open its dialog.").hasSize(1);
+        assertThat(validators.get(0).isValid("ID"))
+                .as("The name of the other column must count as used, although it equals the renamed "
+                        + "column's name ignoring case.")
+                .isNotNull();
+    }
+
+    @Test
+    void testDeleteColumn_whenConfirmed_deletesTheAnchorColumnNamedWithItsValueCount()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.anchorColumnIndex = 1;
+        final DeleteColumnAction action = new DeleteColumnAction(context)
+        {
+            @Override
+            boolean confirmDelete(final Shell shell, final DatasetColumn column, final int valueCount)
+            {
+                assertThat(column.name()).as("The confirmation must name the anchor column.")
+                        .isEqualTo("NAME");
+                assertThat(valueCount).as("The confirmation must count the column's current values.")
+                        .isEqualTo(1);
+                return true;
+            }
+        };
+
+        action.run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                .extracting(DatasetColumn::name).as("Confirmed deletion must remove the column.")
+                .doesNotContain("NAME");
+    }
+
+    @Test
+    void testDeleteColumn_whenNotConfirmed_changesNothing()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.anchorColumnIndex = 1;
+        final DeleteColumnAction action = new DeleteColumnAction(context)
+        {
+            @Override
+            boolean confirmDelete(final Shell shell, final DatasetColumn column, final int valueCount)
+            {
+                return false;
+            }
+        };
+
+        action.run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                .extracting(DatasetColumn::name).as("Declining the confirmation must change nothing.")
+                .contains("NAME");
+    }
+
     private static FlatXmlDatasetDocument create(final String content)
     {
         return create(new Document(content));
@@ -385,6 +561,12 @@ class GridActionsTest
         {
             pendingSelectionColumn = columnIndex;
             pendingSelectionRow = rowIndex;
+        }
+
+        @Override
+        public Shell getShell()
+        {
+            return null;
         }
     }
 }
