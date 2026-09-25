@@ -38,17 +38,26 @@ import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
 import org.dbunit.eclipse.dataset.ui.actions.AddColumnAction;
 import org.dbunit.eclipse.dataset.ui.actions.AddTableAction;
+import org.dbunit.eclipse.dataset.ui.actions.CopyAction;
+import org.dbunit.eclipse.dataset.ui.actions.CutAction;
+import org.dbunit.eclipse.dataset.ui.actions.DeleteAction;
 import org.dbunit.eclipse.dataset.ui.actions.DeleteColumnAction;
 import org.dbunit.eclipse.dataset.ui.actions.DeleteRowsAction;
 import org.dbunit.eclipse.dataset.ui.actions.DeleteTableAction;
 import org.dbunit.eclipse.dataset.ui.actions.DuplicateRowsAction;
+import org.dbunit.eclipse.dataset.ui.actions.EditCellInDialogAction;
+import org.dbunit.eclipse.dataset.ui.actions.FillDownAction;
 import org.dbunit.eclipse.dataset.ui.actions.GridAction;
 import org.dbunit.eclipse.dataset.ui.actions.InsertRowAboveAction;
 import org.dbunit.eclipse.dataset.ui.actions.InsertRowBelowAction;
 import org.dbunit.eclipse.dataset.ui.actions.MoveRowsDownAction;
 import org.dbunit.eclipse.dataset.ui.actions.MoveRowsUpAction;
+import org.dbunit.eclipse.dataset.ui.actions.PasteAction;
 import org.dbunit.eclipse.dataset.ui.actions.RenameColumnAction;
 import org.dbunit.eclipse.dataset.ui.actions.RenameTableAction;
+import org.dbunit.eclipse.dataset.ui.actions.SelectAllAction;
+import org.dbunit.eclipse.dataset.ui.actions.SetEmptyStringAction;
+import org.dbunit.eclipse.dataset.ui.actions.SetNullAction;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGrid;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
@@ -66,11 +75,15 @@ import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.nebula.widgets.nattable.NatTable;
+import org.eclipse.nebula.widgets.nattable.edit.editor.ICellEditor;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.custom.StackLayout;
+import org.eclipse.swt.dnd.Clipboard;
+import org.eclipse.swt.dnd.TextTransfer;
+import org.eclipse.swt.dnd.Transfer;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Font;
@@ -84,6 +97,7 @@ import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.ToolBar;
 import org.eclipse.ui.ISharedImages;
 import org.eclipse.ui.PlatformUI;
@@ -179,7 +193,27 @@ final class TablesPage implements DatasetGridContext
 
     private final DeleteTableAction deleteTableAction;
 
+    private final SetNullAction setNullAction;
+
+    private final SetEmptyStringAction setEmptyStringAction;
+
+    private final FillDownAction fillDownAction;
+
+    private final EditCellInDialogAction editCellInDialogAction;
+
+    private final CutAction cutAction;
+
+    private final CopyAction copyAction;
+
+    private final PasteAction pasteAction;
+
+    private final DeleteAction deleteAction;
+
+    private final SelectAllAction selectAllAction;
+
     private final List<GridAction> gridActions = new ArrayList<>();
+
+    private final List<GridAction> retargetableActions = new ArrayList<>();
 
     private final List<IHandlerActivation> handlerActivations = new ArrayList<>();
 
@@ -259,6 +293,15 @@ final class TablesPage implements DatasetGridContext
         addTableAction = new AddTableAction(this);
         renameTableAction = new RenameTableAction(this);
         deleteTableAction = new DeleteTableAction(this);
+        setNullAction = new SetNullAction(this);
+        setEmptyStringAction = new SetEmptyStringAction(this);
+        fillDownAction = new FillDownAction(this);
+        editCellInDialogAction = new EditCellInDialogAction(this);
+        cutAction = new CutAction(this);
+        copyAction = new CopyAction(this);
+        pasteAction = new PasteAction(this);
+        deleteAction = new DeleteAction(this);
+        selectAllAction = new SelectAllAction(this);
         gridActions.add(insertRowAboveAction);
         gridActions.add(insertRowBelowAction);
         gridActions.add(deleteRowsAction);
@@ -271,6 +314,15 @@ final class TablesPage implements DatasetGridContext
         gridActions.add(addTableAction);
         gridActions.add(renameTableAction);
         gridActions.add(deleteTableAction);
+        gridActions.add(setNullAction);
+        gridActions.add(setEmptyStringAction);
+        gridActions.add(fillDownAction);
+        gridActions.add(editCellInDialogAction);
+        retargetableActions.add(cutAction);
+        retargetableActions.add(copyAction);
+        retargetableActions.add(pasteAction);
+        retargetableActions.add(deleteAction);
+        retargetableActions.add(selectAllAction);
 
         final ToolBarManager toolBarManager = new ToolBarManager(SWT.FLAT);
         toolBarManager.add(insertRowBelowAction);
@@ -395,6 +447,26 @@ final class TablesPage implements DatasetGridContext
         {
             return redoAction;
         }
+        if (ActionFactory.CUT.getId().equals(actionDefinitionId))
+        {
+            return cutAction;
+        }
+        if (ActionFactory.COPY.getId().equals(actionDefinitionId))
+        {
+            return copyAction;
+        }
+        if (ActionFactory.PASTE.getId().equals(actionDefinitionId))
+        {
+            return pasteAction;
+        }
+        if (ActionFactory.DELETE.getId().equals(actionDefinitionId))
+        {
+            return deleteAction;
+        }
+        if (ActionFactory.SELECT_ALL.getId().equals(actionDefinitionId))
+        {
+            return selectAllAction;
+        }
         return null;
     }
 
@@ -479,7 +551,23 @@ final class TablesPage implements DatasetGridContext
     @Override
     public void fillContextMenu(final IMenuManager menu, final String region)
     {
-        if (GridRegion.BODY.equals(region) || GridRegion.ROW_HEADER.equals(region))
+        if (GridRegion.BODY.equals(region))
+        {
+            menu.add(cutAction);
+            menu.add(copyAction);
+            menu.add(pasteAction);
+            menu.add(insertRowAboveAction);
+            menu.add(insertRowBelowAction);
+            menu.add(duplicateRowsAction);
+            menu.add(deleteRowsAction);
+            menu.add(moveRowsUpAction);
+            menu.add(moveRowsDownAction);
+            menu.add(setNullAction);
+            menu.add(setEmptyStringAction);
+            menu.add(fillDownAction);
+            menu.add(editCellInDialogAction);
+        }
+        else if (GridRegion.ROW_HEADER.equals(region))
         {
             menu.add(insertRowAboveAction);
             menu.add(insertRowBelowAction);
@@ -512,12 +600,13 @@ final class TablesPage implements DatasetGridContext
     }
 
     @Override
-    public void setPendingSelection(final int columnIndex, final int rowIndex)
+    public void selectRegion(final int firstColumnIndex, final int firstRowIndex, final int columnCount,
+            final int rowCount)
     {
         final DatasetGrid grid = activeGrid();
         if (grid != null)
         {
-            grid.setPendingSelection(columnIndex, rowIndex);
+            grid.selectRegion(firstColumnIndex, firstRowIndex, columnCount, rowCount);
         }
     }
 
@@ -525,6 +614,84 @@ final class TablesPage implements DatasetGridContext
     public Shell getShell()
     {
         return control.getShell();
+    }
+
+    @Override
+    public Text getActiveCellEditorText()
+    {
+        final CTabItem selected = tabFolder.getSelection();
+        if (selected == null || !(selected.getControl() instanceof NatTable))
+        {
+            return null;
+        }
+        final ICellEditor cellEditor = ((NatTable) selected.getControl()).getActiveCellEditor();
+        if (cellEditor == null)
+        {
+            return null;
+        }
+        final Control editorControl = cellEditor.getEditorControl();
+        return editorControl instanceof Text ? (Text) editorControl : null;
+    }
+
+    @Override
+    public List<Point> getSelectedCellPositions()
+    {
+        final DatasetGrid grid = activeGrid();
+        return grid != null ? grid.getSelectedCellPositions() : List.of();
+    }
+
+    @Override
+    public void selectAll()
+    {
+        final DatasetGrid grid = activeGrid();
+        if (grid != null)
+        {
+            grid.selectAll();
+        }
+    }
+
+    @Override
+    public void editCellInDialog()
+    {
+        final DatasetGrid grid = activeGrid();
+        if (grid != null)
+        {
+            grid.editCellInDialog();
+        }
+    }
+
+    @Override
+    public void setStatusMessage(final String message)
+    {
+        editor.getEditorSite().getActionBars().getStatusLineManager().setMessage(message);
+    }
+
+    @Override
+    public void writeClipboardText(final String text)
+    {
+        final Clipboard clipboard = new Clipboard(control.getDisplay());
+        try
+        {
+            clipboard.setContents(new Object[] { text }, new Transfer[] { TextTransfer.getInstance() });
+        }
+        finally
+        {
+            clipboard.dispose();
+        }
+    }
+
+    @Override
+    public String readClipboardText()
+    {
+        final Clipboard clipboard = new Clipboard(control.getDisplay());
+        try
+        {
+            return (String) clipboard.getContents(TextTransfer.getInstance());
+        }
+        finally
+        {
+            clipboard.dispose();
+        }
     }
 
     private static double relativeLuminance(final Color color)
@@ -585,6 +752,10 @@ final class TablesPage implements DatasetGridContext
     {
         final GridSelection selection = getSelection();
         for (final GridAction action : gridActions)
+        {
+            action.update(selection);
+        }
+        for (final GridAction action : retargetableActions)
         {
             action.update(selection);
         }

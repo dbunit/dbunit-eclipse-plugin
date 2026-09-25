@@ -20,47 +20,60 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
-import org.dbunit.eclipse.dataset.ui.DatasetImages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
+import org.eclipse.swt.widgets.Text;
 
 /**
- * Deletes the selected rows in one undoable change and selects the row left at their position.
+ * The global Select All action: selects every cell of the active grid, or, while a cell editor is active,
+ * selects all of the editor's text.
  *
  * @since 1.0.0
  */
-public final class DeleteRowsAction extends GridAction
+public final class SelectAllAction extends GridAction
 {
     /**
      * Creates the action.
      *
      * @param context What this action needs from the page that hosts the grid.
      */
-    public DeleteRowsAction(final DatasetGridContext context)
+    public SelectAllAction(final DatasetGridContext context)
     {
-        super(DatasetCommandIds.DELETE_ROWS, context);
-        setText("Delete Rows");
-        setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_DELETE_ROWS));
+        super(context);
+        setText("Select All");
     }
 
     @Override
     protected void runOnGrid(final DatasetGridContext context)
     {
-        final GridSelection selection = context.getSelection();
-        final int[] rowIndexes = selection.rowIndexes().stream().mapToInt(Integer::intValue).toArray();
-        final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);
-        final int rowIndex = selection.firstRowIndex();
-        final boolean applied = context.executeMultiCellEdit("Delete Rows",
-                () -> context.getDatasetDocument().deleteRows(selection.tableKey(), rowIndexes));
-        if (applied)
+        context.selectAll();
+    }
+
+    @Override
+    protected boolean changesDataset()
+    {
+        return false;
+    }
+
+    @Override
+    protected boolean isEnabledWhileEditing()
+    {
+        return true;
+    }
+
+    @Override
+    protected void runWhileEditing(final DatasetGridContext context)
+    {
+        final Text text = context.getActiveCellEditorText();
+        if (text != null)
         {
-            context.selectRegion(columnIndex, rowIndex, 1, 1);
+            text.selectAll();
         }
     }
 
     @Override
     protected boolean isEnabledFor(final GridSelection selection)
     {
-        return !selection.rowIndexes().isEmpty();
+        return selection.rowCount() > 0 && selection.columnCount() > 0;
     }
 }

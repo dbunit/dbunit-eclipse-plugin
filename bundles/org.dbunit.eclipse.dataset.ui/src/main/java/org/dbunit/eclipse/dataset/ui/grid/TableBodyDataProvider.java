@@ -84,8 +84,22 @@ final class TableBodyDataProvider implements IDataProvider
         }
         final String columnName = table.get().getColumns().get(columnIndex).name();
         final String key = tableKey;
+        final String value = keepLineBreaks((String) newValue, (String) currentValue);
         context.executeEdit(() -> context.getDatasetDocument().setCells(key,
-                List.of(new CellChange(rowIndex, columnName, (String) newValue))));
+                List.of(new CellChange(rowIndex, columnName, value))));
+    }
+
+    /**
+     * Returns an edited value with the CR LF line breaks that a multi-line text widget writes on some
+     * platforms turned back into line feeds, unless the value already used CR LF before the edit.
+     */
+    private static String keepLineBreaks(final String editedValue, final String currentValue)
+    {
+        if (editedValue == null || currentValue != null && currentValue.contains("\r\n"))
+        {
+            return editedValue;
+        }
+        return editedValue.replace("\r\n", "\n");
     }
 
     void setTableKey(final String tableKey)

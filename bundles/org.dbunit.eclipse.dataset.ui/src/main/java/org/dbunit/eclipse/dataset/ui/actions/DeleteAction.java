@@ -20,47 +20,65 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
-import org.dbunit.eclipse.dataset.ui.DatasetImages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
+import org.eclipse.swt.widgets.Text;
 
 /**
- * Deletes the selected rows in one undoable change and selects the row left at their position.
+ * The global Delete action: sets the selected cells to NULL, or, while a cell editor is active, deletes
+ * the editor's text selection or the character after the caret.
  *
  * @since 1.0.0
  */
-public final class DeleteRowsAction extends GridAction
+public final class DeleteAction extends GridAction
 {
     /**
      * Creates the action.
      *
      * @param context What this action needs from the page that hosts the grid.
      */
-    public DeleteRowsAction(final DatasetGridContext context)
+    public DeleteAction(final DatasetGridContext context)
     {
-        super(DatasetCommandIds.DELETE_ROWS, context);
-        setText("Delete Rows");
-        setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_DELETE_ROWS));
+        super(context);
+        setText("Delete");
     }
 
     @Override
     protected void runOnGrid(final DatasetGridContext context)
     {
-        final GridSelection selection = context.getSelection();
-        final int[] rowIndexes = selection.rowIndexes().stream().mapToInt(Integer::intValue).toArray();
-        final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);
-        final int rowIndex = selection.firstRowIndex();
-        final boolean applied = context.executeMultiCellEdit("Delete Rows",
-                () -> context.getDatasetDocument().deleteRows(selection.tableKey(), rowIndexes));
-        if (applied)
+        SetNullAction.setSelectedCellsToNull(context);
+    }
+
+    @Override
+    protected boolean isEnabledWhileEditing()
+    {
+        return true;
+    }
+
+    @Override
+    protected void runWhileEditing(final DatasetGridContext context)
+    {
+        final Text text = context.getActiveCellEditorText();
+        if (text == null)
         {
-            context.selectRegion(columnIndex, rowIndex, 1, 1);
+            return;
+        }
+        if (text.getSelectionCount() > 0)
+        {
+            text.insert("");
+            return;
+        }
+        final int caretPosition = text.getCaretPosition();
+        if (caretPosition < text.getCharCount())
+        {
+            text.setSelection(caretPosition, caretPosition + 1);
+            text.insert("");
         }
     }
 
     @Override
     protected boolean isEnabledFor(final GridSelection selection)
     {
-        return !selection.rowIndexes().isEmpty();
+        return !selection.rowIndexes().isEmpty() && !selection.columnIndexes().isEmpty();
     }
 }

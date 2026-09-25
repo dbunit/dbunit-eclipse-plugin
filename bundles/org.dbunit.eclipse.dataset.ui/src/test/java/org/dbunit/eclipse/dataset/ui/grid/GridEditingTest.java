@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
 import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
@@ -41,9 +42,11 @@ import org.eclipse.nebula.widgets.nattable.selection.SelectionLayer.MoveDirectio
 import org.eclipse.nebula.widgets.nattable.selection.command.SelectCellCommand;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.KeyEvent;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.swt.widgets.Text;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -130,7 +133,8 @@ class GridEditingTest
                 .isEqualTo(originalText);
         assertThat(context.lastErrorMessage)
                 .as("A rejected edit must set the status line error message.")
-                .isEqualTo("This change would leave row 0 of table 'USERS' with no values.");
+                .isEqualTo("This change would leave row 0 of table 'USERS' with no values. Use Delete "
+                        + "Rows to remove it instead.");
     }
 
     @Test
@@ -145,6 +149,36 @@ class GridEditingTest
         provider.setDataValue(1, 0, "Carol");
 
         assertThat(document.get()).as("A read-only input must reject the edit.").isEqualTo(originalText);
+    }
+
+    @Test
+    void testSetDataValue_whenTheEditorTurnedLineFeedsIntoCrLf_keepsTheLineFeeds()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\" NOTE=\"first&#xA;second\"/></dataset>";
+        final IDocument document = new Document(originalText);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final TestContext context = new TestContext(datasetDocument);
+        final TableBodyDataProvider provider = new TableBodyDataProvider(context, "USERS");
+
+        provider.setDataValue(1, 0, "first\r\nsecond");
+
+        assertThat(document.get())
+                .as("A text widget that writes CR LF must not change a value with line feeds.")
+                .isEqualTo(originalText);
+    }
+
+    @Test
+    void testSetDataValue_whenTheValueUsedCrLf_keepsCrLf()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NOTE=\"a&#xD;&#xA;b\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final TestContext context = new TestContext(datasetDocument);
+        final TableBodyDataProvider provider = new TableBodyDataProvider(context, "USERS");
+
+        provider.setDataValue(1, 0, "a\r\nb\r\nc");
+
+        assertThat(document.get()).as("A value that used CR LF line breaks must keep them.")
+                .isEqualTo("<dataset><USERS ID=\"1\" NOTE=\"a&#xD;&#xA;b&#xD;&#xA;c\"/></dataset>");
     }
 
     @Test
@@ -348,7 +382,8 @@ class GridEditingTest
         }
 
         @Override
-        public void setPendingSelection(final int columnIndex, final int rowIndex)
+        public void selectRegion(final int firstColumnIndex, final int firstRowIndex, final int columnCount,
+                final int rowCount)
         {
         }
 
@@ -366,6 +401,44 @@ class GridEditingTest
         @Override
         public void expectNewTableSelected(final String tableName)
         {
+        }
+
+        @Override
+        public Text getActiveCellEditorText()
+        {
+            return null;
+        }
+
+        @Override
+        public List<Point> getSelectedCellPositions()
+        {
+            return List.of();
+        }
+
+        @Override
+        public void selectAll()
+        {
+        }
+
+        @Override
+        public void editCellInDialog()
+        {
+        }
+
+        @Override
+        public void setStatusMessage(final String message)
+        {
+        }
+
+        @Override
+        public void writeClipboardText(final String text)
+        {
+        }
+
+        @Override
+        public String readClipboardText()
+        {
+            return null;
         }
     }
 }

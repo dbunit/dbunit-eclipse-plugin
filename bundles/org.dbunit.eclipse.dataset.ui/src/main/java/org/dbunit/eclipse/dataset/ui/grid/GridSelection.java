@@ -110,6 +110,16 @@ public record GridSelection(String tableKey, int rowCount, int columnCount, int 
         return !rowIndexes.isEmpty() && lastRowIndex - firstRowIndex + 1 == rowIndexes.size();
     }
 
+    /**
+     * Returns the number of columns from the first selected column to the last.
+     *
+     * @return The width of the selection's bounding rectangle, or 0 when no column is selected.
+     */
+    public int columnSpan()
+    {
+        return columnIndexes.isEmpty() ? 0 : lastColumnIndex - firstColumnIndex + 1;
+    }
+
     private static int boundStart(final List<Integer> indexes)
     {
         return indexes.isEmpty() ? -1 : indexes.get(0);

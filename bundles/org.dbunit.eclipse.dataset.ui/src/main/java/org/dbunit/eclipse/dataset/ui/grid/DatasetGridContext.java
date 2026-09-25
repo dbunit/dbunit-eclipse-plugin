@@ -20,9 +20,13 @@
  */
 package org.dbunit.eclipse.dataset.ui.grid;
 
+import java.util.List;
+
 import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
 import org.eclipse.jface.action.IMenuManager;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.swt.widgets.Text;
 
 /**
  * What a {@link DatasetGrid} needs from the page that hosts it.
@@ -102,12 +106,16 @@ public interface DatasetGridContext
     GridSelection getSelection();
 
     /**
-     * Requests the cell to select on the active grid the next time it refreshes.
+     * Selects a block of cells of the active grid, clamped to its table, moves the selection anchor to the
+     * block's first cell, and scrolls that cell into view. An operation calls it after its edit, which has
+     * then already refreshed the grid.
      *
-     * @param columnIndex The column of the cell to select.
-     * @param rowIndex The row of the cell to select.
+     * @param firstColumnIndex The column of the block's first cell.
+     * @param firstRowIndex The row of the block's first cell.
+     * @param columnCount The number of columns to select.
+     * @param rowCount The number of rows to select.
      */
-    void setPendingSelection(int columnIndex, int rowIndex);
+    void selectRegion(int firstColumnIndex, int firstRowIndex, int columnCount, int rowCount);
 
     /**
      * Returns the shell to parent dialogs on.
@@ -132,4 +140,50 @@ public interface DatasetGridContext
      * @param tableKey The key of the table about to be added.
      */
     void expectNewTableSelected(String tableKey);
+
+    /**
+     * Returns the active cell editor's text control.
+     *
+     * @return The control, or null when no cell editor is active or its editor is not backed by a
+     *         {@code Text} control.
+     */
+    Text getActiveCellEditorText();
+
+    /**
+     * Returns the exact cells the active grid has selected, which may not form a full rectangle.
+     *
+     * @return The selected cell positions, as {@code (columnIndex, rowIndex)} points.
+     */
+    List<Point> getSelectedCellPositions();
+
+    /**
+     * Selects every cell of the active grid.
+     */
+    void selectAll();
+
+    /**
+     * Opens the anchor cell's value in a multi-line dialog editor.
+     */
+    void editCellInDialog();
+
+    /**
+     * Shows an informational message on the editor's status line.
+     *
+     * @param message The message to show, or null to clear it.
+     */
+    void setStatusMessage(String message);
+
+    /**
+     * Writes text to the system clipboard.
+     *
+     * @param text The text to write.
+     */
+    void writeClipboardText(String text);
+
+    /**
+     * Reads text from the system clipboard.
+     *
+     * @return The clipboard's text, or null when it holds no text.
+     */
+    String readClipboardText();
 }

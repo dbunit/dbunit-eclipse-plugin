@@ -20,6 +20,7 @@
  */
 package org.dbunit.eclipse.dataset.ui.grid;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -30,6 +31,7 @@ import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.config.DefaultNatTableStyleConfiguration;
 import org.eclipse.nebula.widgets.nattable.coordinate.PositionCoordinate;
 import org.eclipse.nebula.widgets.nattable.data.IDataProvider;
+import org.eclipse.nebula.widgets.nattable.edit.command.EditCellCommand;
 import org.eclipse.nebula.widgets.nattable.edit.config.DefaultEditConfiguration;
 import org.eclipse.nebula.widgets.nattable.grid.data.DefaultCornerDataProvider;
 import org.eclipse.nebula.widgets.nattable.grid.data.DefaultRowHeaderDataProvider;
@@ -41,11 +43,15 @@ import org.eclipse.nebula.widgets.nattable.grid.layer.GridLayer;
 import org.eclipse.nebula.widgets.nattable.grid.layer.RowHeaderLayer;
 import org.eclipse.nebula.widgets.nattable.layer.DataLayer;
 import org.eclipse.nebula.widgets.nattable.layer.LabelStack;
+import org.eclipse.nebula.widgets.nattable.layer.cell.ILayerCell;
 import org.eclipse.nebula.widgets.nattable.selection.SelectionLayer;
+import org.eclipse.nebula.widgets.nattable.selection.command.SelectAllCommand;
+import org.eclipse.nebula.widgets.nattable.selection.command.SelectRegionCommand;
 import org.eclipse.nebula.widgets.nattable.selection.event.ISelectionEvent;
 import org.eclipse.nebula.widgets.nattable.style.theme.DarkNatTableThemeConfiguration;
 import org.eclipse.nebula.widgets.nattable.style.theme.ModernNatTableThemeConfiguration;
 import org.eclipse.nebula.widgets.nattable.viewport.ViewportLayer;
+import org.eclipse.nebula.widgets.nattable.viewport.command.ShowCellInViewportCommand;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
@@ -72,8 +78,6 @@ public final class DatasetGrid
     private final ColumnWidths columnWidths = new ColumnWidths();
 
     private DatasetTable currentTable;
-
-    private PositionCoordinate pendingSelection;
 
     /**
      * Assembles a NatTable for one table.
@@ -200,6 +204,52 @@ public final class DatasetGrid
         });
     }
 
+    /**
+     * Returns the exact cells this grid has selected, which may not form a full rectangle.
+     *
+     * @return The selected cell positions, as {@code (columnIndex, rowIndex)} points.
+     */
+    public List<Point> getSelectedCellPositions()
+    {
+        final List<Point> positions = new ArrayList<>();
+        for (final PositionCoordinate position : selectionLayer.getSelectedCellPositions())
+        {
+            positions.add(new Point(position.columnPosition, position.rowPosition));
+        }
+        return positions;
+    }
+
+    /**
+     * Selects every cell of this grid.
+     */
+    public void selectAll()
+    {
+        natTable.doCommand(new SelectAllCommand());
+    }
+
+    /**
+     * Opens the anchor cell's value in a multi-line dialog editor.
+     */
+    public void editCellInDialog()
+    {
+        final PositionCoordinate anchor = selectionLayer.getSelectionAnchor();
+        if (anchor.columnPosition < 0 || anchor.rowPosition < 0)
+        {
+            return;
+        }
+        cellLabels.forceEditInDialog(anchor.columnPosition, anchor.rowPosition);
+        try
+        {
+            final ILayerCell cell =
+                    selectionLayer.getCellByPosition(anchor.columnPosition, anchor.rowPosition);
+            natTable.doCommand(new EditCellCommand(natTable, natTable.getConfigRegistry(), cell));
+        }
+        finally
+        {
+            cellLabels.clearForceEditInDialog();
+        }
+    }
+
     LabelStack cellLabelsFor(final int columnIndex, final int rowIndex)
     {
         final LabelStack labels = new LabelStack();
@@ -225,15 +275,35 @@ public final class DatasetGrid
     }
 
     /**
-     * Requests the cell to select the next time the table changes, instead of the old selection anchor
-     * clamped to the new bounds.
+     * Selects a block of cells, clamped to the table, moves the selection anchor to the block's first cell,
+     * and scrolls that cell into view.
      *
-     * @param columnIndex The column of the cell to select.
-     * @param rowIndex The row of the cell to select.
+     * @param firstColumnIndex The column of the block's first cell.
+     * @param firstRowIndex The row of the block's first cell.
+     * @param columnCount The number of columns to select.
+     * @param rowCount The number of rows to select.
      */
-    public void setPendingSelection(final int columnIndex, final int rowIndex)
+    public void selectRegion(final int firstColumnIndex, final int firstRowIndex, final int columnCount,
+            final int rowCount)
     {
-        pendingSelection = new PositionCoordinate(selectionLayer, columnIndex, rowIndex);
+        final int tableColumnCount = bodyDataProvider.getColumnCount();
+        final int tableRowCount = bodyDataProvider.getRowCount();
+        if (tableColumnCount == 0 || tableRowCount == 0)
+        {
+            return;
+        }
+        final int column = clamp(firstColumnIndex, tableColumnCount);
+        final int row = clamp(firstRowIndex, tableRowCount);
+        final int width = Math.max(1, Math.min(columnCount, tableColumnCount - column));
+        final int height = Math.max(1, Math.min(rowCount, tableRowCount - row));
+        selectionLayer
+                .doCommand(new SelectRegionCommand(selectionLayer, column, row, width, height, false, false));
+        natTable.doCommand(new ShowCellInViewportCommand(column, row));
+    }
+
+    private static int clamp(final int index, final int count)
+    {
+        return Math.max(0, Math.min(index, count - 1));
     }
 
     /**
@@ -263,19 +333,12 @@ public final class DatasetGrid
     {
         final int rowCount = newTable.getRows().size();
         final int columnCount = newTable.getColumns().size();
-        if (rowCount == 0 || columnCount == 0)
-        {
-            pendingSelection = null;
-            return;
-        }
-        final PositionCoordinate target = pendingSelection != null ? pendingSelection : oldAnchor;
-        pendingSelection = null;
-        if (target == null || target.columnPosition < 0 || target.rowPosition < 0)
+        if (rowCount == 0 || columnCount == 0 || oldAnchor.columnPosition < 0 || oldAnchor.rowPosition < 0)
         {
             return;
         }
-        final int column = Math.min(target.columnPosition, columnCount - 1);
-        final int row = Math.min(target.rowPosition, rowCount - 1);
+        final int column = Math.min(oldAnchor.columnPosition, columnCount - 1);
+        final int row = Math.min(oldAnchor.rowPosition, rowCount - 1);
         selectionLayer.setSelectedCell(column, row);
         selectionLayer.moveSelectionAnchor(column, row);
     }

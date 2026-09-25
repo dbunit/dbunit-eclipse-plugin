@@ -45,13 +45,13 @@ public final class MoveRowsDownAction extends GridAction
     protected void runOnGrid(final DatasetGridContext context)
     {
         final GridSelection selection = context.getSelection();
-        final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);
         final int newFirstRowIndex = selection.firstRowIndex() + 1;
         final boolean applied = context.executeEdit(() -> context.getDatasetDocument().moveRows(
                 selection.tableKey(), selection.firstRowIndex(), selection.rowIndexes().size(), 1));
         if (applied)
         {
-            context.setPendingSelection(columnIndex, newFirstRowIndex);
+            context.selectRegion(selection.firstColumnIndex(), newFirstRowIndex, selection.columnSpan(),
+                    selection.rowIndexes().size());
         }
     }
 

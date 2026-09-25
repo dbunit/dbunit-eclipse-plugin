@@ -92,6 +92,26 @@ public final class DatasetCommandIds
      */
     public static final String DELETE_TABLE = PREFIX + "deleteTable";
 
+    /**
+     * Sets the selected cells to NULL.
+     */
+    public static final String SET_NULL = PREFIX + "setNull";
+
+    /**
+     * Sets the selected cells to the empty string.
+     */
+    public static final String SET_EMPTY_STRING = PREFIX + "setEmptyString";
+
+    /**
+     * Copies the top row of the selection down into the other selected rows.
+     */
+    public static final String FILL_DOWN = PREFIX + "fillDown";
+
+    /**
+     * Opens the anchor cell's value in a multi-line dialog editor.
+     */
+    public static final String EDIT_CELL_IN_DIALOG = PREFIX + "editCellInDialog";
+
     private DatasetCommandIds()
     {
     }

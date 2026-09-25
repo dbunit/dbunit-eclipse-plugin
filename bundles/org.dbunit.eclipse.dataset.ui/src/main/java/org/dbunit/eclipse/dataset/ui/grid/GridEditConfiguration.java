@@ -38,8 +38,6 @@ import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
  */
 final class GridEditConfiguration extends AbstractRegistryConfiguration
 {
-    private static final String MULTI_LINE_VALUE = "MULTI_LINE_VALUE";
-
     private final DatasetGridContext context;
 
     GridEditConfiguration(final DatasetGridContext context)
@@ -61,9 +59,14 @@ final class GridEditConfiguration extends AbstractRegistryConfiguration
         configRegistry.registerConfigAttribute(EditConfigAttributes.CELL_EDITOR,
                 new TextCellEditor(true, true), DisplayMode.EDIT);
         configRegistry.registerConfigAttribute(EditConfigAttributes.CELL_EDITOR,
-                new MultiLineTextCellEditor(false), DisplayMode.EDIT, MULTI_LINE_VALUE);
+                new MultiLineTextCellEditor(false), DisplayMode.EDIT,
+                DatasetCellLabels.MULTI_LINE_VALUE);
         configRegistry.registerConfigAttribute(EditConfigAttributes.OPEN_IN_DIALOG, Boolean.TRUE,
-                DisplayMode.EDIT, MULTI_LINE_VALUE);
+                DisplayMode.EDIT, DatasetCellLabels.MULTI_LINE_VALUE);
+        configRegistry.registerConfigAttribute(EditConfigAttributes.CELL_EDITOR,
+                new MultiLineTextCellEditor(false), DisplayMode.EDIT, DatasetCellLabels.EDIT_IN_DIALOG);
+        configRegistry.registerConfigAttribute(EditConfigAttributes.OPEN_IN_DIALOG, Boolean.TRUE,
+                DisplayMode.EDIT, DatasetCellLabels.EDIT_IN_DIALOG);
         configRegistry.registerConfigAttribute(EditConfigAttributes.DATA_VALIDATOR,
                 new XmlCharacterValidator(), DisplayMode.EDIT);
         configRegistry.registerConfigAttribute(EditConfigAttributes.VALIDATION_ERROR_HANDLER,

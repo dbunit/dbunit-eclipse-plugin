@@ -20,47 +20,65 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
-import org.dbunit.eclipse.dataset.ui.DatasetImages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
+import org.eclipse.swt.widgets.Text;
 
 /**
- * Deletes the selected rows in one undoable change and selects the row left at their position.
+ * Copies the selection, then sets it to NULL; when the selection consists of whole rows, deletes those
+ * rows instead, since a row cannot be all NULL and cutting rows to move them is the common intent.
  *
  * @since 1.0.0
  */
-public final class DeleteRowsAction extends GridAction
+public final class CutAction extends GridAction
 {
     /**
      * Creates the action.
      *
      * @param context What this action needs from the page that hosts the grid.
      */
-    public DeleteRowsAction(final DatasetGridContext context)
+    public CutAction(final DatasetGridContext context)
     {
-        super(DatasetCommandIds.DELETE_ROWS, context);
-        setText("Delete Rows");
-        setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_DELETE_ROWS));
+        super(context);
+        setText("Cut");
     }
 
     @Override
     protected void runOnGrid(final DatasetGridContext context)
     {
         final GridSelection selection = context.getSelection();
-        final int[] rowIndexes = selection.rowIndexes().stream().mapToInt(Integer::intValue).toArray();
-        final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);
-        final int rowIndex = selection.firstRowIndex();
-        final boolean applied = context.executeMultiCellEdit("Delete Rows",
-                () -> context.getDatasetDocument().deleteRows(selection.tableKey(), rowIndexes));
-        if (applied)
+        CopyAction.copySelectedCellsToClipboard(context);
+        if (selection.wholeRowsSelected())
         {
-            context.selectRegion(columnIndex, rowIndex, 1, 1);
+            final int[] rowIndexes = selection.rowIndexes().stream().mapToInt(Integer::intValue).toArray();
+            context.executeEdit(
+                    () -> context.getDatasetDocument().deleteRows(selection.tableKey(), rowIndexes));
+        }
+        else
+        {
+            SetNullAction.setSelectedCellsToNull(context);
+        }
+    }
+
+    @Override
+    protected boolean isEnabledWhileEditing()
+    {
+        return true;
+    }
+
+    @Override
+    protected void runWhileEditing(final DatasetGridContext context)
+    {
+        final Text text = context.getActiveCellEditorText();
+        if (text != null)
+        {
+            text.cut();
         }
     }
 
     @Override
     protected boolean isEnabledFor(final GridSelection selection)
     {
-        return !selection.rowIndexes().isEmpty();
+        return !selection.rowIndexes().isEmpty() && !selection.columnIndexes().isEmpty();
     }
 }

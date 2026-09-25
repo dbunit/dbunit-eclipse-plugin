@@ -57,7 +57,7 @@ public final class InsertRowAboveAction extends GridAction
                 .insertRows(selection.tableKey(), rowIndex, List.of(blankRow)));
         if (applied)
         {
-            context.setPendingSelection(columnIndex, rowIndex);
+            context.selectRegion(columnIndex, rowIndex, 1, 1);
         }
     }
 

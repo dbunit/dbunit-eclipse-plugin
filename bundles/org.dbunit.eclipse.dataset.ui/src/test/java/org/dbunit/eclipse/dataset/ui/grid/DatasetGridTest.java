@@ -37,16 +37,20 @@ import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.config.CellConfigAttributes;
+import org.eclipse.nebula.widgets.nattable.config.IConfigRegistry;
 import org.eclipse.nebula.widgets.nattable.coordinate.PositionCoordinate;
 import org.eclipse.nebula.widgets.nattable.data.convert.IDisplayConverter;
+import org.eclipse.nebula.widgets.nattable.edit.EditConfigAttributes;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
 import org.eclipse.nebula.widgets.nattable.layer.LabelStack;
 import org.eclipse.nebula.widgets.nattable.layer.cell.CellDisplayConversionUtils;
 import org.eclipse.nebula.widgets.nattable.layer.cell.ILayerCell;
 import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.swt.widgets.Text;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -128,6 +132,26 @@ class DatasetGridTest
     }
 
     @Test
+    void testCellLabels_ofAValueWithALineBreak_openItInTheDialogEditor()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NOTE=\"first&#10;second\"/><USERS ID=\"2\" NOTE=\"plain\"/>"
+                        + "</dataset>");
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(datasetDocument), "USERS");
+        final List<String> multiLineLabels = grid.cellLabelsFor(1, 0).getLabels();
+        final IConfigRegistry configRegistry = grid.getNatTable().getConfigRegistry();
+
+        assertThat(multiLineLabels).as("A value with a line break must get the multi-line label.")
+                .containsExactly("MULTI_LINE_VALUE");
+        assertThat(grid.cellLabelsFor(1, 1).getLabels()).as("A single-line value must get no label.")
+                .isEmpty();
+        assertThat(configRegistry.getConfigAttribute(EditConfigAttributes.OPEN_IN_DIALOG, DisplayMode.EDIT,
+                multiLineLabels))
+                .as("A multi-line value must open in the dialog editor, which keeps its line breaks.")
+                .isTrue();
+    }
+
+    @Test
     void testDisplayText_ofTheCornerHeadersAndBody_showsTheNullDisplayTextOnlyForNullBodyCells()
     {
         final FlatXmlDatasetDocument datasetDocument =
@@ -200,6 +224,24 @@ class DatasetGridTest
         assertThat(List.of(anchor.columnPosition, anchor.rowPosition))
                 .as("The selected cell must stay the anchor after an insertion elsewhere.")
                 .isEqualTo(List.of(0, 1));
+    }
+
+    @Test
+    void testSelectRegion_reachingBeyondTheTable_selectsTheBlockClampedToTheTable()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"A\"/>"
+                + "<USERS ID=\"2\" NAME=\"B\"/><USERS ID=\"3\" NAME=\"C\"/></dataset>");
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(datasetDocument), "USERS");
+        grid.tableChanged(datasetDocument.getModel().findTable("USERS").orElseThrow());
+        processEvents();
+
+        grid.selectRegion(1, 1, 5, 5);
+
+        assertThat(selectedCells(grid)).as("The block must be clamped to the table's last column and row.")
+                .containsExactlyInAnyOrder(List.of(1, 1), List.of(1, 2));
+        final PositionCoordinate anchor = grid.getSelectionLayer().getSelectionAnchor();
+        assertThat(List.of(anchor.columnPosition, anchor.rowPosition))
+                .as("The block's first cell must become the selection anchor.").isEqualTo(List.of(1, 1));
     }
 
     private static List<List<Integer>> selectedCells(final DatasetGrid grid)
@@ -303,7 +345,8 @@ class DatasetGridTest
         }
 
         @Override
-        public void setPendingSelection(final int columnIndex, final int rowIndex)
+        public void selectRegion(final int firstColumnIndex, final int firstRowIndex, final int columnCount,
+                final int rowCount)
         {
         }
 
@@ -321,6 +364,44 @@ class DatasetGridTest
         @Override
         public void expectNewTableSelected(final String tableName)
         {
+        }
+
+        @Override
+        public Text getActiveCellEditorText()
+        {
+            return null;
+        }
+
+        @Override
+        public List<Point> getSelectedCellPositions()
+        {
+            return List.of();
+        }
+
+        @Override
+        public void selectAll()
+        {
+        }
+
+        @Override
+        public void editCellInDialog()
+        {
+        }
+
+        @Override
+        public void setStatusMessage(final String message)
+        {
+        }
+
+        @Override
+        public void writeClipboardText(final String text)
+        {
+        }
+
+        @Override
+        public String readClipboardText()
+        {
+            return null;
         }
     }
 }

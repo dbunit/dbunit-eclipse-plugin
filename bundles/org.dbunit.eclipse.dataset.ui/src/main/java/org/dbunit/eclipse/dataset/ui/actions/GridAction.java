@@ -26,7 +26,8 @@ import org.eclipse.jface.action.Action;
 
 /**
  * A command that acts on the Tables page's active grid: reaches it through a {@link DatasetGridContext},
- * updates its enablement from a {@link GridSelection}, and does nothing while a cell editor is active.
+ * updates its enablement from a {@link GridSelection}, and by default needs an editable page and does
+ * nothing while a cell editor is active.
  *
  * @since 1.0.0
  */
@@ -46,11 +47,26 @@ public abstract class GridAction extends Action
         setActionDefinitionId(commandId);
     }
 
+    /**
+     * Creates a grid action with no command id, for one installed as a global retargetable action instead
+     * of a workbench command.
+     *
+     * @param context What this action needs from the page that hosts the grid.
+     */
+    protected GridAction(final DatasetGridContext context)
+    {
+        this.context = context;
+    }
+
     @Override
     public final void run()
     {
         if (context.hasActiveCellEditor())
         {
+            if (isEnabledWhileEditing())
+            {
+                runWhileEditing(context);
+            }
             return;
         }
         runOnGrid(context);
@@ -63,7 +79,9 @@ public abstract class GridAction extends Action
      */
     public final void update(final GridSelection selection)
     {
-        setEnabled(context.isEditable() && !context.hasActiveCellEditor() && isEnabledFor(selection));
+        final boolean pageAllowsThis = context.isEditable() || !changesDataset();
+        final boolean editingAllowsThis = !context.hasActiveCellEditor() || isEnabledWhileEditing();
+        setEnabled(pageAllowsThis && editingAllowsThis && isEnabledFor(selection));
     }
 
     /**
@@ -74,11 +92,42 @@ public abstract class GridAction extends Action
     protected abstract void runOnGrid(DatasetGridContext context);
 
     /**
-     * Returns whether this command applies to a selection, on a page that is already known to be editable
-     * with no active cell editor.
+     * Returns whether this command applies to a selection, with the page's editable state and the active
+     * cell editor already accounted for.
      *
      * @param selection The active grid's current selection.
      * @return True when this command should be enabled.
      */
     protected abstract boolean isEnabledFor(GridSelection selection);
+
+    /**
+     * Returns whether this command changes the dataset, and so needs an editable page.
+     *
+     * @return True by default, and false for a command that only reads or selects cells.
+     */
+    protected boolean changesDataset()
+    {
+        return true;
+    }
+
+    /**
+     * Returns whether this command stays enabled and dispatches to {@link #runWhileEditing} while a cell
+     * editor is active, instead of doing nothing.
+     *
+     * @return True when this command has an editing-mode behavior; false by default.
+     */
+    protected boolean isEnabledWhileEditing()
+    {
+        return false;
+    }
+
+    /**
+     * Runs this command's fallback while a cell editor is active, for a command whose
+     * {@link #isEnabledWhileEditing()} returns true. The default does nothing.
+     *
+     * @param context What this action needs from the page that hosts the grid.
+     */
+    protected void runWhileEditing(final DatasetGridContext context)
+    {
+    }
 }

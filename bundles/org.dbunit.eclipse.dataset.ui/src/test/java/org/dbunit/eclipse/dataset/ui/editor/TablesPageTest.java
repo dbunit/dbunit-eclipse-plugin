@@ -28,6 +28,7 @@ import java.util.List;
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.ui.actions.DatasetCommandIds;
+import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.swt.SWT;
@@ -299,6 +300,59 @@ class TablesPageTest
             assertThat(contextService.getActiveContextIds())
                     .as("Switching to the Source page must deactivate the Tables page's context.")
                     .doesNotContain("org.dbunit.eclipse.dataset.ui.tablesPageContext");
+        }
+    }
+
+    @Test
+    void testInsertRowBelowAndDeleteRows_throughTheirCommands_selectTheRowAtTheirPosition()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\" NAME=\"A\"/><USERS ID=\"2\" NAME=\"B\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final IHandlerService handlerService =
+                    editor.getEditorSite().getService(IHandlerService.class);
+            tablesPage.selectRegion(1, 0, 1, 1);
+
+            handlerService.executeCommand(DatasetCommandIds.INSERT_ROW_BELOW, null);
+
+            assertThat(tablesPage.getSelection())
+                    .as("Insert Row Below must select the new row's cell in the anchor column.")
+                    .isEqualTo(new GridSelection("USERS", 3, 2, 1, 1, List.of(1), List.of(1), 1, 1, 1, 1,
+                            false));
+
+            tablesPage.selectRegion(0, 0, 2, 2);
+            handlerService.executeCommand(DatasetCommandIds.DELETE_ROWS, null);
+
+            assertThat(tablesPage.getSelection())
+                    .as("Delete Rows must select the row that takes the place of the deleted ones.")
+                    .isEqualTo(new GridSelection("USERS", 1, 2, 0, 0, List.of(0), List.of(0), 0, 0, 0, 0,
+                            false));
+        }
+    }
+
+    @Test
+    void testMoveRowsUp_throughItsCommand_keepsTheMovedRowsSelected() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><T A=\"1\"/><T A=\"2\"/><T A=\"3\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final IHandlerService handlerService =
+                    editor.getEditorSite().getService(IHandlerService.class);
+            tablesPage.selectRegion(0, 1, 1, 2);
+
+            handlerService.executeCommand(DatasetCommandIds.MOVE_ROWS_UP, null);
+
+            assertThat(tablesPage.getSelection())
+                    .as("Move Rows Up must keep the moved rows selected, so that they can move again.")
+                    .isEqualTo(new GridSelection("T", 3, 1, 0, 0, List.of(0, 1), List.of(0), 0, 1, 0, 0,
+                            true));
         }
     }
 

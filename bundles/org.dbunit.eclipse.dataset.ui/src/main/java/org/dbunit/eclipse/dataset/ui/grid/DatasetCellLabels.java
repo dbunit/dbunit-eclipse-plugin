@@ -32,7 +32,15 @@ final class DatasetCellLabels implements IConfigLabelAccumulator
 {
     static final String NULL_VALUE = "NULL_VALUE";
 
+    static final String EDIT_IN_DIALOG = "EDIT_IN_DIALOG";
+
+    static final String MULTI_LINE_VALUE = "MULTI_LINE_VALUE";
+
     private final TableBodyDataProvider bodyDataProvider;
+
+    private int editInDialogColumnPosition = -1;
+
+    private int editInDialogRowPosition = -1;
 
     DatasetCellLabels(final TableBodyDataProvider bodyDataProvider)
     {
@@ -43,9 +51,44 @@ final class DatasetCellLabels implements IConfigLabelAccumulator
     public void accumulateConfigLabels(final LabelStack configLabels, final int columnPosition,
             final int rowPosition)
     {
-        if (bodyDataProvider.getDataValue(columnPosition, rowPosition) == null)
+        final Object value = bodyDataProvider.getDataValue(columnPosition, rowPosition);
+        if (value == null)
         {
             configLabels.addLabel(NULL_VALUE);
         }
+        else if (isMultiLine(value.toString()))
+        {
+            configLabels.addLabel(MULTI_LINE_VALUE);
+        }
+        if (columnPosition == editInDialogColumnPosition && rowPosition == editInDialogRowPosition)
+        {
+            configLabels.addLabel(EDIT_IN_DIALOG);
+        }
+    }
+
+    private static boolean isMultiLine(final String value)
+    {
+        return value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0;
+    }
+
+    /**
+     * Marks one cell to open in the multi-line dialog editor the next time it is edited.
+     *
+     * @param columnPosition The cell's column position.
+     * @param rowPosition The cell's row position.
+     */
+    void forceEditInDialog(final int columnPosition, final int rowPosition)
+    {
+        editInDialogColumnPosition = columnPosition;
+        editInDialogRowPosition = rowPosition;
+    }
+
+    /**
+     * Clears the cell marked by {@link #forceEditInDialog(int, int)}.
+     */
+    void clearForceEditInDialog()
+    {
+        editInDialogColumnPosition = -1;
+        editInDialogRowPosition = -1;
     }
 }

@@ -20,47 +20,50 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
-import org.dbunit.eclipse.dataset.ui.DatasetImages;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.dbunit.eclipse.dataset.core.edit.CellChange;
+import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
+import org.eclipse.swt.graphics.Point;
 
 /**
- * Deletes the selected rows in one undoable change and selects the row left at their position.
+ * Sets every selected cell to the empty string.
  *
  * @since 1.0.0
  */
-public final class DeleteRowsAction extends GridAction
+public final class SetEmptyStringAction extends GridAction
 {
     /**
      * Creates the action.
      *
      * @param context What this action needs from the page that hosts the grid.
      */
-    public DeleteRowsAction(final DatasetGridContext context)
+    public SetEmptyStringAction(final DatasetGridContext context)
     {
-        super(DatasetCommandIds.DELETE_ROWS, context);
-        setText("Delete Rows");
-        setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_DELETE_ROWS));
+        super(DatasetCommandIds.SET_EMPTY_STRING, context);
+        setText("Set to Empty String");
     }
 
     @Override
     protected void runOnGrid(final DatasetGridContext context)
     {
         final GridSelection selection = context.getSelection();
-        final int[] rowIndexes = selection.rowIndexes().stream().mapToInt(Integer::intValue).toArray();
-        final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);
-        final int rowIndex = selection.firstRowIndex();
-        final boolean applied = context.executeMultiCellEdit("Delete Rows",
-                () -> context.getDatasetDocument().deleteRows(selection.tableKey(), rowIndexes));
-        if (applied)
+        final DatasetTable table =
+                context.getDatasetDocument().getModel().findTable(selection.tableKey()).orElseThrow();
+        final List<CellChange> changes = new ArrayList<>();
+        for (final Point cell : context.getSelectedCellPositions())
         {
-            context.selectRegion(columnIndex, rowIndex, 1, 1);
+            changes.add(new CellChange(cell.y, table.getColumns().get(cell.x).name(), ""));
         }
+        context.executeEdit(() -> context.getDatasetDocument().setCells(selection.tableKey(), changes));
     }
 
     @Override
     protected boolean isEnabledFor(final GridSelection selection)
     {
-        return !selection.rowIndexes().isEmpty();
+        return !selection.rowIndexes().isEmpty() && !selection.columnIndexes().isEmpty();
     }
 }
