@@ -21,9 +21,12 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 import org.dbunit.eclipse.dataset.core.Messages;
@@ -70,12 +73,14 @@ final class FlatXmlValidator
         final Set<String> dtdTableKeys = dtdTableKeys(dtdState, dtd, options);
         for (final DatasetTable table : tables)
         {
-            validateFirstRowColumns(problems, index, table, dtdState, options);
+            final ColumnOccurrences occurrences =
+                    ColumnOccurrences.scan(table, index.getRowElements(table.getKey()));
+            validateFirstRowColumns(problems, index, table, occurrences, dtdState, options);
             validateTableNameCaseVariants(problems, index, table, options);
-            validateColumnNameCaseVariants(problems, index, table);
-            validateDuplicateColumnInRow(problems, index, table);
+            validateColumnNameCaseVariants(problems, table, occurrences);
+            validateDuplicateColumnInRow(problems, table, occurrences);
             validateTableNotDeclaredInDtd(problems, index, table, dtdState, dtdTableKeys);
-            validateColumnNotDeclaredInDtd(problems, index, table, dtdState, options, dtdTableKeys);
+            validateColumnNotDeclaredInDtd(problems, table, occurrences, dtdState, options, dtdTableKeys);
             validateRedundantEmptyElement(problems, index, table);
         }
         validateDtdTableWithoutDeclaration(problems, index, dtdState, dtd);
@@ -98,8 +103,8 @@ final class FlatXmlValidator
     }
 
     private static void validateFirstRowColumns(final List<DatasetProblem> problems,
-            final FlatXmlIndex index, final DatasetTable table, final DtdState dtdState,
-            final FlatXmlOptions options)
+            final FlatXmlIndex index, final DatasetTable table, final ColumnOccurrences occurrences,
+            final DtdState dtdState, final FlatXmlOptions options)
     {
         if (dtdState != DtdState.NONE || options.columnSensing())
         {
@@ -123,39 +128,18 @@ final class FlatXmlValidator
             }
             return;
         }
-        final Set<String> firstElementColumnKeys = new HashSet<>();
-        for (final FlatXmlAttribute attribute : first.attributes())
-        {
-            firstElementColumnKeys.add(attribute.name().toUpperCase(Locale.ENGLISH));
-        }
-        final List<FlatXmlElement> rowElements = index.getRowElements(table.getKey());
+        // The first element has attributes, so it is the table's first row.
         for (final DatasetColumn column : table.getColumns())
         {
-            final String columnKey = column.name().toUpperCase(Locale.ENGLISH);
-            if (firstElementColumnKeys.contains(columnKey))
+            final Occurrence occurrence = occurrences.firstValue(column.name());
+            if (occurrence == null || occurrence.rowIndex() == 0)
             {
                 continue;
             }
-            reportFirstLaterValue(problems, table, rowElements, columnKey, column.name());
-        }
-    }
-
-    private static void reportFirstLaterValue(final List<DatasetProblem> problems,
-            final DatasetTable table, final List<FlatXmlElement> rowElements, final String columnKey,
-            final String columnName)
-    {
-        for (int rowIndex = 1; rowIndex < rowElements.size(); rowIndex++)
-        {
-            final FlatXmlAttribute attribute = findAttribute(rowElements.get(rowIndex), columnKey);
-            if (attribute != null)
-            {
-                problems.add(new DatasetProblem(ProblemCode.COLUMN_NOT_IN_FIRST_ROW,
-                        ProblemSeverity.WARNING,
-                        NLS.bind(Messages.Validator_columnNotInFirstRow, columnName, table.getName()),
-                        table.getKey(), columnName, rowIndex, attribute.nameOffset(),
-                        attribute.name().length()));
-                return;
-            }
+            problems.add(new DatasetProblem(ProblemCode.COLUMN_NOT_IN_FIRST_ROW, ProblemSeverity.WARNING,
+                    NLS.bind(Messages.Validator_columnNotInFirstRow, column.name(), table.getName()),
+                    table.getKey(), column.name(), occurrence.rowIndex(), occurrence.attribute().nameOffset(),
+                    occurrence.attribute().name().length()));
         }
     }
 
@@ -182,13 +166,11 @@ final class FlatXmlValidator
     }
 
     private static void validateColumnNameCaseVariants(final List<DatasetProblem> problems,
-            final FlatXmlIndex index, final DatasetTable table)
+            final DatasetTable table, final ColumnOccurrences occurrences)
     {
         for (final DatasetColumn column : table.getColumns())
         {
-            final String columnKey = column.name().toUpperCase(Locale.ENGLISH);
-            final FlatXmlAttribute variant = findSpellingVariant(index.getRowElements(table.getKey()),
-                    columnKey, column.name());
+            final FlatXmlAttribute variant = occurrences.firstSpellingVariant(column.name());
             if (variant != null)
             {
                 problems.add(new DatasetProblem(ProblemCode.COLUMN_NAME_CASE_VARIANTS,
@@ -201,40 +183,14 @@ final class FlatXmlValidator
         }
     }
 
-    private static FlatXmlAttribute findSpellingVariant(final List<FlatXmlElement> rowElements,
-            final String columnKey, final String columnName)
-    {
-        for (final FlatXmlElement row : rowElements)
-        {
-            for (final FlatXmlAttribute attribute : row.attributes())
-            {
-                if (attribute.name().toUpperCase(Locale.ENGLISH).equals(columnKey)
-                        && !attribute.name().equals(columnName))
-                {
-                    return attribute;
-                }
-            }
-        }
-        return null;
-    }
-
     private static void validateDuplicateColumnInRow(final List<DatasetProblem> problems,
-            final FlatXmlIndex index, final DatasetTable table)
+            final DatasetTable table, final ColumnOccurrences occurrences)
     {
-        for (final FlatXmlElement row : index.getRowElements(table.getKey()))
+        for (final FlatXmlAttribute attribute : occurrences.duplicates())
         {
-            final Set<String> seen = new HashSet<>();
-            for (final FlatXmlAttribute attribute : row.attributes())
-            {
-                if (!seen.add(attribute.name().toUpperCase(Locale.ENGLISH)))
-                {
-                    problems.add(new DatasetProblem(ProblemCode.DUPLICATE_COLUMN_IN_ROW,
-                            ProblemSeverity.WARNING,
-                            NLS.bind(Messages.Validator_duplicateColumnInRow, attribute.name()),
-                            table.getKey(), null, -1, attribute.nameOffset(),
-                            attribute.name().length()));
-                }
-            }
+            problems.add(new DatasetProblem(ProblemCode.DUPLICATE_COLUMN_IN_ROW, ProblemSeverity.WARNING,
+                    NLS.bind(Messages.Validator_duplicateColumnInRow, attribute.name()), table.getKey(), null,
+                    -1, attribute.nameOffset(), attribute.name().length()));
         }
     }
 
@@ -258,7 +214,7 @@ final class FlatXmlValidator
     }
 
     private static void validateColumnNotDeclaredInDtd(final List<DatasetProblem> problems,
-            final FlatXmlIndex index, final DatasetTable table, final DtdState dtdState,
+            final DatasetTable table, final ColumnOccurrences occurrences, final DtdState dtdState,
             final FlatXmlOptions options, final Set<String> dtdTableKeys)
     {
         if (dtdState != DtdState.LOADED || !dtdTableKeys.contains(table.getKey()))
@@ -267,30 +223,24 @@ final class FlatXmlValidator
         }
         final ProblemSeverity severity =
                 options.columnSensing() ? ProblemSeverity.ERROR : ProblemSeverity.WARNING;
-        final List<FlatXmlElement> rowElements = index.getRowElements(table.getKey());
         for (final DatasetColumn column : table.getColumns())
         {
             if (column.declared())
             {
                 continue;
             }
-            final String columnKey = column.name().toUpperCase(Locale.ENGLISH);
-            for (final FlatXmlElement row : rowElements)
+            final Occurrence occurrence = occurrences.firstValue(column.name());
+            if (occurrence == null)
             {
-                final FlatXmlAttribute attribute = findAttribute(row, columnKey);
-                if (attribute != null)
-                {
-                    final String message = severity == ProblemSeverity.ERROR
-                            ? NLS.bind(Messages.Validator_columnNotDeclaredInDtdError, column.name(),
-                                    table.getName())
-                            : NLS.bind(Messages.Validator_columnNotDeclaredInDtdWarning, column.name(),
-                                    table.getName());
-                    problems.add(new DatasetProblem(ProblemCode.COLUMN_NOT_DECLARED_IN_DTD, severity,
-                            message, table.getKey(), column.name(), -1, attribute.nameOffset(),
-                            attribute.name().length()));
-                    break;
-                }
+                continue;
             }
+            final String message = severity == ProblemSeverity.ERROR
+                    ? NLS.bind(Messages.Validator_columnNotDeclaredInDtdError, column.name(), table.getName())
+                    : NLS.bind(Messages.Validator_columnNotDeclaredInDtdWarning, column.name(),
+                            table.getName());
+            final FlatXmlAttribute attribute = occurrence.attribute();
+            problems.add(new DatasetProblem(ProblemCode.COLUMN_NOT_DECLARED_IN_DTD, severity, message,
+                    table.getKey(), column.name(), -1, attribute.nameOffset(), attribute.name().length()));
         }
     }
 
@@ -341,19 +291,6 @@ final class FlatXmlValidator
         }
     }
 
-    private static FlatXmlAttribute findAttribute(final FlatXmlElement element, final String columnKey)
-    {
-        FlatXmlAttribute found = null;
-        for (final FlatXmlAttribute attribute : element.attributes())
-        {
-            if (attribute.name().toUpperCase(Locale.ENGLISH).equals(columnKey))
-            {
-                found = attribute;
-            }
-        }
-        return found;
-    }
-
     private static int doctypeOffset(final FlatXmlIndex index)
     {
         return index.getDoctype() != null ? index.getDoctype().offset() : -1;
@@ -368,5 +305,116 @@ final class FlatXmlValidator
     private static String tableKey(final String name, final FlatXmlOptions options)
     {
         return options.caseSensitiveTableNames() ? name : name.toUpperCase(Locale.ENGLISH);
+    }
+
+    private static String columnKey(final String name)
+    {
+        return name.toUpperCase(Locale.ENGLISH);
+    }
+
+    /**
+     * Where a column first has a value.
+     *
+     * @param rowIndex The index of the first row that has a value for the column.
+     * @param attribute The attribute that supplies that row's value: the last of the row's attributes
+     *                  for the column, as in dbUnit.
+     */
+    private record Occurrence(int rowIndex, FlatXmlAttribute attribute)
+    {
+    }
+
+    /**
+     * What one pass over a table's rows finds about its columns, so that the checks take time in
+     * proportion to the number of attributes, however many columns the table has.
+     */
+    private static final class ColumnOccurrences
+    {
+        private final Map<String, Occurrence> firstValues = new HashMap<>();
+
+        private final Map<String, FlatXmlAttribute> firstSpellingVariants = new HashMap<>();
+
+        private final List<FlatXmlAttribute> duplicates = new ArrayList<>();
+
+        private ColumnOccurrences()
+        {
+        }
+
+        /**
+         * Scans a table's rows in document order.
+         *
+         * @param table The table, whose column names are the expected spellings.
+         * @param rowElements The table's row elements, in document order.
+         * @return What the scan found.
+         */
+        static ColumnOccurrences scan(final DatasetTable table, final List<FlatXmlElement> rowElements)
+        {
+            final Map<String, String> columnNamesByKey = new HashMap<>();
+            for (final DatasetColumn column : table.getColumns())
+            {
+                columnNamesByKey.put(columnKey(column.name()), column.name());
+            }
+            final ColumnOccurrences occurrences = new ColumnOccurrences();
+            final Map<String, FlatXmlAttribute> rowAttributesByKey = new LinkedHashMap<>();
+            for (int rowIndex = 0; rowIndex < rowElements.size(); rowIndex++)
+            {
+                rowAttributesByKey.clear();
+                for (final FlatXmlAttribute attribute : rowElements.get(rowIndex).attributes())
+                {
+                    final String key = columnKey(attribute.name());
+                    if (rowAttributesByKey.put(key, attribute) != null)
+                    {
+                        occurrences.duplicates.add(attribute);
+                    }
+                    final String columnName = columnNamesByKey.get(key);
+                    if (columnName != null && !attribute.name().equals(columnName)
+                            && !occurrences.firstSpellingVariants.containsKey(key))
+                    {
+                        occurrences.firstSpellingVariants.put(key, attribute);
+                    }
+                }
+                for (final Map.Entry<String, FlatXmlAttribute> entry : rowAttributesByKey.entrySet())
+                {
+                    final String key = entry.getKey();
+                    if (!occurrences.firstValues.containsKey(key))
+                    {
+                        occurrences.firstValues.put(key, new Occurrence(rowIndex, entry.getValue()));
+                    }
+                }
+            }
+            return occurrences;
+        }
+
+        /**
+         * Returns where a column first has a value.
+         *
+         * @param columnName The column's name, matched case-insensitively.
+         * @return The first row with a value and the attribute that supplies it, or null when no row has
+         *         a value.
+         */
+        Occurrence firstValue(final String columnName)
+        {
+            return firstValues.get(columnKey(columnName));
+        }
+
+        /**
+         * Returns the first attribute that spells a column differently from the column's name.
+         *
+         * @param columnName The column's name, matched case-insensitively.
+         * @return That attribute, or null when every attribute spells the column as its name does.
+         */
+        FlatXmlAttribute firstSpellingVariant(final String columnName)
+        {
+            return firstSpellingVariants.get(columnKey(columnName));
+        }
+
+        /**
+         * Returns the attributes whose element has an earlier attribute for the same column.
+         *
+         * @return Those attributes, in document order.
+         */
+        List<FlatXmlAttribute> duplicates()
+        {
+            return duplicates;
+        }
     }
 }

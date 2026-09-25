@@ -21,6 +21,7 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -50,6 +51,21 @@ class FlatXmlValidatorTest
         assertThat(onlyCode(problems, ProblemCode.COLUMN_NOT_IN_FIRST_ROW)).as(
                 "A column missing from the first element but present later must be reported once.")
                 .hasSize(1);
+    }
+
+    @Test
+    void testValidate_whenTheFirstLaterValueIsSpelledTwiceInItsRow_reportsColumnNotInFirstRowAtTheLast()
+    {
+        final String text = "<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/>"
+                + "<USERS ID=\"3\" name=\"a\" NAME=\"b\"/></dataset>";
+
+        final List<DatasetProblem> problems = validate(text, FlatXmlOptions.DBUNIT_DEFAULTS, false);
+
+        assertThat(onlyCode(problems, ProblemCode.COLUMN_NOT_IN_FIRST_ROW))
+                .extracting(DatasetProblem::rowIndex, DatasetProblem::offset)
+                .as("The problem must point at the row's last attribute for the column, whose value dbUnit "
+                        + "uses.")
+                .containsExactly(tuple(2, text.indexOf("NAME=")));
     }
 
     @Test
@@ -155,6 +171,19 @@ class FlatXmlValidatorTest
     }
 
     @Test
+    void testValidate_whenTwoColumnsAreSpelledTwoWays_reportsColumnNameCaseVariantsInColumnOrder()
+    {
+        final String text = "<dataset><T A=\"1\" B=\"2\"/><T A=\"3\" b=\"4\"/><T a=\"5\" B=\"6\"/></dataset>";
+
+        final List<DatasetProblem> problems = validate(text, FlatXmlOptions.DBUNIT_DEFAULTS, false);
+
+        assertThat(onlyCode(problems, ProblemCode.COLUMN_NAME_CASE_VARIANTS))
+                .extracting(DatasetProblem::columnName, DatasetProblem::offset)
+                .as("Each column's first other spelling must be reported, in column order.")
+                .containsExactly(tuple("A", text.indexOf("a=")), tuple("B", text.indexOf("b=")));
+    }
+
+    @Test
     void testValidate_whenAnElementHasTwoAttributesDifferingOnlyInCase_reportsDuplicateColumnInRowAtTheSecondAttribute()
     {
         final String text = "<dataset><USERS id=\"1\" ID=\"2\"/></dataset>";
@@ -194,6 +223,21 @@ class FlatXmlValidatorTest
         assertThat(onlyCode(error, ProblemCode.COLUMN_NOT_DECLARED_IN_DTD).get(0).severity())
                 .as("With column sensing, dbUnit fails to load the dataset.")
                 .isEqualTo(ProblemSeverity.ERROR);
+    }
+
+    @Test
+    void testValidate_whenAnUndeclaredColumnFirstHasAValueInALaterRow_reportsColumnNotDeclaredInDtdThere()
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n"
+                + "<dataset><USERS ID=\"1\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>";
+
+        final List<DatasetProblem> problems = validate(text, FlatXmlOptions.DBUNIT_DEFAULTS, false);
+
+        assertThat(onlyCode(problems, ProblemCode.COLUMN_NOT_DECLARED_IN_DTD))
+                .extracting(DatasetProblem::columnName, DatasetProblem::offset)
+                .as("The problem must point at the column's first attribute.")
+                .containsExactly(tuple("NAME", text.indexOf("NAME=")));
     }
 
     @Test
