@@ -21,6 +21,10 @@
 package org.dbunit.eclipse.dataset.ui.grid;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import org.eclipse.nebula.widgets.nattable.coordinate.PositionCoordinate;
 import org.eclipse.nebula.widgets.nattable.data.IDataProvider;
@@ -53,7 +57,8 @@ class GridSelectionTest
         };
         selectionLayer.doCommand(new SelectAllCommand());
 
-        final GridSelection selection = GridSelection.compute("USERS", columnCount, selectionLayer);
+        final GridSelection selection =
+                GridSelection.compute("USERS", rowCount, columnCount, selectionLayer);
 
         assertThat(selection.rowIndexes()).as("Select All must select every row.").hasSize(rowCount);
         assertThat(selection.firstRowIndex()).as("The first selected row must be 0.").isZero();
@@ -63,6 +68,36 @@ class GridSelectionTest
         assertThat(selection.lastColumnIndex()).as("The last selected column must be the last column index.")
                 .isEqualTo(columnCount - 1);
         assertThat(selection.wholeRowsSelected()).as("Select All must select every row in full.").isTrue();
+    }
+
+    @Test
+    void testConstructor_whenTheGivenListsChangeAfterwards_keepsTheIndexesItWasGiven()
+    {
+        final List<Integer> rowIndexes = new ArrayList<>(List.of(1, 2));
+        final List<Integer> columnIndexes = new ArrayList<>(List.of(0));
+        final GridSelection selection =
+                new GridSelection("USERS", 3, 1, 0, 1, rowIndexes, columnIndexes, 1, 2, 0, 0, true);
+
+        rowIndexes.add(3);
+        columnIndexes.add(1);
+
+        assertThat(selection).as("A later change to the caller's lists must not change the selection.")
+                .isEqualTo(new GridSelection("USERS", 3, 1, 0, 1, List.of(1, 2), List.of(0), 1, 2, 0, 0,
+                        true));
+    }
+
+    @Test
+    void testIndexes_whenAReturnedListIsModified_throws()
+    {
+        final GridSelection selection = new GridSelection("USERS", 3, 1, 0, 1,
+                new ArrayList<>(List.of(1, 2)), new ArrayList<>(List.of(0)), 1, 2, 0, 0, true);
+
+        assertThatThrownBy(() -> selection.rowIndexes().add(3))
+                .as("The returned row indexes must not let a caller change the selection.")
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> selection.columnIndexes().add(1))
+                .as("The returned column indexes must not let a caller change the selection.")
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
     private static final class FixedSizeDataProvider implements IDataProvider

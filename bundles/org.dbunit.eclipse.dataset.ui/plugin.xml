@@ -34,6 +34,12 @@
             categoryId="org.dbunit.eclipse.dataset.ui.category"/>
       <command id="org.dbunit.eclipse.dataset.ui.deleteRows" name="%command.deleteRows.name"
             categoryId="org.dbunit.eclipse.dataset.ui.category"/>
+      <command id="org.dbunit.eclipse.dataset.ui.duplicateRows" name="%command.duplicateRows.name"
+            categoryId="org.dbunit.eclipse.dataset.ui.category"/>
+      <command id="org.dbunit.eclipse.dataset.ui.moveRowsUp" name="%command.moveRowsUp.name"
+            categoryId="org.dbunit.eclipse.dataset.ui.category"/>
+      <command id="org.dbunit.eclipse.dataset.ui.moveRowsDown" name="%command.moveRowsDown.name"
+            categoryId="org.dbunit.eclipse.dataset.ui.category"/>
    </extension>
    <extension point="org.eclipse.ui.bindings">
       <key sequence="M1+M2+ENTER" commandId="org.dbunit.eclipse.dataset.ui.insertRowAbove"
@@ -43,6 +49,15 @@
             contextId="org.dbunit.eclipse.dataset.ui.tablesPageContext"
             schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"/>
       <key sequence="M1+DEL" commandId="org.dbunit.eclipse.dataset.ui.deleteRows"
+            contextId="org.dbunit.eclipse.dataset.ui.tablesPageContext"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"/>
+      <key sequence="M1+M3+ARROW_DOWN" commandId="org.dbunit.eclipse.dataset.ui.duplicateRows"
+            contextId="org.dbunit.eclipse.dataset.ui.tablesPageContext"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"/>
+      <key sequence="M3+ARROW_UP" commandId="org.dbunit.eclipse.dataset.ui.moveRowsUp"
+            contextId="org.dbunit.eclipse.dataset.ui.tablesPageContext"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"/>
+      <key sequence="M3+ARROW_DOWN" commandId="org.dbunit.eclipse.dataset.ui.moveRowsDown"
             contextId="org.dbunit.eclipse.dataset.ui.tablesPageContext"
             schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"/>
    </extension>
