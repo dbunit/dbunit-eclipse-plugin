@@ -25,6 +25,7 @@ import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -50,10 +51,7 @@ import org.dbunit.eclipse.dataset.core.model.DatasetRow;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.DocumentEvent;
-import org.eclipse.jface.text.DocumentRewriteSession;
-import org.eclipse.jface.text.DocumentRewriteSessionType;
 import org.eclipse.jface.text.IDocument;
-import org.eclipse.jface.text.IDocumentExtension4;
 import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.Region;
@@ -75,7 +73,7 @@ import org.eclipse.text.undo.IDocumentUndoManager;
  */
 public final class FlatXmlDatasetDocument implements TextDatasetDocument
 {
-    private static final int REWRITE_SESSION_EDIT_THRESHOLD = 50;
+    private static final int JOIN_EDITS_THRESHOLD = 50;
 
     private static final FlatXmlIndex EMPTY_INDEX =
             new FlatXmlIndex(null, null, "", List.of(), Map.of(), Map.of(), Map.of());
@@ -176,7 +174,6 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         final IDocumentUndoManager undoManager = DocumentUndoManagerRegistry.getDocumentUndoManager(document);
         final boolean outermost = batchDepth == 0;
         batchDepth++;
-        final DocumentRewriteSession session = outermost ? startRewriteSession() : null;
         if (outermost && undoManager != null)
         {
             undoManager.beginCompoundChange();
@@ -188,13 +185,9 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         finally
         {
             batchDepth--;
-            if (batchDepth == 0)
+            if (batchDepth == 0 && undoManager != null)
             {
-                if (undoManager != null)
-                {
-                    undoManager.endCompoundChange();
-                }
-                stopRewriteSession(session);
+                undoManager.endCompoundChange();
             }
         }
     }
@@ -1095,14 +1088,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
 
     private void apply(final List<TextEdit> edits)
     {
-        final MultiTextEdit root = new MultiTextEdit();
-        for (final TextEdit edit : edits)
-        {
-            root.addChild(edit);
-        }
+        final TextEdit change = edits.size() > JOIN_EDITS_THRESHOLD ? joinEdits(edits) : combineEdits(edits);
         final boolean outermost = batchDepth == 0;
-        final boolean largeChange = edits.size() > REWRITE_SESSION_EDIT_THRESHOLD;
-        final DocumentRewriteSession session = outermost && largeChange ? startRewriteSession() : null;
         final IDocumentUndoManager undoManager =
                 DocumentUndoManagerRegistry.getDocumentUndoManager(document);
         if (outermost && undoManager != null)
@@ -1111,7 +1098,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         }
         try
         {
-            root.apply(document, TextEdit.NONE);
+            change.apply(document, TextEdit.NONE);
         }
         catch (final MalformedTreeException | BadLocationException e)
         {
@@ -1123,25 +1110,74 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             {
                 undoManager.endCompoundChange();
             }
-            stopRewriteSession(session);
         }
     }
 
-    private DocumentRewriteSession startRewriteSession()
+    private static MultiTextEdit combineEdits(final List<TextEdit> edits)
     {
-        if (document instanceof final IDocumentExtension4 extension)
+        final MultiTextEdit root = new MultiTextEdit();
+        for (final TextEdit edit : edits)
         {
-            return extension.startRewriteSession(DocumentRewriteSessionType.UNRESTRICTED);
+            root.addChild(edit);
         }
-        return null;
+        return root;
     }
 
-    private void stopRewriteSession(final DocumentRewriteSession session)
+    /**
+     * Joins edits into one replacement of the text from the first edit to the last, which keeps the text
+     * between the edits as it is. The document changes once, however many edits there are: each edit
+     * that widens the text store's gap past its limit makes the store copy the whole text, so applying
+     * many scattered edits one by one takes time in proportion to their number times the document's
+     * length.
+     *
+     * @param edits The edits to join; they must not overlap.
+     * @return The replacement.
+     */
+    private ReplaceEdit joinEdits(final List<TextEdit> edits)
     {
-        if (session != null)
+        final List<TextEdit> ordered = new ArrayList<>(edits);
+        ordered.sort(Comparator.comparingInt(TextEdit::getOffset));
+        final int start = ordered.get(0).getOffset();
+        final int end = ordered.get(ordered.size() - 1).getExclusiveEnd();
+        final String original;
+        try
         {
-            ((IDocumentExtension4) document).stopRewriteSession(session);
+            original = document.get(start, end - start);
         }
+        catch (final BadLocationException e)
+        {
+            throw new IllegalStateException("Computed text edits do not fit the document.", e);
+        }
+        final StringBuilder replacement = new StringBuilder(original.length());
+        int position = start;
+        for (final TextEdit edit : ordered)
+        {
+            if (edit.getOffset() < position)
+            {
+                throw new IllegalStateException("Computed text edits overlap.");
+            }
+            replacement.append(original, position - start, edit.getOffset() - start);
+            replacement.append(newTextOf(edit));
+            position = edit.getExclusiveEnd();
+        }
+        return new ReplaceEdit(start, end - start, replacement.toString());
+    }
+
+    private static String newTextOf(final TextEdit edit)
+    {
+        if (edit instanceof final ReplaceEdit replaceEdit)
+        {
+            return replaceEdit.getText();
+        }
+        if (edit instanceof final InsertEdit insertEdit)
+        {
+            return insertEdit.getText();
+        }
+        if (edit instanceof DeleteEdit)
+        {
+            return "";
+        }
+        throw new IllegalStateException("Unsupported text edit " + edit.getClass().getName() + ".");
     }
 
     private void notifyListeners(final DatasetModelChangeEvent event)

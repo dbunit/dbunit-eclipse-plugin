@@ -40,9 +40,11 @@ import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.jface.text.Document;
+import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.DocumentRewriteSessionEvent;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentExtension4;
+import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.text.undo.DocumentUndoManagerRegistry;
 import org.eclipse.text.undo.IDocumentUndoManager;
@@ -445,36 +447,27 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
-    void testBatch_whenHoldingASetCellsOfMoreThan50RowsAndAnotherSetCells_isStillOneUndoStep()
+    void testBatch_whenHoldingASetCellsOfMoreThan50RowsAndAnother_changesTheDocumentOncePerCall()
             throws Exception
     {
         final StringBuilder xml = new StringBuilder("<dataset>");
+        final StringBuilder expected = new StringBuilder("<dataset>");
         for (int i = 0; i < 60; i++)
         {
             xml.append("<USERS ID=\"").append(i).append("\" NAME=\"Name").append(i).append("\"/>");
+            expected.append("<USERS ID=\"").append(i).append("\" NAME=\"Changed").append(i).append("\"/>");
         }
         xml.append("<ORDERS ID=\"1\" TOTAL=\"5\"/></dataset>");
+        expected.append("<ORDERS ID=\"1\" TOTAL=\"9\"/></dataset>");
         final IDocument document = new Document(xml.toString());
         final String original = document.get();
 
         withUndoManager(document, undoManager ->
         {
-            // TextViewer begins a compound change when a rewrite session starts and ends it when the
-            // session stops; simulate that here to prove a session started inside the batch would not
-            // split the batch into more than one undo step (none must start, since apply() only starts a
-            // session when it is the outermost change).
-            ((IDocumentExtension4) document).addDocumentRewriteSessionListener(event ->
-            {
-                if (event.getChangeType() == DocumentRewriteSessionEvent.SESSION_START)
-                {
-                    undoManager.beginCompoundChange();
-                }
-                else if (event.getChangeType() == DocumentRewriteSessionEvent.SESSION_STOP)
-                {
-                    undoManager.endCompoundChange();
-                }
-            });
-
+            final List<DocumentRewriteSessionEvent> sessionEvents = new ArrayList<>();
+            ((IDocumentExtension4) document).addDocumentRewriteSessionListener(sessionEvents::add);
+            final DocumentChangeCounter changes = new DocumentChangeCounter();
+            document.addDocumentListener(changes);
             final FlatXmlDatasetDocument datasetDocument = create(document);
             datasetDocument.refresh();
             final List<CellChange> manyChanges = new ArrayList<>();
@@ -489,11 +482,55 @@ class FlatXmlDatasetDocumentTest
                 datasetDocument.setCells("ORDERS", List.of(new CellChange(0, "TOTAL", "9")));
             });
 
-            assertThat(document.get()).as("All changes must be applied.").contains("Changed59")
-                    .contains("TOTAL=\"9\"");
+            assertThat(document.get()).as("All changes must be applied.").isEqualTo(expected.toString());
+            assertThat(changes.count).as("Each call must change the document once, however many rows it "
+                    + "changes.").isEqualTo(2);
+            assertThat(sessionEvents).as("A batch must start no rewrite session, because a text viewer "
+                    + "redraws its whole document when a session stops.").isEmpty();
             undoManager.undo();
-            assertThat(document.get()).as(
-                    "Even past the 50-edit threshold, a batch's changes must still be one undo step.")
+            assertThat(document.get()).as("A batch's changes must be one undo step.").isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testDeleteRows_whenDeletingMoreThan50ScatteredRows_changesTheDocumentOnceAndUndoRestoresIt()
+            throws Exception
+    {
+        final StringBuilder xml = new StringBuilder("<dataset>\n");
+        final StringBuilder expected = new StringBuilder("<dataset>\n");
+        final int[] oddRows = new int[60];
+        for (int i = 0; i < 120; i++)
+        {
+            final String line = "  <USERS ID=\"" + i + "\"/>\n";
+            xml.append(line);
+            if (i % 2 == 0)
+            {
+                expected.append(line);
+            }
+            else
+            {
+                oddRows[i / 2] = i;
+            }
+        }
+        xml.append("</dataset>\n");
+        expected.append("</dataset>\n");
+        final IDocument document = new Document(xml.toString());
+        final String original = document.get();
+
+        withUndoManager(document, undoManager ->
+        {
+            final DocumentChangeCounter changes = new DocumentChangeCounter();
+            document.addDocumentListener(changes);
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.deleteRows("USERS", oddRows);
+
+            assertThat(document.get()).as("Every other row's line must be deleted and nothing else.")
+                    .isEqualTo(expected.toString());
+            assertThat(changes.count).as("Deleting many rows must change the document once.").isEqualTo(1);
+            undoManager.undo();
+            assertThat(document.get()).as("One undo must restore the original text exactly.")
                     .isEqualTo(original);
         });
     }
@@ -1678,5 +1715,24 @@ class FlatXmlDatasetDocumentTest
     private interface UndoManagerConsumer
     {
         void accept(IDocumentUndoManager undoManager) throws Exception;
+    }
+
+    /**
+     * Counts the changes of a document.
+     */
+    private static final class DocumentChangeCounter implements IDocumentListener
+    {
+        private int count;
+
+        @Override
+        public void documentAboutToBeChanged(final DocumentEvent event)
+        {
+        }
+
+        @Override
+        public void documentChanged(final DocumentEvent event)
+        {
+            count++;
+        }
     }
 }
