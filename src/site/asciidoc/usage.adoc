@@ -1,0 +1,354 @@
+= Using the dbUnit Dataset Editor
+
+The *dbUnit Dataset Editor* edits dbUnit flat XML dataset files like a spreadsheet.
+It has two pages that always show the same content:
+the *Tables* page, a grid with one sheet per table,
+and the *Source* page, the XML text.
+Every change on the Tables page is written into the XML text with the smallest possible edit,
+so comments, formatting, attribute order, and the DOCTYPE stay as they are,
+and a version-control diff shows only what you changed.
+
+image::images/tables-page.png[The Tables page of the dbUnit Dataset Editor]
+
+[[opening]]
+== Opening Dataset Files
+
+Eclipse recognizes a file as a *dbUnit Flat XML Dataset* when its extension is `.xml` and its root element is `dataset`,
+and opens it in the dbUnit Dataset Editor.
+Files in dbUnit's other XML format, whose `dataset` element contains `table` elements, are not flat XML datasets
+and keep opening in your usual XML editor.
+
+The editor opens on the Tables page.
+When the XML has an error, it opens on the Source page instead, so you can fix the error first.
+
+To create a dataset, use *File > New > Other... > dbUnit > dbUnit Flat XML Dataset*.
+The wizard creates a file with an empty dataset, `dataset.xml` by default, and opens it:
+
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<dataset>
+</dataset>
+----
+
+When you open an empty file, the Tables page offers *Create Empty Dataset*, which writes the same content.
+
+[[tables-page]]
+== The Tables Page
+
+Each table of the dataset is a sheet tab, in the order in which the tables first appear in the file.
+When the dataset has no tables, the page shows a message and an *Add Table...* button instead,
+which opens the same dialog as the toolbar's *Add Table*.
+
+* A tab's tooltip shows the number of rows and columns.
+* A table without rows has its name in italics.
+* Showing a table's tab for the first time selects its first cell,
+so the arrow keys, *F2*, and the grid commands work right away;
+a table without rows or columns starts with nothing selected.
+* A table with problems shows a warning or error icon (see <<problems>>).
+
+The grid shows one row per row element and one column per attribute.
+Row numbers count the rows of the table from 1.
+Rows are always in the order of the file, because dbUnit inserts them in that order;
+the editor never sorts them.
+
+A table may appear in several places in the file.
+dbUnit, and the editor, treat all of its elements as one table, with the rows in the order of the file.
+dbUnit also treats table names that differ only in case, such as `USERS` and `users`, as one table.
+If your tests make dbUnit's table names case-sensitive, change the <<preferences,preferences>> to match.
+
+The toolbar at the right of the tabs holds *Insert Row Below*, *Delete Rows*, *Add Column*, *Delete Column*, and *Add Table*.
+Right-click a cell, a row number, a column header, or a tab for the commands that apply there.
+
+Below the grid, the *Problems* section lists what dbUnit would ignore or reject (see <<problems>>).
+It is hidden when there are none.
+
+When the XML has an error, a banner at the top shows the error and a *Show in Source* link,
+and the grid is read-only until you fix the error on the Source page.
+When the file itself is read-only, for example a file in a JAR or an older revision from the history,
+the banner says so and the grid is read-only.
+A read-only grid still lets you select and copy cells, and *Show in Source* (*F3*) still works.
+
+[[editing]]
+== Editing Cells
+
+Select a cell and start typing to replace its value,
+or press *F2* or double-click to edit the value in place.
+*Enter* saves the value and moves down, *Tab* and *Shift+Tab* save it and move right and left,
+*Up* and *Down* save it and move up and down, and *Escape* discards the change.
+
+[[null-values]]
+=== NULL and Empty Strings
+
+In a flat XML dataset, a column's value in a row is NULL when the row element has no attribute for the column,
+and the empty string when the attribute is present but empty (`NAME=""`).
+The editor keeps the two apart:
+
+* A NULL cell shows `(null)` in gray italics. You can choose another text in the <<preferences,preferences>>.
+* An empty string shows as an empty cell.
+* A line break in a value shows as `⏎`.
+
+Editing a NULL cell and saving it without typing anything keeps it NULL.
+Clearing the text of a cell with a value makes it an empty string.
+To make cells NULL, select them and press *Delete*, or use *Set to NULL*;
+*Set to Empty String* makes them empty strings.
+
+A row cannot have every value NULL, because an element without attributes is not a row in dbUnit.
+The editor rejects a change that would leave a row without values and suggests *Delete Rows* instead,
+and a new row starts with an empty string in its first column.
+
+To enter a value with line breaks, use *Edit Cell in Dialog* (*Shift+F2*).
+Characters that XML does not allow, such as most control characters, are rejected.
+
+The editor escapes values as dbUnit's own writer does, for example `&amp;`, `&lt;`, and `&#xA;` for a line break.
+A character that the file's encoding cannot store, such as `€` in an ISO-8859-1 file,
+is written as a character reference, `&#x20AC;`.
+
+[[undo]]
+=== Undo and Redo
+
+*Edit > Undo* and *Edit > Redo* work on both pages and share one history,
+so you can undo a grid change on the Source page and the other way around.
+Every command is one undo step, however many cells it changes; so is a paste.
+
+[[rows-columns-tables]]
+== Rows, Columns, and Tables
+
+[cols="3,2,4", options="header"]
+|===
+|Command |Key |Where
+
+|Insert Row Above |Ctrl+Shift+Enter |Cell and row number menus
+|Insert Row Below |Ctrl+Enter |Cell and row number menus, toolbar
+|Duplicate Rows |Ctrl+Alt+Down |Cell and row number menus
+|Delete Rows |Ctrl+Delete |Cell and row number menus, toolbar
+|Move Rows Up |Alt+Up |Cell and row number menus
+|Move Rows Down |Alt+Down |Cell and row number menus
+|Add Column... | |Column header menu, toolbar
+|Rename Column... | |Column header menu
+|Delete Column | |Column header menu, toolbar
+|Add Table... | |Tab menu, toolbar
+|Rename Table... | |Tab menu
+|Delete Table | |Tab menu
+|===
+
+On macOS, use Command instead of Ctrl and Option instead of Alt.
+You can change the keys in *Preferences > General > Keys*, where the commands are in the *dbUnit Dataset* category.
+
+Rows::
+The row commands act on every row that has a selected cell.
+*Duplicate Rows* inserts copies of the rows after the last of them.
+*Move Rows Up* and *Move Rows Down* move one block of adjacent rows past its neighbor.
+
+Columns::
+A flat XML file stores a column only as attributes of rows,
+so a column you add has no place in the file until a row has a value for it.
+Until then it is a _pending_ column, with its name in italics and a tooltip that says so;
+give it a value in at least one row to keep it.
+*Rename Column* renames the attribute in every row, and *Delete Column* removes it from every row,
+after asking for confirmation.
+
+Tables::
+*Add Table* asks for the table name and, optionally, comma-separated column names,
+and adds an empty element for the table at the end of the dataset, such as `<ORDERS/>`.
+Column names must each be a valid XML name and not repeat another, case-insensitively, the same
+rules *Add Column* applies.
+dbUnit treats such an element as an empty table, which operations such as `DELETE_ALL` and `CLEAN_INSERT` still process.
+*Rename Table* renames every element of the table.
+*Delete Table* removes every element of the table, after asking for confirmation.
+
+When the dataset has a DTD, dbUnit takes the tables and columns from the DTD, so update the DTD too
+(see <<dtd>>).
+
+[[clipboard]]
+== Copy, Cut, and Paste
+
+The clipboard holds cells as tab-separated text,
+so you can copy cells to and from spreadsheet applications such as Microsoft Excel and LibreOffice Calc.
+
+* *Copy* copies the rectangle around the selected cells; cells inside it that are not selected copy as empty.
+* *Cut* copies the cells and then makes them NULL.
+When whole rows are selected, *Cut* deletes the rows instead, so you can move rows by cutting and pasting them.
+* *Paste* starts at the top-left selected cell, or at column 0 of a table with no rows yet.
+A single value pasted into several selected cells fills all of them.
+Values beyond the table's last column are ignored, and the status line says how many columns were;
+rows beyond the table's last row are added as new rows.
+Empty fields become NULL.
+A paste is one undo step, and the pasted cells are selected afterwards.
+* *Fill Down* (*Ctrl+D*) copies the top selected value of each column into the selected cells below it.
+With a single row selected, it copies the values of the row above.
+
+While you edit a cell, the clipboard keys act on the text of the cell.
+
+[[source-page]]
+== The Source Page
+
+The Source page shows the XML text with syntax coloring.
+You can change the colors in *Preferences > General > Appearance > Colors and Fonts*, category *dbUnit Dataset Editor*;
+the dark theme has its own colors.
+
+image::images/source-page.png[The Source page, with the value of the cell selected on the Tables page selected]
+
+Switching pages keeps your place:
+the value of the selected cell (or, for a NULL cell, the name of its element) is selected in the XML text,
+and when you switch back, the cell at the text cursor is selected.
+*Show in Source* (*F3*) switches to the Source page with the selected cell's value selected.
+
+[[dtd]]
+== DTDs
+
+A dataset may declare its tables and columns in a DTD, in the DOCTYPE itself or in a separate file:
+
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dataset SYSTEM "dataset.dtd">
+<dataset>
+  <USERS ID="1" NAME="Alice"/>
+</dataset>
+----
+
+When a dataset has a DOCTYPE, dbUnit reads its tables and columns from the DTD, and the editor does the same:
+
+* The tables are the elements that the content model of the `dataset` element lists, in that order.
+* A table's columns are the attributes of its `ATTLIST`, in declared order, followed by any other columns the rows use.
+* Tables the DTD lists but the file does not contain appear as tabs with their names in italics;
+their tooltip says _Declared in the DTD; no rows_.
+* The header tooltip of a declared column without values says _Declared in the DTD; no values yet_.
+
+The editor reads a DTD file whose system identifier is a path relative to the dataset file,
+a Windows path such as `C:\dtds\dataset.dtd`, or a `file:` URI.
+It never reads a DTD from the network, such as an `http:` URL;
+it then reports that the DTD could not be read, and skips the checks that need the DTD.
+When you edit the DTD file, the editor reads it again the next time you activate the editor.
+Parameter entities and conditional sections in a DTD are not supported and are ignored.
+
+[[problems]]
+== Problems
+
+dbUnit silently ignores some content of a flat XML dataset, and fails to load some other content.
+The editor warns about both.
+It shows problems as icons on the sheet tabs and column headers, with the messages in the column header tooltips,
+and lists them all in the Problems section below the grid.
+Double-click a problem there to select its cell or column, or its text on the Source page.
+
+[cols="4,5", options="header"]
+|===
+|Problem |What to do
+
+|*The XML has an error*, such as a missing quote, a root element other than `dataset`,
+an element inside a row element, or an entity other than `&amp;`, `&lt;`, `&gt;`, `&quot;`, and `&apos;`.
+The grid is read-only.
+|Fix the XML on the Source page; *Show in Source* on the banner takes you to the error.
+
+|*Column ... is missing from the first element, so dbUnit ignores its value in this row.*
+Without a DTD, dbUnit takes a table's columns from the table's first row element and ignores other columns.
+|Give the table's first row element that attribute, even an empty one;
+or declare the columns in a DTD;
+or, if your tests enable dbUnit's column sensing (`FlatXmlDataSetBuilder.setColumnSensing(true)`),
+select the column sensing <<preferences,preference>>.
+
+|*The first element of table ... has no attributes, so dbUnit ignores every column of its later rows.*
+|Remove the empty element or give it the table's columns, or use column sensing as above.
+
+|*Table ... is also spelled ...*
+dbUnit treats the spellings as one table.
+|Use one spelling, or select case-sensitive table names in the preferences if your tests use them.
+
+|*Column ... of table ... is also spelled ...*
+dbUnit treats the spellings as one column.
+|Use one spelling.
+
+|*Attribute ... repeats an earlier attribute that differs only in case; its value wins.*
+|Remove one of the two attributes on the Source page.
+
+|*Table ... is not declared in the DTD, so dbUnit fails to load the dataset.*
+|Add the table to the content model of the `dataset` element in the DTD, or remove the table.
+
+|*Column ... of table ... is not declared in the DTD*, so dbUnit ignores its values,
+or, with column sensing, fails to load the dataset.
+|Add the column to the table's `ATTLIST` in the DTD, or delete the column.
+
+|*The DTD content model names ..., which the DTD does not declare, so dbUnit fails to load the dataset.*
+|Declare the element with `ELEMENT` or `ATTLIST` in the DTD, or remove it from the content model.
+
+|*The DOCTYPE's external DTD could not be read.*
+The editor skips the checks that need the DTD.
+|Check the DOCTYPE's system identifier; the editor reads only local files (see <<dtd>>).
+
+|*Text content is ignored.* (information)
+dbUnit ignores text between elements.
+|Remove the text, or turn it into a comment.
+
+|*This empty element is redundant; table ... already has rows.* (information)
+|Remove the element; a table needs an empty element only when it has no rows.
+
+|*Parameter entity references are ignored.*, and the same for parameter entity declarations and
+conditional sections in a DTD (information).
+|Nothing, unless the DTD declares tables or columns through them; the editor then does not know those
+tables and columns.
+|===
+
+[[preferences]]
+== Preferences
+
+*Window > Preferences > dbUnit Dataset Editor* has three settings.
+Open editors apply a change immediately.
+
+Text shown for NULL cells::
+How the grid shows NULL values; `(null)` by default. It cannot be blank, so that NULL cells look different from empty strings.
+
+Validate as if the tests enable dbUnit column sensing::
+Select this when your tests load datasets with `FlatXmlDataSetBuilder.setColumnSensing(true)`.
+dbUnit then reads columns from all rows, not only from each table's first row,
+so the editor stops warning about columns missing from the first row,
+and warns that columns missing from a DTD make dbUnit fail.
+
+Treat table names as case-sensitive, like dbUnit's caseSensitiveTableNames::
+Select this when your tests load datasets with case-sensitive table names.
+Tables whose names differ only in case then become separate sheets.
+
+[[keys]]
+== Keyboard Reference
+
+[cols="3,4,4", options="header"]
+|===
+|Key |In the grid |While editing a cell
+
+|Arrow keys |Move the selection |Move the text cursor; Up and Down save the value and move
+|Shift+Arrow keys |Extend the selection |Select text
+|Tab, Shift+Tab |Move right, left |Save the value and move right, left
+|Enter |Move down |Save the value and move down
+|Escape | |Discard the change
+|F2 |Edit the selected cell |
+|Shift+F2 |Edit the selected cell in a dialog |
+|Any character |Start editing, replacing the value |Type
+|Delete |Make the selected cells NULL |Delete a character
+|Ctrl+C, Ctrl+X, Ctrl+V |Copy, cut, paste cells |Copy, cut, paste text
+|Ctrl+A |Select all cells |Select all text
+|Ctrl+D |Fill down |
+|F3 |Show in Source |
+|===
+
+On macOS, use Command instead of Ctrl.
+
+With the mouse, click to select a cell, Shift+click to extend the selection, Ctrl+click to add a cell,
+and drag to select a range.
+Click a row number or a column header to select the row or column.
+Drag a column header's border to resize the column, or double-click it to fit the column to its values.
+Right-click for the commands that apply to what you clicked.
+
+[[limitations]]
+== Known Limitations
+
+* The editor supports only the flat XML format (`FlatXmlDataSet`), not dbUnit's other dataset formats.
+* The grid never sorts or filters rows, because their order matters to dbUnit.
+* Columns and tables cannot be reordered in the grid; reorder them on the Source page.
+* The Tables page has no find or replace across cells; use the Source page's Find/Replace instead.
+* Problems appear in the editor only, not in the Problems view.
+* The editor does not connect to databases.
+* Placeholders of dbUnit's `ReplacementDataSet`, such as `[NULL]`, are ordinary text to the editor.
+* Every change on the Tables page reads the whole file again, so changes take longer in large datasets.
+On a typical developer computer, a change takes a fraction of a second in 100,000 rows of 4 columns (9 MB),
+and about a second in 100,000 rows of 20 columns (42 MB), which also takes a few seconds and about 400 MB of memory
+to open.

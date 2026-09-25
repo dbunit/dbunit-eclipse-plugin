@@ -11,7 +11,17 @@ each table is a sheet, each row element is a spreadsheet row, and each attribute
 Edits are written back into the XML text with minimal changes,
 so comments, formatting, and the DOCTYPE are preserved and diffs stay small.
 
-Version 1 supports the dbUnit flat XML format; other dataset formats are planned.
+The plugin currently supports the dbUnit flat XML format; other dataset formats are planned.
+
+== Features
+
+* link:https://dbunit.github.io/dbunit-eclipse-plugin/usage.html#tables-page[One sheet per table], with rows in file order
+* link:https://dbunit.github.io/dbunit-eclipse-plugin/usage.html#editing[Spreadsheet editing], with link:https://dbunit.github.io/dbunit-eclipse-plugin/usage.html#null-values[NULL and empty strings kept apart]
+* link:https://dbunit.github.io/dbunit-eclipse-plugin/usage.html#rows-columns-tables[Row, column, and table commands]
+* link:https://dbunit.github.io/dbunit-eclipse-plugin/usage.html#clipboard[Copy and paste] to and from spreadsheet applications
+* link:https://dbunit.github.io/dbunit-eclipse-plugin/usage.html#undo[Undo and redo] shared with the link:https://dbunit.github.io/dbunit-eclipse-plugin/usage.html#source-page[Source page]
+* link:https://dbunit.github.io/dbunit-eclipse-plugin/usage.html#problems[Warnings about content dbUnit ignores or rejects]
+* link:https://dbunit.github.io/dbunit-eclipse-plugin/usage.html#dtd[DTD support] and a link:https://dbunit.github.io/dbunit-eclipse-plugin/usage.html#opening[new dataset wizard]
 
 == Documentation
 

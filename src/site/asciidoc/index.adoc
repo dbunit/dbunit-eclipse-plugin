@@ -2,14 +2,31 @@
 
 Edit link:https://dbunit.github.io/dbunit-extension/[dbUnit] dataset files like a spreadsheet, inside the Eclipse IDE.
 
-The *dbUnit Dataset Editor* opens dbUnit flat XML dataset files as a grid:
+The *dbUnit Dataset Editor* opens dbUnit flat XML dataset files (`FlatXmlDataSet`) as a grid:
 each table is a sheet, each row element is a spreadsheet row, and each attribute is a cell.
 Edits are written back into the XML text with minimal changes,
 so comments, formatting, and the DOCTYPE are preserved and version-control diffs stay small.
 A *Source* tab shows the XML text; both views always show the same content.
 
-Version 1 supports the dbUnit flat XML format (`FlatXmlDataSet`).
-Other dbUnit dataset formats are planned for later versions.
+== Features
+
+* link:usage.html#tables-page[One sheet per table], with the rows in file order,
+and tables that appear in several places of the file merged as dbUnit merges them.
+* link:usage.html#editing[Spreadsheet editing]: type to replace a value, F2 or double-click to edit it, Enter and Tab to move on.
+* link:usage.html#null-values[NULL and the empty string kept apart], as dbUnit keeps them apart.
+* link:usage.html#rows-columns-tables[Rows, columns, and tables]: insert, duplicate, move, and delete rows;
+add, rename, and delete columns and tables.
+* link:usage.html#clipboard[Copy and paste] cell ranges to and from spreadsheet applications, and fill down.
+* link:usage.html#undo[Undo and redo] shared with the Source page, with every command, and every paste, one undo step.
+* link:usage.html#source-page[A Source page] with syntax coloring for light and dark themes,
+and the selection kept in step with the Tables page.
+* link:usage.html#problems[Warnings about content dbUnit ignores or rejects],
+such as a column missing from a table's first row.
+* link:usage.html#dtd[DTD support]: the tables and columns a dataset's DTD declares.
+* link:usage.html#opening[A wizard] for new flat XML datasets.
+* link:usage.html#preferences[Preferences] that match the editor to your tests' column sensing and table name case.
+
+See the link:usage.html[User Guide] for the details.
 
 == Installation
 
