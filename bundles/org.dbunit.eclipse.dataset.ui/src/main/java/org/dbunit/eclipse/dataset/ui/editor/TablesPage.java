@@ -31,6 +31,7 @@ import java.util.Set;
 import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
+import org.dbunit.eclipse.dataset.core.model.CellAddress;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
@@ -58,6 +59,7 @@ import org.dbunit.eclipse.dataset.ui.actions.RenameTableAction;
 import org.dbunit.eclipse.dataset.ui.actions.SelectAllAction;
 import org.dbunit.eclipse.dataset.ui.actions.SetEmptyStringAction;
 import org.dbunit.eclipse.dataset.ui.actions.SetNullAction;
+import org.dbunit.eclipse.dataset.ui.actions.ShowInSourceAction;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGrid;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
@@ -74,6 +76,9 @@ import org.eclipse.jface.resource.LocalResourceManager;
 import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentListener;
+import org.eclipse.jface.text.IRegion;
+import org.eclipse.jface.text.ITextSelection;
+import org.eclipse.jface.text.Region;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.edit.editor.ICellEditor;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
@@ -133,6 +138,8 @@ final class TablesPage implements DatasetGridContext
     private final StackLayout contentStackLayout;
 
     private final ProblemsSection problemsSection;
+
+    private final PageSelectionSync pageSelectionSync;
 
     private final Composite blankComposite;
 
@@ -203,6 +210,8 @@ final class TablesPage implements DatasetGridContext
 
     private final EditCellInDialogAction editCellInDialogAction;
 
+    private final ShowInSourceAction showInSourceAction;
+
     private final CutAction cutAction;
 
     private final CopyAction copyAction;
@@ -243,6 +252,8 @@ final class TablesPage implements DatasetGridContext
         this.editor = editor;
         this.datasetDocument = datasetDocument;
         resources = new LocalResourceManager(JFaceResources.getResources(), parent);
+        pageSelectionSync = new PageSelectionSync(this::sourceSelectionRegion,
+                editor.getSourceEditor()::selectAndReveal, datasetDocument);
 
         control = new Composite(parent, SWT.NONE);
         final GridLayout controlLayout = new GridLayout(1, false);
@@ -301,6 +312,7 @@ final class TablesPage implements DatasetGridContext
         setEmptyStringAction = new SetEmptyStringAction(this);
         fillDownAction = new FillDownAction(this);
         editCellInDialogAction = new EditCellInDialogAction(this);
+        showInSourceAction = new ShowInSourceAction(this);
         cutAction = new CutAction(this);
         copyAction = new CopyAction(this);
         pasteAction = new PasteAction(this);
@@ -322,6 +334,7 @@ final class TablesPage implements DatasetGridContext
         gridActions.add(setEmptyStringAction);
         gridActions.add(fillDownAction);
         gridActions.add(editCellInDialogAction);
+        gridActions.add(showInSourceAction);
         retargetableActions.add(cutAction);
         retargetableActions.add(copyAction);
         retargetableActions.add(pasteAction);
@@ -402,10 +415,12 @@ final class TablesPage implements DatasetGridContext
             refreshPending = false;
             datasetDocument.refresh();
         }
+        pageSelectionSync.onActivate().ifPresent(this::selectCellAddress);
     }
 
     void deactivate()
     {
+        pageSelectionSync.onDeactivate(currentCellAddress());
         active = false;
         final IContextService contextService = editor.getEditorSite().getService(IContextService.class);
         contextService.deactivateContext(contextActivation);
@@ -570,6 +585,7 @@ final class TablesPage implements DatasetGridContext
             menu.add(setEmptyStringAction);
             menu.add(fillDownAction);
             menu.add(editCellInDialogAction);
+            menu.add(showInSourceAction);
         }
         else if (GridRegion.ROW_HEADER.equals(region))
         {
@@ -662,6 +678,18 @@ final class TablesPage implements DatasetGridContext
         {
             grid.editCellInDialog();
         }
+    }
+
+    @Override
+    public void showInSource()
+    {
+        final CellAddress address = currentCellAddress();
+        if (address == null)
+        {
+            return;
+        }
+        datasetDocument.locate(address)
+                .ifPresent(region -> editor.showOnSourcePage(region.getOffset(), region.getLength()));
     }
 
     @Override
@@ -794,23 +822,45 @@ final class TablesPage implements DatasetGridContext
             editor.showOnSourcePage(problem.offset(), problem.length());
             return;
         }
-        final CTabItem item = tabsByKey.get(problem.tableKey());
+        final int columnIndex = problem.columnName() == null ? -1
+                : datasetDocument.getModel().findTable(problem.tableKey())
+                        .map(table -> table.getColumnIndex(problem.columnName())).orElse(-1);
+        selectCellAddress(new CellAddress(problem.tableKey(), Math.max(problem.rowIndex(), 0), columnIndex));
+    }
+
+    private void selectCellAddress(final CellAddress address)
+    {
+        final CTabItem item = tabsByKey.get(address.tableKey());
         if (item != null)
         {
             tabFolder.setSelection(item);
             updateGridActionsEnablement();
         }
-        final DatasetGrid grid = gridsByKey.get(problem.tableKey());
-        if (grid == null || problem.columnName() == null)
+        final DatasetGrid grid = gridsByKey.get(address.tableKey());
+        if (grid == null || address.columnIndex() < 0)
         {
             return;
         }
-        final int columnIndex = datasetDocument.getModel().findTable(problem.tableKey())
-                .map(table -> table.getColumnIndex(problem.columnName())).orElse(-1);
-        if (columnIndex >= 0)
+        grid.selectCell(address.columnIndex(), address.rowIndex());
+    }
+
+    private CellAddress currentCellAddress()
+    {
+        final GridSelection selection = getSelection();
+        if (selection.tableKey() == null || selection.anchorRowIndex() < 0
+                || selection.anchorColumnIndex() < 0)
         {
-            grid.selectCell(columnIndex, Math.max(problem.rowIndex(), 0));
+            return null;
         }
+        return new CellAddress(selection.tableKey(), selection.anchorRowIndex(),
+                selection.anchorColumnIndex());
+    }
+
+    private IRegion sourceSelectionRegion()
+    {
+        final ITextSelection selection =
+                (ITextSelection) editor.getSourceEditor().getSelectionProvider().getSelection();
+        return new Region(selection.getOffset(), selection.getLength());
     }
 
     private void scheduleRefresh()

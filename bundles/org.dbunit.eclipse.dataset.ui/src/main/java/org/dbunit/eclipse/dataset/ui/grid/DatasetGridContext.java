@@ -167,6 +167,11 @@ public interface DatasetGridContext
     void editCellInDialog();
 
     /**
+     * Selects and reveals the anchor cell's range on the Source page, and switches to it.
+     */
+    void showInSource();
+
+    /**
      * Shows an informational message on the editor's status line.
      *
      * @param message The message to show, or null to clear it.

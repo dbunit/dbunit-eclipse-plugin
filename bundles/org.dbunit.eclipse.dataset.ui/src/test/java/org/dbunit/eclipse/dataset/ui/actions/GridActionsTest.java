@@ -715,6 +715,36 @@ class GridActionsTest
     }
 
     @Test
+    void testShowInSource_run_selectsAndRevealsTheAnchorCellOnTheSourcePage()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.anchorColumnIndex = 0;
+        context.anchorRowIndex = 0;
+        final ShowInSourceAction action = new ShowInSourceAction(context);
+
+        action.run();
+
+        assertThat(context.showInSourceCalled)
+                .as("Show in Source must select and reveal the anchor cell's range.").isTrue();
+    }
+
+    @Test
+    void testUpdate_forShowInSource_staysEnabledOnAReadOnlyPage()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.anchorColumnIndex = 0;
+        context.anchorRowIndex = 0;
+        context.editable = false;
+        final ShowInSourceAction action = new ShowInSourceAction(context);
+
+        action.update(context.getSelection());
+
+        assertThat(action.isEnabled()).as("A read-only page must still show a cell in the source.").isTrue();
+    }
+
+    @Test
     void testFillDown_withAMultiRowSelection_copiesTheTopRowIntoTheOtherSelectedRows()
     {
         final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
@@ -963,6 +993,8 @@ class GridActionsTest
 
         private boolean editCellInDialogCalled;
 
+        private boolean showInSourceCalled;
+
         private String statusMessage;
 
         private String clipboardText;
@@ -1105,6 +1137,12 @@ class GridActionsTest
         public void editCellInDialog()
         {
             editCellInDialogCalled = true;
+        }
+
+        @Override
+        public void showInSource()
+        {
+            showInSourceCalled = true;
         }
 
         @Override
