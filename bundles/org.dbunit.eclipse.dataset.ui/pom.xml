@@ -117,6 +117,10 @@
           <useUIThread>true</useUIThread>
           <product>org.eclipse.platform.ide</product>
           <application>org.eclipse.ui.ide.workbench</application>
+          <systemProperties>
+            <!-- TablesPageScreenshotsTest saves its PNGs under this directory. -->
+            <dbunit.build.directory>${project.build.directory}</dbunit.build.directory>
+          </systemProperties>
         </configuration>
       </plugin>
     </plugins>
