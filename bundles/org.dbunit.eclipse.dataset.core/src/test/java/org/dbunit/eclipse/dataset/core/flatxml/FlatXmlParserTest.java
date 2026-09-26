@@ -283,6 +283,16 @@ class FlatXmlParserTest
     }
 
     @Test
+    void testParse_whenEndTagNameDoesNotMatch_namesBothElementsAndTheLineAndColumn()
+    {
+        final FlatXmlParseResult result = FlatXmlParser.parse("<dataset>\n<USERS></ORDERS></dataset>");
+
+        assertThat(result.problems()).extracting(DatasetProblem::message)
+                .as("The message must name the expected and the found element, and where the end tag is.")
+                .containsExactly("Expected </USERS>, but found </ORDERS>. (line 2, column 8)");
+    }
+
+    @Test
     void testParse_whenAttributeIsDuplicated_reportsNotWellFormedAtSecondAttributeNameOffset()
     {
         final String text = TestDatasets.read("malformed/duplicate-attribute.xml");
