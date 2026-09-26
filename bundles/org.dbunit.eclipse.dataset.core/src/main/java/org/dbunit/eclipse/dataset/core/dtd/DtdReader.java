@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.flatxml.XmlNames;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
@@ -90,33 +91,13 @@ public final class DtdReader
                 {
                     break;
                 }
-                if (matchesAt(pos, "<!--"))
+                if (matchesAt(pos, "<!"))
                 {
-                    skipComment();
+                    scanMarkupDeclaration();
                 }
                 else if (matchesAt(pos, "<?"))
                 {
                     skipProcessingInstruction();
-                }
-                else if (matchesAt(pos, "<!ELEMENT"))
-                {
-                    scanElementDeclaration();
-                }
-                else if (matchesAt(pos, "<!ATTLIST"))
-                {
-                    scanAttlistDeclaration();
-                }
-                else if (matchesAt(pos, "<!ENTITY"))
-                {
-                    scanIgnoredDeclaration("Parameter entity declarations are ignored.");
-                }
-                else if (matchesAt(pos, "<!NOTATION"))
-                {
-                    scanIgnoredDeclaration(null);
-                }
-                else if (matchesAt(pos, "<!["))
-                {
-                    scanConditionalSection();
                 }
                 else if (dtdText.charAt(pos) == '%')
                 {
@@ -124,13 +105,52 @@ public final class DtdReader
                 }
                 else
                 {
-                    // Unexpected content; advance so a malformed DTD cannot loop forever. DTD files are
-                    // not edited, so reporting a precise syntax error here is not worth the complexity.
-                    pos++;
+                    skipUnexpectedContent();
                 }
             }
             return new DtdDeclarations(contentModelDeclared, contentModelAny, contentModelNames, elements,
                     problems);
+        }
+
+        private void scanMarkupDeclaration()
+        {
+            if (matchesAt(pos, "<!--"))
+            {
+                skipComment();
+            }
+            else if (matchesAt(pos, "<!ELEMENT"))
+            {
+                scanElementDeclaration();
+            }
+            else if (matchesAt(pos, "<!ATTLIST"))
+            {
+                scanAttlistDeclaration();
+            }
+            else if (matchesAt(pos, "<!ENTITY"))
+            {
+                scanIgnoredDeclaration(Messages.Dtd_parameterEntityDeclarationsIgnored);
+            }
+            else if (matchesAt(pos, "<!NOTATION"))
+            {
+                scanIgnoredDeclaration(null);
+            }
+            else if (matchesAt(pos, "<!["))
+            {
+                scanConditionalSection();
+            }
+            else
+            {
+                skipUnexpectedContent();
+            }
+        }
+
+        /**
+         * Advances past one character of unexpected content, so that a malformed DTD cannot loop forever. DTD
+         * files are not edited, so reporting a precise syntax error here is not worth the complexity.
+         */
+        private void skipUnexpectedContent()
+        {
+            pos++;
         }
 
         private void scanElementDeclaration()
@@ -268,7 +288,7 @@ public final class DtdReader
             {
                 pos += "]]>".length();
             }
-            addInfoProblem("Conditional sections are ignored.", start, pos - start);
+            addInfoProblem(Messages.Dtd_conditionalSectionsIgnored, start, pos - start);
         }
 
         private void scanParameterEntityReference()
@@ -280,7 +300,7 @@ public final class DtdReader
             {
                 pos++;
             }
-            addInfoProblem("Parameter entity references are ignored.", start, pos - start);
+            addInfoProblem(Messages.Dtd_parameterEntityReferencesIgnored, start, pos - start);
         }
 
         private void skipToMatchingCloseAngleBracket()

@@ -27,9 +27,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
+import org.eclipse.osgi.util.NLS;
 
 /**
  * Scans dbUnit flat XML text once, left to right, with a hand-written scanner instead of a standard XML
@@ -125,7 +127,7 @@ final class FlatXmlParser
                 if (pos >= length)
                 {
                     throw blockingError(ProblemCode.ROOT_NOT_DATASET,
-                            "The document has no root element; a dataset starts with <dataset>.", pos);
+                            Messages.Parser_noRootElement, pos);
                 }
                 if (isElementStart())
                 {
@@ -134,7 +136,7 @@ final class FlatXmlParser
                 if (!scanPrologMarkup())
                 {
                     throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                            "Unexpected character before the root element.", pos);
+                            Messages.Parser_unexpectedBeforeRoot, pos);
                 }
             }
         }
@@ -174,7 +176,7 @@ final class FlatXmlParser
             if (!"dataset".equals(startTag.name()))
             {
                 throw blockingError(ProblemCode.ROOT_NOT_DATASET,
-                        "The root element must be named <dataset>, but found <" + startTag.name() + ">.",
+                        NLS.bind(Messages.Parser_rootNotDataset, startTag.name()),
                         rootOffset);
             }
             if (startTag.selfClosing())
@@ -206,7 +208,7 @@ final class FlatXmlParser
                 else
                 {
                     throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                            "Unexpected content after the root element.", pos);
+                            Messages.Parser_unexpectedAfterRoot, pos);
                 }
             }
         }
@@ -264,27 +266,40 @@ final class FlatXmlParser
                     return new StartTag(name, nameEndOffset, List.copyOf(attributes), attributesEndOffset,
                             pos, false);
                 }
-                if (pos >= length)
-                {
-                    throw blockingError(ProblemCode.NOT_WELL_FORMED, "The document ended inside a start "
-                            + "tag.", pos);
-                }
-                if (!hadWhitespace)
-                {
-                    throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                            attributes.isEmpty()
-                                    ? "Expected whitespace, '/>', or '>' after the element name."
-                                    : "Expected whitespace between attributes.",
-                            pos);
-                }
+                requireAttributeStart(hadWhitespace, attributes.isEmpty());
                 final FlatXmlAttribute attribute = scanAttribute(segmentOffset);
-                if (!startTagAttributeNames.add(attribute.name()))
-                {
-                    throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                            "Duplicate attribute '" + attribute.name() + "'.", attribute.nameOffset());
-                }
+                rememberAttributeName(attribute);
                 attributes.add(attribute);
                 attributesEndOffset = attribute.endOffset();
+            }
+        }
+
+        /**
+         * Requires that an attribute starts at the current position: the text must not end here, and
+         * whitespace must come before the attribute.
+         */
+        private void requireAttributeStart(final boolean hadWhitespace, final boolean firstAttribute)
+        {
+            if (pos >= length)
+            {
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_endedInStartTag, pos);
+            }
+            if (!hadWhitespace)
+            {
+                throw blockingError(ProblemCode.NOT_WELL_FORMED,
+                        firstAttribute
+                                ? Messages.Parser_expectedAfterElementName
+                                : Messages.Parser_expectedWhitespaceBetweenAttributes,
+                        pos);
+            }
+        }
+
+        private void rememberAttributeName(final FlatXmlAttribute attribute)
+        {
+            if (!startTagAttributeNames.add(attribute.name()))
+            {
+                final String message = NLS.bind(Messages.Parser_duplicateAttribute, attribute.name());
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, message, attribute.nameOffset());
             }
         }
 
@@ -293,45 +308,68 @@ final class FlatXmlParser
             final int nameOffset = pos;
             final String name = scanName();
             skipWhitespace();
-            if (pos >= length || text.charAt(pos) != '=')
-            {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "Expected '=' after the attribute name.",
-                        pos);
-            }
-            pos++; // consume '='
+            expectCharacter('=', Messages.Parser_expectedEquals);
             skipWhitespace();
-            if (pos >= length || (text.charAt(pos) != '"' && text.charAt(pos) != '\''))
+            final char quote = scanOpeningQuote(Messages.Parser_expectedQuotedValue);
+            final int valueOffset = pos;
+            final int valueEndOffset = scanToClosingQuote(quote, valueOffset);
+            final String value = decodeValue(text.subSequence(valueOffset, valueEndOffset), valueOffset);
+            pos++; // consume the closing quote
+            return new FlatXmlAttribute(name, value, segmentOffset, nameOffset, valueOffset, valueEndOffset,
+                    quote);
+        }
+
+        /**
+         * Consumes the expected character, or records the blocking problem that the message describes.
+         */
+        private void expectCharacter(final char expected, final String message)
+        {
+            if (pos >= length || text.charAt(pos) != expected)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "Expected a quoted attribute value.",
-                        pos);
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, message, pos);
+            }
+            pos++;
+        }
+
+        /**
+         * Consumes the quote that opens a quoted value, or records the blocking problem that the message
+         * describes.
+         *
+         * @return The quote, which also closes the value.
+         */
+        private char scanOpeningQuote(final String message)
+        {
+            final boolean atQuote = pos < length && (text.charAt(pos) == '"' || text.charAt(pos) == '\'');
+            if (!atQuote)
+            {
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, message, pos);
             }
             final char quote = text.charAt(pos);
-            pos++; // consume the opening quote
-            final int valueOffset = pos;
-            while (pos < length)
+            pos++;
+            return quote;
+        }
+
+        /**
+         * Advances to the quote that closes an attribute value, which may not contain a {@code <}.
+         *
+         * @return The offset of the closing quote.
+         */
+        private int scanToClosingQuote(final char quote, final int valueOffset)
+        {
+            while (pos < length && text.charAt(pos) != quote)
             {
-                final char valueChar = text.charAt(pos);
-                if (valueChar == quote)
+                if (text.charAt(pos) == '<')
                 {
-                    break;
-                }
-                if (valueChar == '<')
-                {
-                    throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                            "'<' is not allowed in an attribute value.", pos);
+                    throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_lessThanInValue, pos);
                 }
                 pos++;
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                        "The attribute value has no closing quote.", valueOffset - 1);
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedValue,
+                        valueOffset - 1);
             }
-            final int valueEndOffset = pos;
-            final String value = decodeValue(text.subSequence(valueOffset, valueEndOffset), valueOffset);
-            pos++; // consume the closing quote
-            return new FlatXmlAttribute(name, value, segmentOffset, nameOffset, valueOffset, valueEndOffset,
-                    quote);
+            return pos;
         }
 
         private String decodeValue(final CharSequence raw, final int valueOffset)
@@ -357,71 +395,63 @@ final class FlatXmlParser
          */
         private int scanChildren(final String endTagName, final boolean allowElements)
         {
-            int runStart = -1;
-            boolean runSignificant = false;
-            while (true)
+            final TextRun run = new TextRun();
+            int endTagOffset = -1;
+            while (endTagOffset < 0)
             {
                 if (pos >= length)
                 {
                     throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                            "The document ended before </" + endTagName + ">.", pos);
+                            NLS.bind(Messages.Parser_endedBeforeEndTag, endTagName), pos);
                 }
                 final char ch = text.charAt(pos);
                 if (ch != '<')
                 {
-                    // Whitespace does not end a run of text (rule 5): only markup does, so that
-                    // "stray text" reports as one problem rather than one per word.
-                    if (runStart < 0)
-                    {
-                        runStart = pos;
-                    }
-                    if (!isWhitespace(ch))
-                    {
-                        runSignificant = true;
-                    }
+                    run.include(pos, !isWhitespace(ch));
                     pos++;
-                    continue;
                 }
-                if (matchesAt(pos, "</"))
+                else if (matchesAt(pos, "</"))
                 {
-                    flushTextRun(runStart, runSignificant, pos);
-                    return scanEndTag(endTagName);
-                }
-                if (matchesAt(pos, "<?"))
-                {
-                    flushTextRun(runStart, runSignificant, pos);
-                    runStart = -1;
-                    runSignificant = false;
-                    skipProcessingInstruction();
-                }
-                else if (matchesAt(pos, "<!--"))
-                {
-                    flushTextRun(runStart, runSignificant, pos);
-                    runStart = -1;
-                    runSignificant = false;
-                    skipComment();
-                }
-                else if (matchesAt(pos, "<![CDATA["))
-                {
-                    if (runStart < 0)
-                    {
-                        runStart = pos;
-                    }
-                    runSignificant = true;
-                    skipCData();
-                }
-                else if (allowElements)
-                {
-                    flushTextRun(runStart, runSignificant, pos);
-                    runStart = -1;
-                    runSignificant = false;
-                    scanRowElement();
+                    run.end(pos);
+                    endTagOffset = scanEndTag(endTagName);
                 }
                 else
                 {
-                    throw blockingError(ProblemCode.NESTED_ELEMENT,
-                            "An element cannot be nested inside a row element.", pos);
+                    scanMarkup(run, allowElements);
                 }
+            }
+            return endTagOffset;
+        }
+
+        /**
+         * Scans the processing instruction, comment, CDATA section, or row element at the current
+         * position, which is at a {@code <} that does not start an end tag.
+         */
+        private void scanMarkup(final TextRun run, final boolean allowElements)
+        {
+            if (matchesAt(pos, "<?"))
+            {
+                run.end(pos);
+                skipProcessingInstruction();
+            }
+            else if (matchesAt(pos, "<!--"))
+            {
+                run.end(pos);
+                skipComment();
+            }
+            else if (matchesAt(pos, "<![CDATA["))
+            {
+                run.include(pos, true);
+                skipCData();
+            }
+            else if (allowElements)
+            {
+                run.end(pos);
+                scanRowElement();
+            }
+            else
+            {
+                throw blockingError(ProblemCode.NESTED_ELEMENT, Messages.Parser_nestedElement, pos);
             }
         }
 
@@ -433,24 +463,50 @@ final class FlatXmlParser
             skipWhitespace();
             if (pos >= length || text.charAt(pos) != '>')
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "Expected '>' to close </" + name + ">.",
-                        pos);
+                final String message = NLS.bind(Messages.Parser_unclosedEndTag, name);
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, message, pos);
             }
             pos++; // consume '>'
             if (!name.equals(expectedName))
             {
                 throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                        "Expected </" + expectedName + ">, but found </" + name + ">.", endTagStart);
+                        NLS.bind(Messages.Parser_mismatchedEndTag, expectedName, name), endTagStart);
             }
             return endTagStart;
         }
 
-        private void flushTextRun(final int start, final boolean significant, final int end)
+        /**
+         * The text between the markup in an element, which the scan reports once, as ignored, when it holds
+         * more than whitespace. Whitespace does not end a run of text (rule 5): only markup does, so that
+         * "stray text" reports as one problem rather than one per word.
+         */
+        private final class TextRun
         {
-            if (start >= 0 && significant)
+            private int start = -1;
+
+            private boolean significant;
+
+            private void include(final int offset, final boolean isSignificant)
             {
-                addInfoProblem(ProblemCode.TEXT_CONTENT_IGNORED, "Text content is ignored.", start,
-                        end - start);
+                if (start < 0)
+                {
+                    start = offset;
+                }
+                if (isSignificant)
+                {
+                    significant = true;
+                }
+            }
+
+            private void end(final int offset)
+            {
+                if (start >= 0 && significant)
+                {
+                    addInfoProblem(ProblemCode.TEXT_CONTENT_IGNORED, Messages.Parser_textIgnored, start,
+                            offset - start);
+                }
+                start = -1;
+                significant = false;
             }
         }
 
@@ -458,15 +514,7 @@ final class FlatXmlParser
         {
             final int doctypeOffset = pos;
             pos += "<!DOCTYPE".length();
-            final int beforeNameWhitespace = pos;
-            skipWhitespace();
-            if (pos == beforeNameWhitespace || pos >= length
-                    || !XmlNames.isNameStartChar(Character.codePointAt(text, pos)))
-            {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                        "Expected whitespace and the root name after <!DOCTYPE.", pos);
-            }
-            final String rootName = scanName();
+            final String rootName = scanDoctypeName();
             skipWhitespace();
             String publicId = null;
             String systemId = null;
@@ -497,24 +545,27 @@ final class FlatXmlParser
                 pos++; // consume ']'
                 skipWhitespace();
             }
-            if (pos >= length || text.charAt(pos) != '>')
-            {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                        "Expected '>' to close the DOCTYPE declaration.", pos);
-            }
-            pos++; // consume '>'
+            expectCharacter('>', Messages.Parser_unclosedDoctype);
             doctype = new FlatXmlDoctype(rootName, publicId, systemId, internalSubset, internalSubsetOffset,
                     doctypeOffset, pos);
         }
 
+        private String scanDoctypeName()
+        {
+            final int beforeNameWhitespace = pos;
+            skipWhitespace();
+            if (pos == beforeNameWhitespace || pos >= length
+                    || !XmlNames.isNameStartChar(Character.codePointAt(text, pos)))
+            {
+                throw blockingError(ProblemCode.NOT_WELL_FORMED,
+                        Messages.Parser_expectedDoctypeName, pos);
+            }
+            return scanName();
+        }
+
         private String scanQuotedLiteral()
         {
-            if (pos >= length || (text.charAt(pos) != '"' && text.charAt(pos) != '\''))
-            {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "Expected a quoted literal.", pos);
-            }
-            final char quote = text.charAt(pos);
-            pos++;
+            final char quote = scanOpeningQuote(Messages.Parser_expectedQuotedLiteral);
             final int start = pos;
             while (pos < length && text.charAt(pos) != quote)
             {
@@ -522,7 +573,7 @@ final class FlatXmlParser
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "The literal has no closing quote.",
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedLiteral,
                         start - 1);
             }
             final String value = text.subSequence(start, pos).toString();
@@ -538,39 +589,53 @@ final class FlatXmlParser
         {
             while (pos < length && text.charAt(pos) != ']')
             {
-                final char ch = text.charAt(pos);
-                if (ch == '"' || ch == '\'')
-                {
-                    pos++;
-                    while (pos < length && text.charAt(pos) != ch)
-                    {
-                        pos++;
-                    }
-                    if (pos >= length)
-                    {
-                        throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                                "A quoted literal in the internal subset has no closing quote.", pos);
-                    }
-                    pos++; // consume the closing quote
-                }
-                else if (matchesAt(pos, "<!--"))
-                {
-                    skipComment();
-                }
-                else if (matchesAt(pos, "<?"))
-                {
-                    skipProcessingInstruction();
-                }
-                else
-                {
-                    pos++;
-                }
+                skipSubsetItem();
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "The internal subset has no closing ']'.",
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedSubset,
                         pos);
             }
+        }
+
+        /**
+         * Skips the quoted literal, comment, processing instruction, or other character at the current
+         * position in an internal subset.
+         */
+        private void skipSubsetItem()
+        {
+            final char ch = text.charAt(pos);
+            if (ch == '"' || ch == '\'')
+            {
+                skipSubsetLiteral(ch);
+            }
+            else if (matchesAt(pos, "<!--"))
+            {
+                skipComment();
+            }
+            else if (matchesAt(pos, "<?"))
+            {
+                skipProcessingInstruction();
+            }
+            else
+            {
+                pos++;
+            }
+        }
+
+        private void skipSubsetLiteral(final char quote)
+        {
+            pos++;
+            while (pos < length && text.charAt(pos) != quote)
+            {
+                pos++;
+            }
+            if (pos >= length)
+            {
+                throw blockingError(ProblemCode.NOT_WELL_FORMED,
+                        Messages.Parser_unclosedSubsetLiteral, pos);
+            }
+            pos++; // consume the closing quote
         }
 
         private String scanName()
@@ -578,7 +643,7 @@ final class FlatXmlParser
             final int start = pos;
             if (pos >= length || !XmlNames.isNameStartChar(Character.codePointAt(text, pos)))
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "Expected a name.", pos);
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_expectedName, pos);
             }
             pos += Character.charCount(Character.codePointAt(text, pos));
             while (pos < length)
@@ -635,7 +700,7 @@ final class FlatXmlParser
             if (pos >= length)
             {
                 throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                        "The processing instruction has no closing '?>'.", start);
+                        Messages.Parser_unclosedProcessingInstruction, start);
             }
             pos += 2;
         }
@@ -650,7 +715,7 @@ final class FlatXmlParser
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "The comment has no closing '-->'.",
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedComment,
                         start);
             }
             pos += 3;
@@ -667,7 +732,7 @@ final class FlatXmlParser
             if (pos >= length)
             {
                 throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                        "The CDATA section has no closing ']]>'.", start);
+                        Messages.Parser_unclosedCdata, start);
             }
             pos += 3;
         }
@@ -725,7 +790,7 @@ final class FlatXmlParser
                     index++;
                 }
             }
-            return message + " (line " + line + ", column " + column + ")";
+            return NLS.bind(Messages.Parser_position, new Object[] { message, line, column });
         }
     }
 
