@@ -20,6 +20,7 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 
@@ -38,7 +39,7 @@ public final class EditCellInDialogAction extends GridAction
     public EditCellInDialogAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.EDIT_CELL_IN_DIALOG, context);
-        setText("Edit Cell in Dialog...");
+        setText(Messages.Action_editCellInDialog);
     }
 
     @Override

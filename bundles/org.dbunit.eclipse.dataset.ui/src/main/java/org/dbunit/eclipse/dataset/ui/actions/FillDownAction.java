@@ -26,6 +26,7 @@ import java.util.List;
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 
@@ -45,7 +46,7 @@ public final class FillDownAction extends GridAction
     public FillDownAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.FILL_DOWN, context);
-        setText("Fill Down");
+        setText(Messages.Action_fillDown);
         setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_FILL_DOWN));
     }
 
@@ -79,7 +80,7 @@ public final class FillDownAction extends GridAction
                 changes.add(new CellChange(selection.firstRowIndex(), columnName, sourceValue));
             }
         }
-        context.executeMultiCellEdit("Fill Down",
+        context.executeMultiCellEdit(Messages.Action_fillDown,
                 () -> context.getDatasetDocument().setCells(selection.tableKey(), changes));
     }
 

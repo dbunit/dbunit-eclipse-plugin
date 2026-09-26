@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.flatxml.XmlNames;
+import org.dbunit.eclipse.dataset.ui.Messages;
+import org.eclipse.osgi.util.NLS;
 
 /**
  * Validates a table's optional column names: each must be a valid XML name, and no two may match,
@@ -47,13 +49,13 @@ public final class ColumnNamesValidator
         {
             if (!XmlNames.isValidName(columnName))
             {
-                return "'" + columnName + "' is not a valid XML name.";
+                return NLS.bind(Messages.NameValidator_invalid, columnName);
             }
             for (final String seenColumnName : seenColumnNames)
             {
                 if (seenColumnName.equalsIgnoreCase(columnName))
                 {
-                    return "'" + columnName + "' is already used.";
+                    return NLS.bind(Messages.NameValidator_used, columnName);
                 }
             }
             seenColumnNames.add(columnName);

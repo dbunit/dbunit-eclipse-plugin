@@ -20,6 +20,7 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 
@@ -38,7 +39,7 @@ public final class ShowInSourceAction extends GridAction
     public ShowInSourceAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.SHOW_IN_SOURCE, context);
-        setText("Show in Source");
+        setText(Messages.Action_showInSource);
     }
 
     @Override

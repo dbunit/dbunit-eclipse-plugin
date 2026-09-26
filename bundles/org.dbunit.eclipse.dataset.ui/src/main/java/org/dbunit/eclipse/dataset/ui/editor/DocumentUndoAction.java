@@ -23,6 +23,7 @@ package org.dbunit.eclipse.dataset.ui.editor;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.eclipse.core.commands.ExecutionException;
 import org.eclipse.core.runtime.ILog;
 import org.eclipse.jface.action.Action;
@@ -58,7 +59,7 @@ final class DocumentUndoAction extends Action
     DocumentUndoAction(final Supplier<IDocument> document, final boolean redo,
             final BooleanSupplier hasActiveCellEditor)
     {
-        super(redo ? "Redo" : "Undo");
+        super(redo ? Messages.Action_redo : Messages.Action_undo);
         this.document = document;
         this.redo = redo;
         this.hasActiveCellEditor = hasActiveCellEditor;

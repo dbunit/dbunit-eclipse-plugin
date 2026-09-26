@@ -28,6 +28,7 @@ import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.eclipse.jface.layout.TableColumnLayout;
 import org.eclipse.jface.viewers.ArrayContentProvider;
 import org.eclipse.jface.viewers.ColumnLabelProvider;
@@ -37,6 +38,7 @@ import org.eclipse.jface.viewers.ColumnWeightData;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.viewers.TableViewer;
 import org.eclipse.jface.viewers.TableViewerColumn;
+import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.layout.GridData;
@@ -148,7 +150,7 @@ final class ProblemsSection
             hide();
             return;
         }
-        header.setText("Problems (" + problems.size() + ")");
+        header.setText(NLS.bind(Messages.ProblemsSection_header, problems.size()));
         viewer.setInput(problems.toArray());
         final Table table = viewer.getTable();
         final int visibleRows = Math.min(problems.size(), MAX_VISIBLE_ROWS);

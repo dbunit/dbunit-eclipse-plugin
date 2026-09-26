@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.dialogs.DatasetNameValidator;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
@@ -47,7 +48,7 @@ public class RenameTableAction extends GridAction
     public RenameTableAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.RENAME_TABLE, context);
-        setText("Rename Table...");
+        setText(Messages.Action_renameTable);
     }
 
     @Override
@@ -86,8 +87,8 @@ public class RenameTableAction extends GridAction
      */
     String openNameDialog(final Shell shell, final String currentName, final IInputValidator validator)
     {
-        final InputDialog dialog =
-                new InputDialog(shell, "Rename Table", "Table name:", currentName, validator);
+        final InputDialog dialog = new InputDialog(shell, Messages.TableDialog_renameTitle,
+                Messages.TableDialog_name, currentName, validator);
         return dialog.open() == Window.OK ? dialog.getValue() : null;
     }
 

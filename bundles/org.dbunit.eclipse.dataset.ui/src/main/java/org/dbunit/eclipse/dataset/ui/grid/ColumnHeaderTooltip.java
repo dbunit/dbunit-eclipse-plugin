@@ -25,6 +25,7 @@ import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.eclipse.jface.window.DefaultToolTip;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
@@ -92,11 +93,11 @@ final class ColumnHeaderTooltip extends DefaultToolTip
         }
         if (column.declared() && !column.hasValues())
         {
-            lines.add("Declared in the DTD; no values yet");
+            lines.add(Messages.ColumnHeaderTooltip_declaredWithoutValues);
         }
         if (column.pending())
         {
-            lines.add("This column has no values yet; it is saved when at least one row has a value.");
+            lines.add(Messages.ColumnHeaderTooltip_pending);
         }
         return lines.isEmpty() ? null : String.join("\n", lines);
     }

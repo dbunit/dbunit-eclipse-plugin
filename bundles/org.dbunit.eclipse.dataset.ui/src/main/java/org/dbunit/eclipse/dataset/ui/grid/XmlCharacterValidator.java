@@ -20,8 +20,10 @@
  */
 package org.dbunit.eclipse.dataset.ui.grid;
 
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.eclipse.nebula.widgets.nattable.data.validate.DataValidator;
 import org.eclipse.nebula.widgets.nattable.data.validate.ValidationFailedException;
+import org.eclipse.osgi.util.NLS;
 
 /**
  * Rejects an edited value that contains a code point that is not an XML 1.0 {@code Char}.
@@ -43,8 +45,9 @@ final class XmlCharacterValidator extends DataValidator
             final int codePoint = text.codePointAt(offset);
             if (!isXmlChar(codePoint))
             {
+                final String character = String.format("U+%04X", codePoint);
                 throw new ValidationFailedException(
-                        String.format("Character U+%04X is not allowed in XML.", codePoint));
+                        NLS.bind(Messages.XmlCharacterValidator_invalidCharacter, character));
             }
             offset += Character.charCount(codePoint);
         }

@@ -21,6 +21,7 @@
 package org.dbunit.eclipse.dataset.ui.actions;
 
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 
@@ -39,7 +40,7 @@ public final class DeleteRowsAction extends GridAction
     public DeleteRowsAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.DELETE_ROWS, context);
-        setText("Delete Rows");
+        setText(Messages.Action_deleteRows);
         setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_DELETE_ROWS));
     }
 
@@ -50,7 +51,7 @@ public final class DeleteRowsAction extends GridAction
         final int[] rowIndexes = selection.rowIndexes().stream().mapToInt(Integer::intValue).toArray();
         final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);
         final int rowIndex = selection.firstRowIndex();
-        final boolean applied = context.executeMultiCellEdit("Delete Rows",
+        final boolean applied = context.executeMultiCellEdit(Messages.Action_deleteRows,
                 () -> context.getDatasetDocument().deleteRows(selection.tableKey(), rowIndexes));
         if (applied)
         {

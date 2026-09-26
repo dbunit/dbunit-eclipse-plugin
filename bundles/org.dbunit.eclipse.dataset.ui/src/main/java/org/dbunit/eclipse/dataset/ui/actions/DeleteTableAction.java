@@ -21,9 +21,11 @@
 package org.dbunit.eclipse.dataset.ui.actions;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.jface.dialogs.MessageDialog;
+import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.widgets.Shell;
 
 /**
@@ -42,7 +44,7 @@ public class DeleteTableAction extends GridAction
     public DeleteTableAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.DELETE_TABLE, context);
-        setText("Delete Table");
+        setText(Messages.Action_deleteTable);
     }
 
     @Override
@@ -68,9 +70,10 @@ public class DeleteTableAction extends GridAction
     boolean confirmDelete(final Shell shell, final DatasetTable table)
     {
         final int rowCount = table.getRows().size();
-        final String message = "Delete table '" + table.getName() + "'? This removes " + rowCount
-                + (rowCount == 1 ? " row." : " rows.");
-        return MessageDialog.openConfirm(shell, "Delete Table", message);
+        final String message = rowCount == 1
+                ? NLS.bind(Messages.DeleteTableDialog_messageOneRow, table.getName())
+                : NLS.bind(Messages.DeleteTableDialog_message, table.getName(), rowCount);
+        return MessageDialog.openConfirm(shell, Messages.Action_deleteTable, message);
     }
 
     @Override

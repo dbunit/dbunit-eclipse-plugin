@@ -23,6 +23,7 @@ package org.dbunit.eclipse.dataset.ui.editor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
@@ -68,6 +69,26 @@ class TablesPageTest
                     .isEqualTo("USERS");
             assertThat(tabFolder.getItem(1).getText()).as("Tabs must be in model order.")
                     .isEqualTo("ORDERS");
+        }
+    }
+
+    @Test
+    void testTablesPage_whenOpened_countsEachTablesRowsAndColumnsInItsTabTooltip() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><ONE A=\"1\"/><TWO A=\"1\" B=\"2\"/><TWO A=\"3\" B=\"4\"/><NONE/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final List<String> tooltips = new ArrayList<>();
+            for (final CTabItem item : editor.getTablesPage().getTabFolder().getItems())
+            {
+                tooltips.add(item.getToolTipText());
+            }
+
+            assertThat(tooltips)
+                    .as("A tab's tooltip must count its table's rows and columns, one in the singular.")
+                    .containsExactly("1 row, 1 column", "2 rows, 2 columns", "0 rows, 0 columns");
         }
     }
 

@@ -20,6 +20,7 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.swt.widgets.Text;
@@ -40,7 +41,7 @@ public final class SelectAllAction extends GridAction
     public SelectAllAction(final DatasetGridContext context)
     {
         super(context);
-        setText("Select All");
+        setText(Messages.Action_selectAll);
     }
 
     @Override

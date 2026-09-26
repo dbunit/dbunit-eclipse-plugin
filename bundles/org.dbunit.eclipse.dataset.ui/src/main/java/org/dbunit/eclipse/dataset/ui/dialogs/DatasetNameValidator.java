@@ -23,7 +23,9 @@ package org.dbunit.eclipse.dataset.ui.dialogs;
 import java.util.Collection;
 
 import org.dbunit.eclipse.dataset.core.flatxml.XmlNames;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.eclipse.jface.dialogs.IInputValidator;
+import org.eclipse.osgi.util.NLS;
 
 /**
  * Validates a column or table name: it must be a valid XML name, and not already used.
@@ -50,17 +52,17 @@ public final class DatasetNameValidator implements IInputValidator
     {
         if (newText == null || newText.isEmpty())
         {
-            return "Enter a name.";
+            return Messages.NameValidator_empty;
         }
         if (!XmlNames.isValidName(newText))
         {
-            return "'" + newText + "' is not a valid XML name.";
+            return NLS.bind(Messages.NameValidator_invalid, newText);
         }
         for (final String existingName : existingNames)
         {
             if (existingName.equalsIgnoreCase(newText))
             {
-                return "'" + newText + "' is already used.";
+                return NLS.bind(Messages.NameValidator_used, newText);
             }
         }
         return null;

@@ -25,6 +25,7 @@ import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.dialogs.DatasetNameValidator;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
@@ -48,7 +49,7 @@ public class RenameColumnAction extends GridAction
     public RenameColumnAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.RENAME_COLUMN, context);
-        setText("Rename Column...");
+        setText(Messages.Action_renameColumn);
     }
 
     @Override
@@ -86,8 +87,8 @@ public class RenameColumnAction extends GridAction
      */
     String openNameDialog(final Shell shell, final String currentName, final IInputValidator validator)
     {
-        final InputDialog dialog =
-                new InputDialog(shell, "Rename Column", "Column name:", currentName, validator);
+        final InputDialog dialog = new InputDialog(shell, Messages.ColumnDialog_renameTitle,
+                Messages.ColumnDialog_name, currentName, validator);
         return dialog.open() == Window.OK ? dialog.getValue() : null;
     }
 

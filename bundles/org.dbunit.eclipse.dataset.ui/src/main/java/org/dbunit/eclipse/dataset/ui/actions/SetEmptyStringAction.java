@@ -25,6 +25,7 @@ import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.swt.graphics.Point;
@@ -44,7 +45,7 @@ public final class SetEmptyStringAction extends GridAction
     public SetEmptyStringAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.SET_EMPTY_STRING, context);
-        setText("Set to Empty String");
+        setText(Messages.Action_setEmptyString);
     }
 
     @Override

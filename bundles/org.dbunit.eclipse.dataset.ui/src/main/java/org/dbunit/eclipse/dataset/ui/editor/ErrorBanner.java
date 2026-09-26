@@ -21,6 +21,7 @@
 package org.dbunit.eclipse.dataset.ui.editor;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.Image;
@@ -65,7 +66,7 @@ final class ErrorBanner
         message = new Label(control, SWT.NONE);
         message.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
         showInSourceLink = new Link(control, SWT.NONE);
-        showInSourceLink.setText("<a>Show in Source</a>");
+        showInSourceLink.setText(Messages.ErrorBanner_showInSource);
         showInSourceLink.addSelectionListener(SelectionListener.widgetSelectedAdapter(event ->
         {
             if (shownProblem != null)
@@ -95,7 +96,7 @@ final class ErrorBanner
     {
         shownProblem = null;
         image.setImage(sharedImage(ISharedImages.IMG_OBJS_WARN_TSK));
-        message.setText("This dataset is read-only.");
+        message.setText(Messages.ErrorBanner_readOnly);
         showInSourceLink.setVisible(false);
         reveal();
     }

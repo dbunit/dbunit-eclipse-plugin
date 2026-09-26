@@ -26,8 +26,10 @@ import java.util.List;
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.tsv.TabSeparatedValues;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
+import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Text;
 
@@ -53,7 +55,7 @@ public final class PasteAction extends GridAction
     {
         super(context);
         this.context = context;
-        setText("Paste");
+        setText(Messages.Action_paste);
     }
 
     @Override
@@ -89,7 +91,7 @@ public final class PasteAction extends GridAction
         {
             changes.add(new CellChange(cell.y, table.getColumns().get(cell.x).name(), value));
         }
-        context.executeMultiCellEdit("Paste",
+        context.executeMultiCellEdit(Messages.Action_paste,
                 () -> context.getDatasetDocument().setCells(selection.tableKey(), changes));
     }
 
@@ -118,8 +120,9 @@ public final class PasteAction extends GridAction
                 appendedRows.add(buildAppendedRow(anchorColumnIndex, columnCount, sourceRow));
             }
         }
-        final boolean edited = context.executeMultiCellEdit("Paste", () -> context.getDatasetDocument()
-                .setCellsAndAppendRows(selection.tableKey(), changes, appendedRows));
+        final boolean edited = context.executeMultiCellEdit(Messages.Action_paste,
+                () -> context.getDatasetDocument().setCellsAndAppendRows(selection.tableKey(), changes,
+                        appendedRows));
         if (!edited)
         {
             return;
@@ -127,10 +130,9 @@ public final class PasteAction extends GridAction
         context.selectRegion(anchorColumnIndex, anchorRowIndex, pastedColumnCount, parsedRows.size());
         if (ignoredColumnCount > 0)
         {
-            final String columnWord = ignoredColumnCount == 1 ? "column" : "columns";
-            context.setStatusMessage(
-                    "Ignored " + ignoredColumnCount + " pasted " + columnWord + " beyond the table's last "
-                            + "column.");
+            final String message =
+                    ignoredColumnCount == 1 ? Messages.Paste_ignoredColumn : Messages.Paste_ignoredColumns;
+            context.setStatusMessage(NLS.bind(message, ignoredColumnCount));
         }
     }
 

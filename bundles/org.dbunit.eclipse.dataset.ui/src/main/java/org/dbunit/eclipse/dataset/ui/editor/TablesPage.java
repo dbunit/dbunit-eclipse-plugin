@@ -37,6 +37,7 @@ import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.actions.AddColumnAction;
 import org.dbunit.eclipse.dataset.ui.actions.AddTableAction;
 import org.dbunit.eclipse.dataset.ui.actions.CopyAction;
@@ -82,6 +83,7 @@ import org.eclipse.jface.text.Region;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.edit.editor.ICellEditor;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
+import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
@@ -273,10 +275,10 @@ final class TablesPage implements DatasetGridContext
         blankComposite = new Composite(contentStack, SWT.NONE);
         blankComposite.setLayout(new GridLayout(1, false));
         final Label blankLabel = new Label(blankComposite, SWT.CENTER);
-        blankLabel.setText("The file is empty.");
+        blankLabel.setText(Messages.TablesPage_emptyFile);
         blankLabel.setLayoutData(new GridData(SWT.CENTER, SWT.BOTTOM, true, true));
         createEmptyDatasetButton = new Button(blankComposite, SWT.PUSH);
-        createEmptyDatasetButton.setText("Create Empty Dataset");
+        createEmptyDatasetButton.setText(Messages.TablesPage_createEmptyDataset);
         createEmptyDatasetButton.setLayoutData(new GridData(SWT.CENTER, SWT.TOP, true, true));
         createEmptyDatasetButton.addSelectionListener(
                 SelectionListener.widgetSelectedAdapter(event -> createEmptyDataset()));
@@ -284,10 +286,10 @@ final class TablesPage implements DatasetGridContext
         noTablesComposite = new Composite(contentStack, SWT.NONE);
         noTablesComposite.setLayout(new GridLayout(1, false));
         final Label noTablesLabel = new Label(noTablesComposite, SWT.CENTER);
-        noTablesLabel.setText("The dataset has no tables.");
+        noTablesLabel.setText(Messages.TablesPage_noTables);
         noTablesLabel.setLayoutData(new GridData(SWT.CENTER, SWT.BOTTOM, true, true));
         addTableButton = new Button(noTablesComposite, SWT.PUSH);
-        addTableButton.setText("Add Table...");
+        addTableButton.setText(Messages.Action_addTable);
         addTableButton.setLayoutData(new GridData(SWT.CENTER, SWT.TOP, true, true));
         addTableButton.addSelectionListener(
                 SelectionListener.widgetSelectedAdapter(event -> runAddTableAction()));
@@ -1011,10 +1013,22 @@ final class TablesPage implements DatasetGridContext
     private void updateTab(final CTabItem item, final DatasetTable table, final DatasetModel model)
     {
         item.setText(table.getName());
-        item.setToolTipText(table.isDeclaredOnly() ? "Declared in the DTD; no rows"
-                : table.getRows().size() + " rows, " + table.getColumns().size() + " columns");
+        final String tooltip = table.isDeclaredOnly() ? Messages.TablesPage_declaredOnlyTableTooltip
+                : countsTooltip(table);
+        item.setToolTipText(tooltip);
         item.setFont(table.getRows().isEmpty() ? italicFont() : null);
         item.setImage(problemImage(model.getProblems(table.getKey())));
+    }
+
+    private static String countsTooltip(final DatasetTable table)
+    {
+        final int rowCount = table.getRows().size();
+        final int columnCount = table.getColumns().size();
+        final String rows = rowCount == 1 ? Messages.TablesPage_tableTooltipOneRow
+                : NLS.bind(Messages.TablesPage_tableTooltipRows, rowCount);
+        final String columns = columnCount == 1 ? Messages.TablesPage_tableTooltipOneColumn
+                : NLS.bind(Messages.TablesPage_tableTooltipColumns, columnCount);
+        return NLS.bind(Messages.TablesPage_tableTooltip, rows, columns);
     }
 
     private Font italicFont()

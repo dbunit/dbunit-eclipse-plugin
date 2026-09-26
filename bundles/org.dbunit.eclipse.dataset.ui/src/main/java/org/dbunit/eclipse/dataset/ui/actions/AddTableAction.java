@@ -25,6 +25,7 @@ import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.dialogs.AddTableDialog;
 import org.dbunit.eclipse.dataset.ui.dialogs.DatasetNameValidator;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
@@ -47,7 +48,7 @@ public class AddTableAction extends GridAction
     public AddTableAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.ADD_TABLE, context);
-        setText("Add Table...");
+        setText(Messages.Action_addTable);
         setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_ADD_TABLE));
     }
 
