@@ -29,6 +29,7 @@ import java.util.TreeMap;
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.swt.graphics.Point;
@@ -52,7 +53,7 @@ public final class FillDownAction extends GridAction
     {
         super(DatasetCommandIds.FILL_DOWN, context);
         this.context = context;
-        setText("Fill Down");
+        setText(Messages.Action_fillDown);
         setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_FILL_DOWN));
     }
 
@@ -82,7 +83,7 @@ public final class FillDownAction extends GridAction
                 }
             }
         }
-        context.executeMultiCellEdit("Fill Down",
+        context.executeMultiCellEdit(Messages.Action_fillDown,
                 () -> context.getDatasetDocument().setCells(selection.tableKey(), changes));
     }
 

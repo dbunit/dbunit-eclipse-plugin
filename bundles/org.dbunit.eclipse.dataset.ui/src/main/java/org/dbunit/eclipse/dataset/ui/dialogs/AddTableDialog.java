@@ -23,6 +23,7 @@ package org.dbunit.eclipse.dataset.ui.dialogs;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.eclipse.jface.dialogs.Dialog;
 import org.eclipse.jface.dialogs.IInputValidator;
 import org.eclipse.jface.dialogs.MessageDialog;
@@ -68,7 +69,7 @@ public class AddTableDialog extends Dialog
     protected void configureShell(final Shell newShell)
     {
         super.configureShell(newShell);
-        newShell.setText("Add Table");
+        newShell.setText(Messages.TableDialog_addTitle);
     }
 
     @Override
@@ -78,12 +79,12 @@ public class AddTableDialog extends Dialog
         composite.setLayout(new GridLayout(2, false));
 
         final Label nameLabel = new Label(composite, SWT.NONE);
-        nameLabel.setText("Table name:");
+        nameLabel.setText(Messages.TableDialog_name);
         nameText = new Text(composite, SWT.BORDER);
         nameText.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
 
         final Label columnsLabel = new Label(composite, SWT.NONE);
-        columnsLabel.setText("Column names (comma-separated, optional):");
+        columnsLabel.setText(Messages.TableDialog_columnNames);
         columnsLabel.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, false, false, 2, 1));
         columnsText = new Text(composite, SWT.BORDER);
         columnsText.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false, 2, 1));
@@ -98,14 +99,14 @@ public class AddTableDialog extends Dialog
         final String validationMessage = nameValidator.isValid(enteredName);
         if (validationMessage != null)
         {
-            MessageDialog.openError(getShell(), "Add Table", validationMessage);
+            MessageDialog.openError(getShell(), Messages.TableDialog_addTitle, validationMessage);
             return;
         }
         final List<String> enteredColumnNames = parseColumnNames(columnsText.getText());
         final String columnValidationMessage = new ColumnNamesValidator().isValid(enteredColumnNames);
         if (columnValidationMessage != null)
         {
-            MessageDialog.openError(getShell(), "Add Table", columnValidationMessage);
+            MessageDialog.openError(getShell(), Messages.TableDialog_addTitle, columnValidationMessage);
             return;
         }
         tableName = enteredName;

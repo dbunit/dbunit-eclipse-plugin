@@ -24,9 +24,11 @@ import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetRow;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.jface.dialogs.MessageDialog;
+import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.widgets.Shell;
 
 /**
@@ -44,7 +46,7 @@ public class DeleteColumnAction extends GridAction
     public DeleteColumnAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.DELETE_COLUMN, context);
-        setText("Delete Column");
+        setText(Messages.Action_deleteColumn);
         setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_DELETE_COLUMN));
     }
 
@@ -74,14 +76,12 @@ public class DeleteColumnAction extends GridAction
      */
     boolean confirmDelete(final Shell shell, final DatasetColumn column, final int valueCount)
     {
-        final StringBuilder message = new StringBuilder();
-        message.append("Delete column '").append(column.name()).append("'? This removes ")
-                .append(valueCount).append(valueCount == 1 ? " value." : " values.");
-        if (column.declared())
-        {
-            message.append(" dbUnit reads columns from the DTD, so the DTD must be updated too.");
-        }
-        return MessageDialog.openConfirm(shell, "Delete Column", message.toString());
+        final String deleteMessage = valueCount == 1
+                ? NLS.bind(Messages.DeleteColumnDialog_messageOneValue, column.name())
+                : NLS.bind(Messages.DeleteColumnDialog_message, column.name(), valueCount);
+        final String message = column.declared() ? deleteMessage + ' ' + Messages.DeleteColumnDialog_dtdNote
+                : deleteMessage;
+        return MessageDialog.openConfirm(shell, Messages.Action_deleteColumn, message);
     }
 
     @Override

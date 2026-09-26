@@ -26,6 +26,7 @@ import java.util.List;
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.swt.graphics.Point;
@@ -45,7 +46,7 @@ public final class SetNullAction extends GridAction
     public SetNullAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.SET_NULL, context);
-        setText("Set to NULL");
+        setText(Messages.Action_setNull);
         setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_SET_NULL));
     }
 
