@@ -26,6 +26,7 @@ import java.util.List;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.dialogs.DatasetNameValidator;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
@@ -41,9 +42,6 @@ import org.eclipse.swt.widgets.Shell;
  */
 public class AddColumnAction extends GridAction
 {
-    private static final String DTD_WARNING = "\n\ndbUnit reads a flat XML dataset's columns from its "
-            + "DTD; add this column there too, or it will have no effect.";
-
     /**
      * Creates the action.
      *
@@ -52,7 +50,7 @@ public class AddColumnAction extends GridAction
     public AddColumnAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.ADD_COLUMN, context);
-        setText("Add Column...");
+        setText(Messages.Action_addColumn);
         setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_ADD_COLUMN));
     }
 
@@ -86,8 +84,8 @@ public class AddColumnAction extends GridAction
      */
     String openNameDialog(final Shell shell, final IInputValidator validator, final DatasetTable table)
     {
-        final InputDialog dialog =
-                new InputDialog(shell, "Add Column", nameDialogMessage(table), "", validator);
+        final InputDialog dialog = new InputDialog(shell, Messages.ColumnDialog_addTitle,
+                nameDialogMessage(table), "", validator);
         return dialog.open() == Window.OK ? dialog.getValue() : null;
     }
 
@@ -101,7 +99,7 @@ public class AddColumnAction extends GridAction
     static String nameDialogMessage(final DatasetTable table)
     {
         final boolean hasDtdColumns = table.getColumns().stream().anyMatch(DatasetColumn::declared);
-        return hasDtdColumns ? "Column name:" + DTD_WARNING : "Column name:";
+        return hasDtdColumns ? Messages.ColumnDialog_nameWithDtdWarning : Messages.ColumnDialog_name;
     }
 
     @Override

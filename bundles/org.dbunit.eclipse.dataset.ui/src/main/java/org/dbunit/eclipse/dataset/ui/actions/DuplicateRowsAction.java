@@ -21,6 +21,7 @@
 package org.dbunit.eclipse.dataset.ui.actions;
 
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 
@@ -39,7 +40,7 @@ public final class DuplicateRowsAction extends GridAction
     public DuplicateRowsAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.DUPLICATE_ROWS, context);
-        setText("Duplicate Rows");
+        setText(Messages.Action_duplicateRows);
         setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_DUPLICATE_ROWS));
     }
 

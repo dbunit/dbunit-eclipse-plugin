@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 
@@ -43,7 +44,7 @@ public final class InsertRowBelowAction extends GridAction
     public InsertRowBelowAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.INSERT_ROW_BELOW, context);
-        setText("Insert Row Below");
+        setText(Messages.Action_insertRowBelow);
         setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_INSERT_ROW_BELOW));
     }
 

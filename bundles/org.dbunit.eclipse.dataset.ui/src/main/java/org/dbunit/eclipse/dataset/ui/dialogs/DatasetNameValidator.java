@@ -25,7 +25,9 @@ import java.util.List;
 import java.util.Locale;
 
 import org.dbunit.eclipse.dataset.core.flatxml.XmlNames;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.eclipse.jface.dialogs.IInputValidator;
+import org.eclipse.osgi.util.NLS;
 
 /**
  * Validates a column name: it must be a valid XML name, and not already used.
@@ -53,18 +55,18 @@ public final class DatasetNameValidator implements IInputValidator
     {
         if (newText == null || newText.isEmpty())
         {
-            return "Enter a name.";
+            return Messages.NameValidator_empty;
         }
         if (!XmlNames.isValidName(newText))
         {
-            return "'" + newText + "' is not a valid XML name.";
+            return NLS.bind(Messages.NameValidator_invalid, newText);
         }
         final String newKey = newText.toUpperCase(Locale.ENGLISH);
         for (final String existingName : existingNames)
         {
             if (existingName.toUpperCase(Locale.ENGLISH).equals(newKey))
             {
-                return "'" + newText + "' is already used.";
+                return NLS.bind(Messages.NameValidator_used, newText);
             }
         }
         return null;

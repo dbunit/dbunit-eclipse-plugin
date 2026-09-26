@@ -20,6 +20,7 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 
@@ -38,7 +39,7 @@ public final class MoveRowsDownAction extends GridAction
     public MoveRowsDownAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.MOVE_ROWS_DOWN, context);
-        setText("Move Rows Down");
+        setText(Messages.Action_moveRowsDown);
     }
 
     @Override

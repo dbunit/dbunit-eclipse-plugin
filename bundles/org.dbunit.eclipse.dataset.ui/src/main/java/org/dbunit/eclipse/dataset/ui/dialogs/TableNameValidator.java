@@ -25,7 +25,9 @@ import java.util.List;
 import java.util.function.Function;
 
 import org.dbunit.eclipse.dataset.core.flatxml.XmlNames;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.eclipse.jface.dialogs.IInputValidator;
+import org.eclipse.osgi.util.NLS;
 
 /**
  * Validates a table name: it must be a valid XML name, not already used, and not the name reserved for
@@ -60,22 +62,22 @@ public final class TableNameValidator implements IInputValidator
     {
         if (newText == null || newText.isEmpty())
         {
-            return "Enter a name.";
+            return Messages.NameValidator_empty;
         }
         if (!XmlNames.isValidName(newText))
         {
-            return "'" + newText + "' is not a valid XML name.";
+            return NLS.bind(Messages.NameValidator_invalid, newText);
         }
         final String newKey = tableKeyOf.apply(newText);
         if (newKey.equals(tableKeyOf.apply(RESERVED_ROOT_NAME)))
         {
-            return "'" + newText + "' is reserved for the root element.";
+            return NLS.bind(Messages.TableNameValidator_reserved, newText);
         }
         for (final String existingName : existingNames)
         {
             if (tableKeyOf.apply(existingName).equals(newKey))
             {
-                return "'" + newText + "' is already used.";
+                return NLS.bind(Messages.NameValidator_used, newText);
             }
         }
         return null;

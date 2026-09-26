@@ -27,6 +27,7 @@ import java.util.Set;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.tsv.TabSeparatedValues;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.swt.graphics.Point;
@@ -48,7 +49,7 @@ public final class CopyAction extends GridAction
     public CopyAction(final DatasetGridContext context)
     {
         super(context);
-        setText("Copy");
+        setText(Messages.Action_copy);
     }
 
     @Override
