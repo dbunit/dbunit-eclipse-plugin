@@ -32,14 +32,18 @@ import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Text;
 
 /**
- * Pastes tab-separated text from the clipboard at the selection's top-left cell: a single value fills
- * every selected cell; otherwise the block is pasted at the anchor, with columns beyond the last column
- * ignored and rows beyond the last row appended, all as one undo step.
+ * Pastes tab-separated text from the clipboard at the selection's top-left cell, or at column 0, row 0 of
+ * a table with no rows yet: a single value fills every selected cell; otherwise the block is pasted at the
+ * anchor, with columns beyond the last column ignored and rows beyond the last row appended, all as one
+ * undo step. An unquoted empty pasted field becomes NULL; a quoted empty field ({@code ""}) becomes the
+ * empty string.
  *
  * @since 1.0.0
  */
 public final class PasteAction extends GridAction
 {
+    private final DatasetGridContext context;
+
     /**
      * Creates the action.
      *
@@ -48,6 +52,7 @@ public final class PasteAction extends GridAction
     public PasteAction(final DatasetGridContext context)
     {
         super(context);
+        this.context = context;
         setText("Paste");
     }
 
@@ -91,12 +96,8 @@ public final class PasteAction extends GridAction
     private void pasteBlock(final DatasetGridContext context, final GridSelection selection,
             final DatasetTable table, final List<List<String>> parsedRows)
     {
-        final int anchorRowIndex = selection.firstRowIndex();
-        final int anchorColumnIndex = selection.firstColumnIndex();
-        if (anchorRowIndex < 0 || anchorColumnIndex < 0)
-        {
-            return;
-        }
+        final int anchorRowIndex = Math.max(0, selection.firstRowIndex());
+        final int anchorColumnIndex = Math.max(0, selection.firstColumnIndex());
         final int columnCount = table.getColumns().size();
         final int rowCount = table.getRows().size();
         final int pastedColumnCount = parsedRows.get(0).size();
@@ -118,18 +119,7 @@ public final class PasteAction extends GridAction
             }
         }
         final boolean edited = context.executeMultiCellEdit("Paste", () -> context.getDatasetDocument()
-                .batch(() ->
-                {
-                    if (!changes.isEmpty())
-                    {
-                        context.getDatasetDocument().setCells(selection.tableKey(), changes);
-                    }
-                    if (!appendedRows.isEmpty())
-                    {
-                        context.getDatasetDocument().insertRows(selection.tableKey(), rowCount,
-                                appendedRows);
-                    }
-                }));
+                .setCellsAndAppendRows(selection.tableKey(), changes, appendedRows));
         if (!edited)
         {
             return;
@@ -194,6 +184,16 @@ public final class PasteAction extends GridAction
     @Override
     protected boolean isEnabledFor(final GridSelection selection)
     {
+        if (selection.rowCount() == 0)
+        {
+            return selection.columnCount() > 0 && hasClipboardText();
+        }
         return !selection.rowIndexes().isEmpty() && !selection.columnIndexes().isEmpty();
+    }
+
+    private boolean hasClipboardText()
+    {
+        final String text = context.readClipboardText();
+        return text != null && !text.isEmpty();
     }
 }

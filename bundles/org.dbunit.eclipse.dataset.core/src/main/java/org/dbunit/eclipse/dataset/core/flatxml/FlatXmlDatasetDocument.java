@@ -203,6 +203,69 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         }
         final DatasetTable table = getModel().findTable(tableKey)
                 .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        final List<TextEdit> edits = cellEdits(tableKey, table, changes);
+        if (edits.isEmpty())
+        {
+            return;
+        }
+        apply(edits);
+        refreshInternal(ChangeOrigin.EDIT);
+    }
+
+    @Override
+    public void insertRows(final String tableKey, final int rowIndex, final List<List<String>> rows)
+    {
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        final DatasetTable table = getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        final List<TextEdit> edits = rowInsertEdits(tableKey, table, rowIndex, rows);
+        if (edits.isEmpty())
+        {
+            return;
+        }
+        apply(edits);
+        refreshInternal(ChangeOrigin.EDIT);
+    }
+
+    @Override
+    public void setCellsAndAppendRows(final String tableKey, final List<CellChange> changes,
+            final List<List<String>> rows)
+    {
+        refresh();
+        if (!getModel().isEditable())
+        {
+            throw new DatasetEditException("Cannot edit because the source has errors that block "
+                    + "editing.");
+        }
+        final DatasetTable table = getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+        // Both sets of edits come from the same index: the cell edits rewrite start tags of existing
+        // rows, and the appended rows go after the last row element, so they never overlap.
+        final List<TextEdit> edits = new ArrayList<>(cellEdits(tableKey, table, changes));
+        if (!rows.isEmpty())
+        {
+            edits.addAll(rowInsertEdits(tableKey, table, table.getRows().size(), rows));
+        }
+        if (edits.isEmpty())
+        {
+            return;
+        }
+        apply(edits);
+        refreshInternal(ChangeOrigin.EDIT);
+    }
+
+    /**
+     * Validates cell changes and returns the start-tag rewrites that make them, one per changed row
+     * element, computed against the current index.
+     */
+    private List<TextEdit> cellEdits(final String tableKey, final DatasetTable table,
+            final List<CellChange> changes)
+    {
         for (final CellChange change : changes)
         {
             if (change.rowIndex() < 0 || change.rowIndex() >= table.getRows().size())
@@ -249,25 +312,17 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
                         element.attributesEndOffset() - element.nameEndOffset(), rewritten));
             }
         }
-        if (edits.isEmpty())
-        {
-            return;
-        }
-        apply(edits);
-        refreshInternal(ChangeOrigin.EDIT);
+        return edits;
     }
 
-    @Override
-    public void insertRows(final String tableKey, final int rowIndex, final List<List<String>> rows)
+    /**
+     * Validates new rows and returns the edit that inserts them before the row at rowIndex, or after the
+     * last row when rowIndex is the row count, computed against the current index; no edit when there are
+     * no rows.
+     */
+    private List<TextEdit> rowInsertEdits(final String tableKey, final DatasetTable table,
+            final int rowIndex, final List<List<String>> rows)
     {
-        refresh();
-        if (!getModel().isEditable())
-        {
-            throw new DatasetEditException("Cannot edit because the source has errors that block "
-                    + "editing.");
-        }
-        final DatasetTable table = getModel().findTable(tableKey)
-                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
         if (table.getColumns().isEmpty())
         {
             throw new DatasetEditException(
@@ -289,7 +344,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         }
         if (rows.isEmpty())
         {
-            return;
+            return List.of();
         }
 
         final CharsetEncoder encoder = currentEncoder();
@@ -336,9 +391,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             final String joined = String.join(delimiter + indent, rowTexts);
             edit = insertAsLastChildOfRoot(joined);
         }
-
-        apply(List.of(edit));
-        refreshInternal(ChangeOrigin.EDIT);
+        return List.of(edit);
     }
 
     @Override

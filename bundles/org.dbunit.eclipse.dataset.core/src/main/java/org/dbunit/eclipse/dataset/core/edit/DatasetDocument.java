@@ -96,6 +96,17 @@ public interface DatasetDocument
     void insertRows(String tableKey, int rowIndex, List<List<String>> rows);
 
     /**
+     * Changes cells of existing rows and appends rows after a table's last row, as pasting a block that
+     * reaches past the last row does. Unlike a batch of {@link #setCells} and {@link #insertRows}, it
+     * rebuilds the model only once.
+     *
+     * @param tableKey The key of the table.
+     * @param changes The changes to existing rows' cells; may be empty.
+     * @param rows The values of the rows to append, aligned with the table's columns; may be empty.
+     */
+    void setCellsAndAppendRows(String tableKey, List<CellChange> changes, List<List<String>> rows);
+
+    /**
      * Inserts copies of rows directly after the last of them, in their order.
      *
      * @param tableKey The key of the table.

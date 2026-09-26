@@ -28,6 +28,7 @@ import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
+import org.dbunit.eclipse.dataset.core.edit.ChangeOrigin;
 import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
@@ -877,9 +878,14 @@ class GridActionsTest
             context.columnIndexes = List.of(0, 1);
             context.clipboardText = "10\tX\n20\tY\n30\tZ\n";
             final PasteAction action = new PasteAction(context);
+            final List<ChangeOrigin> modelRebuilds = new ArrayList<>();
+            datasetDocument.addModelListener(event -> modelRebuilds.add(event.origin()));
 
             action.run();
 
+            assertThat(modelRebuilds)
+                    .as("A paste that changes a row and appends rows must rebuild the model once.")
+                    .containsExactly(ChangeOrigin.EDIT);
             final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
             assertThat(table.getRows()).as("A 3-row paste at the last row must append two rows.")
                     .hasSize(3);
@@ -948,6 +954,84 @@ class GridActionsTest
         assertThat(context.statusMessage)
                 .as("A pasted column beyond the table's last column must be ignored with a status message.")
                 .isEqualTo("Ignored 1 pasted column beyond the table's last column.");
+    }
+
+    @Test
+    void testPaste_forAnEmptyTable_isEnabledOnlyWithColumnsAndClipboardText()
+    {
+        final FlatXmlDatasetDocument withColumns = create(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset>\n</dataset>\n");
+        final TestContext withColumnsContext = new TestContext(withColumns, "USERS");
+        final PasteAction withColumnsAction = new PasteAction(withColumnsContext);
+
+        withColumnsAction.update(withColumnsContext.getSelection());
+        assertThat(withColumnsAction.isEnabled())
+                .as("An empty table with columns must stay disabled for Paste until clipboard text is "
+                        + "available.")
+                .isFalse();
+
+        withColumnsContext.clipboardText = "1\n";
+        withColumnsAction.update(withColumnsContext.getSelection());
+        assertThat(withColumnsAction.isEnabled())
+                .as("An empty table with columns must enable Paste once clipboard text is available.")
+                .isTrue();
+
+        final FlatXmlDatasetDocument withoutColumns = create("<dataset><NONE/></dataset>");
+        final TestContext withoutColumnsContext = new TestContext(withoutColumns, "NONE");
+        withoutColumnsContext.clipboardText = "1\n";
+        final PasteAction withoutColumnsAction = new PasteAction(withoutColumnsContext);
+
+        withoutColumnsAction.update(withoutColumnsContext.getSelection());
+        assertThat(withoutColumnsAction.isEnabled())
+                .as("A table without columns must stay disabled for Paste even with clipboard text.")
+                .isFalse();
+    }
+
+    @Test
+    void testPaste_of2x2BlockIntoAnEmpty3ColumnTable_appendsTwoRowsFromColumnZeroInOneUndoStep()
+            throws ExecutionException
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED NAME CDATA #IMPLIED CITY CDATA #IMPLIED>\n]>\n"
+                        + "<dataset>\n</dataset>\n");
+        DocumentUndoManagerRegistry.connect(document);
+        final IDocumentUndoManager undoManager = DocumentUndoManagerRegistry.getDocumentUndoManager(document);
+        undoManager.connect(this);
+        try
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            final TestContext context = new TestContext(datasetDocument, "USERS");
+            context.clipboardText = "1\tAlice\n2\tBob\n";
+            final PasteAction action = new PasteAction(context);
+            final List<ChangeOrigin> modelRebuilds = new ArrayList<>();
+            datasetDocument.addModelListener(event -> modelRebuilds.add(event.origin()));
+
+            action.run();
+
+            assertThat(modelRebuilds).as("Pasting into an empty table must rebuild the model once.")
+                    .containsExactly(ChangeOrigin.EDIT);
+            final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+            assertThat(table.getRows()).as("The paste must append two rows.").hasSize(2);
+            assertThat(table.getRows().get(0).getValue(0)).isEqualTo("1");
+            assertThat(table.getRows().get(0).getValue(1)).isEqualTo("Alice");
+            assertThat(table.getRows().get(1).getValue(0)).isEqualTo("2");
+            assertThat(table.getRows().get(1).getValue(1)).isEqualTo("Bob");
+            assertThat(context.selectedRegion).as("Paste must select the pasted block.")
+                    .isEqualTo(new Rectangle(0, 0, 2, 2));
+
+            undoManager.undo();
+            datasetDocument.refresh();
+
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows())
+                    .as("Appending the pasted rows must be one undo step.").isEmpty();
+        }
+        finally
+        {
+            undoManager.disconnect(this);
+            DocumentUndoManagerRegistry.disconnect(document);
+        }
     }
 
     private static FlatXmlDatasetDocument create(final String content)

@@ -725,6 +725,49 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testSetCellsAndAppendRows_whenChangingTheLastRowAndAppending_rebuildsTheModelOnceInOneUndoStep()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n"
+                + "    <USERS ID=\"2\" NAME=\"Bob\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            final List<ChangeOrigin> refreshes = new ArrayList<>();
+            datasetDocument.addModelListener(event -> refreshes.add(event.origin()));
+
+            datasetDocument.setCellsAndAppendRows("USERS", List.of(new CellChange(1, "NAME", "Robert")),
+                    List.of(List.of("3", "Carol"), Arrays.asList("4", null)));
+
+            assertThat(document.get())
+                    .as("The last row must change, and the new rows must follow it, indented to match.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n"
+                            + "    <USERS ID=\"2\" NAME=\"Robert\"/>\n    <USERS ID=\"3\" NAME=\"Carol\"/>\n"
+                            + "    <USERS ID=\"4\"/>\n</dataset>\n");
+            assertThat(refreshes).as("The model must be rebuilt once.").containsExactly(ChangeOrigin.EDIT);
+            undoManager.undo();
+            assertThat(document.get()).as("One undo must restore the original text.").isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testSetCellsAndAppendRows_whenAChangeWouldEmptyARow_throwsAndAppendsNothing()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.setCellsAndAppendRows("USERS",
+                List.of(new CellChange(0, "ID", null)), List.of(List.of("2"))))
+                .as("A change that would empty a row must be rejected.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("A rejected call must not append its rows either.")
+                .isEqualTo("<dataset><USERS ID=\"1\"/></dataset>");
+    }
+
+    @Test
     void testInsertRows_whenIndentationUsesTabs_copiesTabIndentation() throws Exception
     {
         final IDocument document =
