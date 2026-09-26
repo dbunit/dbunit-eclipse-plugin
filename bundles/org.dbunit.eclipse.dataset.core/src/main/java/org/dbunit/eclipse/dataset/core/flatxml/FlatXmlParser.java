@@ -27,9 +27,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
+import org.eclipse.osgi.util.NLS;
 
 /**
  * Scans dbUnit flat XML text once, left to right, with a hand-written scanner instead of a standard XML
@@ -127,7 +129,7 @@ final class FlatXmlParser
                 if (pos >= length)
                 {
                     throw blockingError(ProblemCode.ROOT_NOT_DATASET,
-                            "The document has no root element; a dataset starts with <dataset>.", pos);
+                            Messages.Parser_noRootElement, pos);
                 }
                 if (matchesAt(pos, "<?"))
                 {
@@ -148,7 +150,7 @@ final class FlatXmlParser
                 else
                 {
                     throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                            "Unexpected character before the root element.", pos);
+                            Messages.Parser_unexpectedBeforeRoot, pos);
                 }
             }
         }
@@ -160,7 +162,7 @@ final class FlatXmlParser
             if (!"dataset".equals(startTag.name()))
             {
                 throw blockingError(ProblemCode.ROOT_NOT_DATASET,
-                        "The root element must be named <dataset>, but found <" + startTag.name() + ">.",
+                        NLS.bind(Messages.Parser_rootNotDataset, startTag.name()),
                         rootOffset);
             }
             if (startTag.selfClosing())
@@ -192,7 +194,7 @@ final class FlatXmlParser
                 else
                 {
                     throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                            "Unexpected content after the root element.", pos);
+                            Messages.Parser_unexpectedAfterRoot, pos);
                 }
             }
         }
@@ -252,22 +254,21 @@ final class FlatXmlParser
                 }
                 if (pos >= length)
                 {
-                    throw blockingError(ProblemCode.NOT_WELL_FORMED, "The document ended inside a start "
-                            + "tag.", pos);
+                    throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_endedInStartTag, pos);
                 }
                 if (!hadWhitespace)
                 {
                     throw blockingError(ProblemCode.NOT_WELL_FORMED,
                             attributes.isEmpty()
-                                    ? "Expected whitespace, '/>', or '>' after the element name."
-                                    : "Expected whitespace between attributes.",
+                                    ? Messages.Parser_expectedAfterElementName
+                                    : Messages.Parser_expectedWhitespaceBetweenAttributes,
                             pos);
                 }
                 final FlatXmlAttribute attribute = scanAttribute(segmentOffset);
                 if (!startTagAttributeNames.add(attribute.name()))
                 {
-                    throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                            "Duplicate attribute '" + attribute.name() + "'.", attribute.nameOffset());
+                    final String message = NLS.bind(Messages.Parser_duplicateAttribute, attribute.name());
+                    throw blockingError(ProblemCode.NOT_WELL_FORMED, message, attribute.nameOffset());
                 }
                 attributes.add(attribute);
                 attributesEndOffset = attribute.endOffset();
@@ -281,14 +282,14 @@ final class FlatXmlParser
             skipWhitespace();
             if (pos >= length || text.charAt(pos) != '=')
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "Expected '=' after the attribute name.",
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_expectedEquals,
                         pos);
             }
             pos++; // consume '='
             skipWhitespace();
             if (pos >= length || (text.charAt(pos) != '"' && text.charAt(pos) != '\''))
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "Expected a quoted attribute value.",
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_expectedQuotedValue,
                         pos);
             }
             final char quote = text.charAt(pos);
@@ -304,14 +305,14 @@ final class FlatXmlParser
                 if (valueChar == '<')
                 {
                     throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                            "'<' is not allowed in an attribute value.", pos);
+                            Messages.Parser_lessThanInValue, pos);
                 }
                 pos++;
             }
             if (pos >= length)
             {
                 throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                        "The attribute value has no closing quote.", valueOffset - 1);
+                        Messages.Parser_unclosedValue, valueOffset - 1);
             }
             final int valueEndOffset = pos;
             final String value = decodeValue(text.subSequence(valueOffset, valueEndOffset), valueOffset);
@@ -350,7 +351,7 @@ final class FlatXmlParser
                 if (pos >= length)
                 {
                     throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                            "The document ended before </" + endTagName + ">.", pos);
+                            NLS.bind(Messages.Parser_endedBeforeEndTag, endTagName), pos);
                 }
                 final char ch = text.charAt(pos);
                 if (ch != '<')
@@ -406,7 +407,7 @@ final class FlatXmlParser
                 else
                 {
                     throw blockingError(ProblemCode.NESTED_ELEMENT,
-                            "An element cannot be nested inside a row element.", pos);
+                            Messages.Parser_nestedElement, pos);
                 }
             }
         }
@@ -419,14 +420,14 @@ final class FlatXmlParser
             skipWhitespace();
             if (pos >= length || text.charAt(pos) != '>')
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "Expected '>' to close </" + name + ">.",
-                        pos);
+                final String message = NLS.bind(Messages.Parser_unclosedEndTag, name);
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, message, pos);
             }
             pos++; // consume '>'
             if (!name.equals(expectedName))
             {
                 throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                        "Expected </" + expectedName + ">, but found </" + name + ">.", endTagStart);
+                        NLS.bind(Messages.Parser_mismatchedEndTag, expectedName, name), endTagStart);
             }
             return endTagStart;
         }
@@ -435,7 +436,7 @@ final class FlatXmlParser
         {
             if (start >= 0 && significant)
             {
-                addInfoProblem(ProblemCode.TEXT_CONTENT_IGNORED, "Text content is ignored.", start,
+                addInfoProblem(ProblemCode.TEXT_CONTENT_IGNORED, Messages.Parser_textIgnored, start,
                         end - start);
             }
         }
@@ -450,7 +451,7 @@ final class FlatXmlParser
                     || !XmlNames.isNameStartChar(Character.codePointAt(text, pos)))
             {
                 throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                        "Expected whitespace and the root name after <!DOCTYPE.", pos);
+                        Messages.Parser_expectedDoctypeName, pos);
             }
             final String rootName = scanName();
             skipWhitespace();
@@ -485,7 +486,7 @@ final class FlatXmlParser
             if (pos >= length || text.charAt(pos) != '>')
             {
                 throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                        "Expected '>' to close the DOCTYPE declaration.", pos);
+                        Messages.Parser_unclosedDoctype, pos);
             }
             pos++; // consume '>'
             doctype = new FlatXmlDoctype(rootName, publicId, systemId, internalSubset, doctypeOffset, pos);
@@ -495,7 +496,7 @@ final class FlatXmlParser
         {
             if (pos >= length || (text.charAt(pos) != '"' && text.charAt(pos) != '\''))
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "Expected a quoted literal.", pos);
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_expectedQuotedLiteral, pos);
             }
             final char quote = text.charAt(pos);
             pos++;
@@ -506,7 +507,7 @@ final class FlatXmlParser
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "The literal has no closing quote.",
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedLiteral,
                         start - 1);
             }
             final String value = text.subSequence(start, pos).toString();
@@ -533,7 +534,7 @@ final class FlatXmlParser
                     if (pos >= length)
                     {
                         throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                                "A quoted literal in the internal subset has no closing quote.", pos);
+                                Messages.Parser_unclosedSubsetLiteral, pos);
                     }
                     pos++; // consume the closing quote
                 }
@@ -552,7 +553,7 @@ final class FlatXmlParser
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "The internal subset has no closing ']'.",
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedSubset,
                         pos);
             }
         }
@@ -562,7 +563,7 @@ final class FlatXmlParser
             final int start = pos;
             if (pos >= length || !XmlNames.isNameStartChar(Character.codePointAt(text, pos)))
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "Expected a name.", pos);
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_expectedName, pos);
             }
             pos += Character.charCount(Character.codePointAt(text, pos));
             while (pos < length)
@@ -619,7 +620,7 @@ final class FlatXmlParser
             if (pos >= length)
             {
                 throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                        "The processing instruction has no closing '?>'.", start);
+                        Messages.Parser_unclosedProcessingInstruction, start);
             }
             pos += 2;
         }
@@ -634,7 +635,7 @@ final class FlatXmlParser
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, "The comment has no closing '-->'.",
+                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedComment,
                         start);
             }
             pos += 3;
@@ -651,7 +652,7 @@ final class FlatXmlParser
             if (pos >= length)
             {
                 throw blockingError(ProblemCode.NOT_WELL_FORMED,
-                        "The CDATA section has no closing ']]>'.", start);
+                        Messages.Parser_unclosedCdata, start);
             }
             pos += 3;
         }
@@ -703,7 +704,7 @@ final class FlatXmlParser
                     index++;
                 }
             }
-            return message + " (line " + line + ", column " + column + ")";
+            return NLS.bind(Messages.Parser_position, new Object[] { message, line, column });
         }
     }
 

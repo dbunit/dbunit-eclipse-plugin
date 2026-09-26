@@ -23,7 +23,9 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 import java.nio.charset.CharsetEncoder;
 import java.util.Locale;
 
+import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
+import org.eclipse.osgi.util.NLS;
 
 /**
  * Decodes and escapes dbUnit flat XML attribute values.
@@ -143,9 +145,8 @@ public final class AttributeValueCodec
     {
         if (!isXmlChar(codePoint))
         {
-            throw new DatasetEditException(
-                    "The character U+" + Integer.toHexString(codePoint).toUpperCase(Locale.ROOT)
-                            + " is not allowed in an XML 1.0 document.");
+            final String hexadecimal = Integer.toHexString(codePoint).toUpperCase(Locale.ROOT);
+            throw new DatasetEditException(NLS.bind(Messages.Codec_notXmlCharacter, hexadecimal));
         }
         switch (codePoint)
         {
@@ -183,8 +184,7 @@ public final class AttributeValueCodec
         final int semicolon = indexOf(raw, ';', ampersandOffset + 1);
         if (semicolon < 0)
         {
-            throw new AttributeValueException("'&' must start a valid entity or character reference.",
-                    ampersandOffset, false);
+            throw new AttributeValueException(Messages.Codec_invalidAmpersand, ampersandOffset, false);
         }
         final String body = raw.subSequence(ampersandOffset + 1, semicolon).toString();
         switch (body)
@@ -212,9 +212,7 @@ public final class AttributeValueCodec
         }
         else
         {
-            throw new AttributeValueException(
-                    "Entity reference '&" + body + ";' is not supported; only the predefined entities "
-                            + "and character references are available without a DTD.",
+            throw new AttributeValueException(NLS.bind(Messages.Codec_unsupportedEntity, body),
                     ampersandOffset, true);
         }
     }
@@ -224,8 +222,7 @@ public final class AttributeValueCodec
     {
         if (digits.isEmpty())
         {
-            throw new AttributeValueException("A character reference must have at least one digit.",
-                    referenceOffset, false);
+            throw new AttributeValueException(Messages.Codec_referenceWithoutDigits, referenceOffset, false);
         }
         long value = 0;
         for (int index = 0; index < digits.length(); index++)
@@ -233,21 +230,19 @@ public final class AttributeValueCodec
             final int digit = Character.digit(digits.charAt(index), radix);
             if (digit < 0)
             {
-                throw new AttributeValueException(
-                        "'" + digits + "' is not a valid character reference.", referenceOffset, false);
+                throw new AttributeValueException(NLS.bind(Messages.Codec_invalidReference, digits),
+                        referenceOffset, false);
             }
             value = value * radix + digit;
             if (value > Character.MAX_CODE_POINT)
             {
-                throw new AttributeValueException("A character reference must not exceed U+10FFFF.",
-                        referenceOffset, false);
+                throw new AttributeValueException(Messages.Codec_referenceTooLarge, referenceOffset, false);
             }
         }
         if (!isXmlChar((int) value))
         {
-            throw new AttributeValueException(
-                    "Character reference U+" + Long.toHexString(value).toUpperCase(Locale.ROOT)
-                            + " is not allowed in XML 1.0.",
+            final String hexadecimal = Long.toHexString(value).toUpperCase(Locale.ROOT);
+            throw new AttributeValueException(NLS.bind(Messages.Codec_referenceNotXmlCharacter, hexadecimal),
                     referenceOffset, false);
         }
         return (int) value;

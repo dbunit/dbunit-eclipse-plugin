@@ -34,6 +34,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
 
+import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.dtd.DtdDeclarations;
 import org.dbunit.eclipse.dataset.core.dtd.DtdReader;
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
@@ -56,6 +57,7 @@ import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.Region;
 import org.eclipse.jface.text.TextUtilities;
+import org.eclipse.osgi.util.NLS;
 import org.eclipse.text.edits.DeleteEdit;
 import org.eclipse.text.edits.InsertEdit;
 import org.eclipse.text.edits.MalformedTreeException;
@@ -198,11 +200,10 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
         if (!getModel().isEditable())
         {
-            throw new DatasetEditException("Cannot edit because the source has errors that block "
-                    + "editing.");
+            throw new DatasetEditException(Messages.Edit_sourceHasErrors);
         }
         final DatasetTable table = getModel().findTable(tableKey)
-                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+                .orElseThrow(() -> new DatasetEditException(NLS.bind(Messages.Edit_noSuchTable, tableKey)));
         final List<TextEdit> edits = cellEdits(tableKey, table, changes);
         if (edits.isEmpty())
         {
@@ -218,11 +219,10 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
         if (!getModel().isEditable())
         {
-            throw new DatasetEditException("Cannot edit because the source has errors that block "
-                    + "editing.");
+            throw new DatasetEditException(Messages.Edit_sourceHasErrors);
         }
         final DatasetTable table = getModel().findTable(tableKey)
-                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+                .orElseThrow(() -> new DatasetEditException(NLS.bind(Messages.Edit_noSuchTable, tableKey)));
         final List<TextEdit> edits = rowInsertEdits(tableKey, table, rowIndex, rows);
         if (edits.isEmpty())
         {
@@ -239,11 +239,10 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
         if (!getModel().isEditable())
         {
-            throw new DatasetEditException("Cannot edit because the source has errors that block "
-                    + "editing.");
+            throw new DatasetEditException(Messages.Edit_sourceHasErrors);
         }
         final DatasetTable table = getModel().findTable(tableKey)
-                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+                .orElseThrow(() -> new DatasetEditException(NLS.bind(Messages.Edit_noSuchTable, tableKey)));
         // Both sets of edits come from the same index: the cell edits rewrite start tags of existing
         // rows, and the appended rows go after the last row element, so they never overlap.
         final List<TextEdit> edits = new ArrayList<>(cellEdits(tableKey, table, changes));
@@ -271,13 +270,12 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             if (change.rowIndex() < 0 || change.rowIndex() >= table.getRows().size())
             {
                 throw new DatasetEditException(
-                        "Row " + change.rowIndex() + " does not exist in table '" + table.getName()
-                                + "'.");
+                        NLS.bind(Messages.Edit_noSuchRow, change.rowIndex(), table.getName()));
             }
             if (table.getColumnIndex(change.columnName()) < 0)
             {
-                throw new DatasetEditException("Column '" + change.columnName() + "' does not exist in "
-                        + "table '" + table.getName() + "'.");
+                throw new DatasetEditException(
+                        NLS.bind(Messages.Edit_noSuchColumn, change.columnName(), table.getName()));
             }
         }
 
@@ -300,8 +298,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             if (wouldEmptyRow(table, rowIndex, rowChanges))
             {
                 throw new DatasetEditException(
-                        "This change would leave row " + rowIndex + " of table '" + table.getName()
-                                + "' with no values. Use Delete Rows to remove it instead.");
+                        NLS.bind(Messages.Edit_rowWouldBeEmpty, rowIndex, table.getName()));
             }
             final FlatXmlElement element = rowElements.get(rowIndex);
             final String rewritten = StartTagRewriter.rewrite(text, element, table.getColumns(),
@@ -326,20 +323,20 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         if (table.getColumns().isEmpty())
         {
             throw new DatasetEditException(
-                    "Table '" + table.getName() + "' has no columns to insert a row into.");
+                    NLS.bind(Messages.Edit_tableHasNoColumns, table.getName()));
         }
         final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
         if (rowIndex < 0 || rowIndex > rowElements.size())
         {
             throw new DatasetEditException(
-                    "Row " + rowIndex + " is out of range for table '" + table.getName() + "'.");
+                    NLS.bind(Messages.Edit_rowOutOfRange, rowIndex, table.getName()));
         }
         for (final List<String> values : rows)
         {
             if (values.size() != table.getColumns().size())
             {
-                throw new DatasetEditException("Each new row must have exactly "
-                        + table.getColumns().size() + " values for table '" + table.getName() + "'.");
+                throw new DatasetEditException(NLS.bind(Messages.Edit_wrongValueCount,
+                        table.getColumns().size(), table.getName()));
             }
         }
         if (rows.isEmpty())
@@ -400,11 +397,10 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
         if (!getModel().isEditable())
         {
-            throw new DatasetEditException("Cannot edit because the source has errors that block "
-                    + "editing.");
+            throw new DatasetEditException(Messages.Edit_sourceHasErrors);
         }
         final DatasetTable table = getModel().findTable(tableKey)
-                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+                .orElseThrow(() -> new DatasetEditException(NLS.bind(Messages.Edit_noSuchTable, tableKey)));
         final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
         final int[] sorted = rowIndexes.clone();
         Arrays.sort(sorted);
@@ -413,7 +409,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             if (rowIndex < 0 || rowIndex >= rowElements.size())
             {
                 throw new DatasetEditException(
-                        "Row " + rowIndex + " is out of range for table '" + table.getName() + "'.");
+                        NLS.bind(Messages.Edit_rowOutOfRange, rowIndex, table.getName()));
             }
         }
         if (sorted.length == 0)
@@ -443,11 +439,10 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
         if (!getModel().isEditable())
         {
-            throw new DatasetEditException("Cannot edit because the source has errors that block "
-                    + "editing.");
+            throw new DatasetEditException(Messages.Edit_sourceHasErrors);
         }
         final DatasetTable table = getModel().findTable(tableKey)
-                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+                .orElseThrow(() -> new DatasetEditException(NLS.bind(Messages.Edit_noSuchTable, tableKey)));
         final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
         final int[] sorted = rowIndexes.clone();
         Arrays.sort(sorted);
@@ -456,7 +451,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             if (rowIndex < 0 || rowIndex >= rowElements.size())
             {
                 throw new DatasetEditException(
-                        "Row " + rowIndex + " is out of range for table '" + table.getName() + "'.");
+                        NLS.bind(Messages.Edit_rowOutOfRange, rowIndex, table.getName()));
             }
         }
         if (sorted.length == 0)
@@ -493,31 +488,29 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
         if (!getModel().isEditable())
         {
-            throw new DatasetEditException("Cannot edit because the source has errors that block "
-                    + "editing.");
+            throw new DatasetEditException(Messages.Edit_sourceHasErrors);
         }
         final DatasetTable table = getModel().findTable(tableKey)
-                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+                .orElseThrow(() -> new DatasetEditException(NLS.bind(Messages.Edit_noSuchTable, tableKey)));
         final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
         if (firstRowIndex < 0 || rowCount < 1 || firstRowIndex + rowCount > rowElements.size())
         {
             throw new DatasetEditException(
-                    "The row block is out of range for table '" + table.getName() + "'.");
+                    NLS.bind(Messages.Edit_rowBlockOutOfRange, table.getName()));
         }
         if (delta != -1 && delta != 1)
         {
-            throw new DatasetEditException("A row block can only move up or down by one position at a "
-                    + "time.");
+            throw new DatasetEditException(Messages.Edit_moveByOnePosition);
         }
         if (delta < 0 && firstRowIndex == 0)
         {
             throw new DatasetEditException(
-                    "Cannot move past the first row of table '" + table.getName() + "'.");
+                    NLS.bind(Messages.Edit_moveBeforeFirstRow, table.getName()));
         }
         if (delta > 0 && firstRowIndex + rowCount >= rowElements.size())
         {
             throw new DatasetEditException(
-                    "Cannot move past the last row of table '" + table.getName() + "'.");
+                    NLS.bind(Messages.Edit_moveAfterLastRow, table.getName()));
         }
 
         final int startPosition = delta < 0 ? firstRowIndex - 1 : firstRowIndex;
@@ -552,19 +545,18 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
         if (!getModel().isEditable())
         {
-            throw new DatasetEditException("Cannot edit because the source has errors that block "
-                    + "editing.");
+            throw new DatasetEditException(Messages.Edit_sourceHasErrors);
         }
         final DatasetTable table = getModel().findTable(tableKey)
-                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+                .orElseThrow(() -> new DatasetEditException(NLS.bind(Messages.Edit_noSuchTable, tableKey)));
         if (!XmlNames.isValidName(columnName))
         {
-            throw new DatasetEditException("'" + columnName + "' is not a valid column name.");
+            throw new DatasetEditException(NLS.bind(Messages.Edit_invalidColumnName, columnName));
         }
         if (table.getColumnIndex(columnName) >= 0)
         {
             throw new DatasetEditException(
-                    "Table '" + table.getName() + "' already has a column named '" + columnName + "'.");
+                    NLS.bind(Messages.Edit_columnExists, table.getName(), columnName));
         }
 
         pendingColumns.computeIfAbsent(tableKey, unused -> new ArrayList<>()).add(columnName);
@@ -578,26 +570,25 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
         if (!getModel().isEditable())
         {
-            throw new DatasetEditException("Cannot edit because the source has errors that block "
-                    + "editing.");
+            throw new DatasetEditException(Messages.Edit_sourceHasErrors);
         }
         final DatasetTable table = getModel().findTable(tableKey)
-                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+                .orElseThrow(() -> new DatasetEditException(NLS.bind(Messages.Edit_noSuchTable, tableKey)));
         final int columnIndex = table.getColumnIndex(columnName);
         if (columnIndex < 0)
         {
             throw new DatasetEditException(
-                    "Column '" + columnName + "' does not exist in table '" + table.getName() + "'.");
+                    NLS.bind(Messages.Edit_noSuchColumn, columnName, table.getName()));
         }
         if (!XmlNames.isValidName(newColumnName))
         {
-            throw new DatasetEditException("'" + newColumnName + "' is not a valid column name.");
+            throw new DatasetEditException(NLS.bind(Messages.Edit_invalidColumnName, newColumnName));
         }
         final int conflictingIndex = table.getColumnIndex(newColumnName);
         if (conflictingIndex >= 0 && conflictingIndex != columnIndex)
         {
-            throw new DatasetEditException("Table '" + table.getName() + "' already has a column named '"
-                    + newColumnName + "'.");
+            throw new DatasetEditException(
+                    NLS.bind(Messages.Edit_columnExists, table.getName(), newColumnName));
         }
 
         final DatasetColumn column = table.getColumns().get(columnIndex);
@@ -615,9 +606,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             }
             if (matches > 1)
             {
-                throw new DatasetEditException("Cannot rename column '" + column.name() + "' in table '"
-                        + table.getName() + "' because a row has two attributes for it that differ only "
-                        + "in letter case; remove one of them on the Source page first.");
+                throw new DatasetEditException(NLS.bind(Messages.Edit_renameColumnWithCaseVariants,
+                        column.name(), table.getName()));
             }
         }
 
@@ -669,16 +659,15 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
         if (!getModel().isEditable())
         {
-            throw new DatasetEditException("Cannot edit because the source has errors that block "
-                    + "editing.");
+            throw new DatasetEditException(Messages.Edit_sourceHasErrors);
         }
         final DatasetTable table = getModel().findTable(tableKey)
-                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+                .orElseThrow(() -> new DatasetEditException(NLS.bind(Messages.Edit_noSuchTable, tableKey)));
         final int columnIndex = table.getColumnIndex(columnName);
         if (columnIndex < 0)
         {
             throw new DatasetEditException(
-                    "Column '" + columnName + "' does not exist in table '" + table.getName() + "'.");
+                    NLS.bind(Messages.Edit_noSuchColumn, columnName, table.getName()));
         }
         final DatasetColumn column = table.getColumns().get(columnIndex);
 
@@ -717,8 +706,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             }
             if (hasColumn && remaining == 0)
             {
-                throw new DatasetEditException("Cannot delete column '" + column.name() + "' from table '"
-                        + table.getName() + "' because it would leave a row with no values.");
+                throw new DatasetEditException(NLS.bind(Messages.Edit_deleteColumnWouldEmptyRow,
+                        column.name(), table.getName()));
             }
         }
 
@@ -751,22 +740,21 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
         if (!getModel().isEditable())
         {
-            throw new DatasetEditException("Cannot edit because the source has errors that block "
-                    + "editing.");
+            throw new DatasetEditException(Messages.Edit_sourceHasErrors);
         }
         if (!XmlNames.isValidName(tableName))
         {
-            throw new DatasetEditException("'" + tableName + "' is not a valid table name.");
+            throw new DatasetEditException(NLS.bind(Messages.Edit_invalidTableName, tableName));
         }
         if (isReservedRootName(tableName))
         {
-            throw new DatasetEditException("'" + tableName + "' is reserved for the root element.");
+            throw new DatasetEditException(NLS.bind(Messages.Edit_reservedTableName, tableName));
         }
         for (final DatasetTable existing : getModel().getTables())
         {
             if (sameTableName(existing.getName(), tableName))
             {
-                throw new DatasetEditException("A table named '" + tableName + "' already exists.");
+                throw new DatasetEditException(NLS.bind(Messages.Edit_tableExists, tableName));
             }
         }
         final List<String> seenColumnNames = new ArrayList<>();
@@ -774,14 +762,14 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         {
             if (!XmlNames.isValidName(columnName))
             {
-                throw new DatasetEditException("'" + columnName + "' is not a valid column name.");
+                throw new DatasetEditException(NLS.bind(Messages.Edit_invalidColumnName, columnName));
             }
             for (final String seenColumnName : seenColumnNames)
             {
                 if (seenColumnName.equalsIgnoreCase(columnName))
                 {
-                    throw new DatasetEditException("Table '" + tableName + "' already has a column named '"
-                            + columnName + "'.");
+                    throw new DatasetEditException(
+                            NLS.bind(Messages.Edit_columnExists, tableName, columnName));
                 }
             }
             seenColumnNames.add(columnName);
@@ -801,24 +789,23 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
         if (!getModel().isEditable())
         {
-            throw new DatasetEditException("Cannot edit because the source has errors that block "
-                    + "editing.");
+            throw new DatasetEditException(Messages.Edit_sourceHasErrors);
         }
         getModel().findTable(tableKey)
-                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+                .orElseThrow(() -> new DatasetEditException(NLS.bind(Messages.Edit_noSuchTable, tableKey)));
         if (!XmlNames.isValidName(newTableName))
         {
-            throw new DatasetEditException("'" + newTableName + "' is not a valid table name.");
+            throw new DatasetEditException(NLS.bind(Messages.Edit_invalidTableName, newTableName));
         }
         if (isReservedRootName(newTableName))
         {
-            throw new DatasetEditException("'" + newTableName + "' is reserved for the root element.");
+            throw new DatasetEditException(NLS.bind(Messages.Edit_reservedTableName, newTableName));
         }
         for (final DatasetTable existing : getModel().getTables())
         {
             if (!existing.getKey().equals(tableKey) && sameTableName(existing.getName(), newTableName))
             {
-                throw new DatasetEditException("A table named '" + newTableName + "' already exists.");
+                throw new DatasetEditException(NLS.bind(Messages.Edit_tableExists, newTableName));
             }
         }
 
@@ -853,11 +840,10 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
         if (!getModel().isEditable())
         {
-            throw new DatasetEditException("Cannot edit because the source has errors that block "
-                    + "editing.");
+            throw new DatasetEditException(Messages.Edit_sourceHasErrors);
         }
         getModel().findTable(tableKey)
-                .orElseThrow(() -> new DatasetEditException("There is no table '" + tableKey + "'."));
+                .orElseThrow(() -> new DatasetEditException(NLS.bind(Messages.Edit_noSuchTable, tableKey)));
 
         final List<FlatXmlElement> elements = index.getAllElementsInOrder(tableKey);
         final List<TextEdit> edits = new ArrayList<>();
@@ -911,8 +897,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     {
         if (!isBlank())
         {
-            throw new DatasetEditException("Cannot create an empty dataset because the document is not "
-                    + "blank.");
+            throw new DatasetEditException(Messages.Edit_documentNotBlank);
         }
         final String delimiter = TextUtilities.getDefaultLineDelimiter(document);
         final String newText = emptyDatasetText(delimiter);

@@ -114,6 +114,9 @@ class AttributeValueCodecTest
         assertThat(exception.getOffset()).as("The offset must point at the '&'.").isEqualTo(2);
         assertThat(exception.isUnsupportedEntity())
                 .as("An unknown named entity is unsupported, not malformed.").isTrue();
+        assertThat(exception.getMessage()).as("The message must quote the entity reference.")
+                .isEqualTo("Entity reference '&foo;' is not supported; only the predefined entities and "
+                        + "character references are available without a DTD.");
     }
 
     @Test

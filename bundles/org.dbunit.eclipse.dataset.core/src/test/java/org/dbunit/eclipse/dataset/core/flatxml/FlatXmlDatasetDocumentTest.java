@@ -889,8 +889,9 @@ class FlatXmlDatasetDocumentTest
         datasetDocument.refresh();
 
         assertThatThrownBy(() -> datasetDocument.insertRows("USERS", 5, List.of(List.of("2"))))
-                .as("An out-of-range row index must be rejected.")
-                .isInstanceOf(DatasetEditException.class);
+                .as("An out-of-range row index must be rejected with a message naming the row and table.")
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage("Row 5 is out of range for table 'USERS'.");
         assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
     }
 
@@ -1277,7 +1278,8 @@ class FlatXmlDatasetDocumentTest
 
         assertThatThrownBy(() -> datasetDocument.renameColumn("USERS", "NAME", "id"))
                 .as("Renaming to a name that already exists, case-insensitively, must be rejected.")
-                .isInstanceOf(DatasetEditException.class);
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage("Table 'USERS' already has a column named 'id'.");
         assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
     }
 
