@@ -315,9 +315,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             if (ambiguousKey != null)
             {
                 final String columnName = table.getColumns().get(table.getColumnIndex(ambiguousKey)).name();
-                throw new DatasetEditException("Cannot change column '" + columnName + "' because row "
-                        + rowIndex + " of table '" + table.getName() + "' has two attributes for it that "
-                        + "differ only in letter case; remove one of them on the Source page first.");
+                throw new DatasetEditException(NLS.bind(Messages.Edit_cellHasCaseVariantAttributes,
+                        new Object[] { columnName, rowIndex, table.getName() }));
             }
             requireRowNotEmptied(table, rowIndex, rowChanges);
             final String rewritten = StartTagRewriter.rewrite(text, element, table.getColumns(),
@@ -646,15 +645,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
         for (final FlatXmlElement element : rowElements)
         {
-            int matches = 0;
-            for (final FlatXmlAttribute attribute : element.attributes())
-            {
-                if (attribute.name().toUpperCase(Locale.ENGLISH).equals(key))
-                {
-                    matches++;
-                }
-            }
-            if (matches > 1)
+            if (hasCaseVariantAttributes(element, key))
             {
                 throw new DatasetEditException(NLS.bind(Messages.Edit_renameColumnWithCaseVariants,
                         column.name(), table.getName()));
