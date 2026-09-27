@@ -112,6 +112,12 @@ public final class Messages extends NLS
     public static String Edit_rowWouldBeEmpty;
 
     /**
+     * A cell cannot be changed while its row has two attributes for the column; {0} is the column, {1} the
+     * row index, {2} the table.
+     */
+    public static String Edit_cellHasCaseVariantAttributes;
+
+    /**
      * Rows cannot be inserted into a table without columns; {0} is the table.
      */
     public static String Edit_tableHasNoColumns;
