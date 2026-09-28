@@ -23,6 +23,7 @@ package org.dbunit.eclipse.dataset.ui.actions;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.dialogs.TableNameValidator;
@@ -31,6 +32,7 @@ import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.jface.dialogs.IInputValidator;
 import org.eclipse.jface.dialogs.InputDialog;
 import org.eclipse.jface.window.Window;
+import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.widgets.Shell;
 
 /**
@@ -56,7 +58,9 @@ public class RenameTableAction extends GridAction
     {
         final GridSelection selection = context.getSelection();
         final DatasetTable currentTable =
-                context.getDatasetDocument().getModel().findTable(selection.tableKey()).orElseThrow();
+                context.getDatasetDocument().getModel().findTable(selection.tableKey())
+                        .orElseThrow(() -> new DatasetEditException(
+                                NLS.bind(Messages.Edit_noSuchTable, selection.tableKey())));
         final String currentName = currentTable.getName();
         final List<String> existingNames = new ArrayList<>();
         for (final DatasetTable table : context.getDatasetDocument().getModel().getTables())

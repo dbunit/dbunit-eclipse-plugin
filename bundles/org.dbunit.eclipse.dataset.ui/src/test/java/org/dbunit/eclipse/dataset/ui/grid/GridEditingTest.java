@@ -587,6 +587,12 @@ class GridEditingTest
         }
 
         @Override
+        public void setStatusErrorMessage(final String message)
+        {
+            lastErrorMessage = message;
+        }
+
+        @Override
         public void writeClipboardText(final String text)
         {
         }

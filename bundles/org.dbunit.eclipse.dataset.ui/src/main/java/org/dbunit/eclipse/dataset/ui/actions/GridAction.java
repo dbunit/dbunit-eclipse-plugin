@@ -20,6 +20,7 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
+import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.jface.action.Action;
@@ -27,7 +28,9 @@ import org.eclipse.jface.action.Action;
 /**
  * A command that acts on the Tables page's active grid: reaches it through a {@link DatasetGridContext},
  * updates its enablement from a {@link GridSelection}, and by default needs an editable page and does
- * nothing while a cell editor is active.
+ * nothing while a cell editor is active. A {@link DatasetEditException} thrown directly by
+ * {@link #runOnGrid} or {@link #runWhileEditing}, outside an edit run through the context, is reported as
+ * the status line's error message, as a rejected edit is, instead of propagating.
  *
  * @since 1.0.0
  */
@@ -61,15 +64,22 @@ public abstract class GridAction extends Action
     @Override
     public final void run()
     {
-        if (context.hasActiveCellEditor())
+        try
         {
-            if (isEnabledWhileEditing())
+            if (context.hasActiveCellEditor())
             {
-                runWhileEditing(context);
+                if (isEnabledWhileEditing())
+                {
+                    runWhileEditing(context);
+                }
+                return;
             }
-            return;
+            runOnGrid(context);
         }
-        runOnGrid(context);
+        catch (final DatasetEditException e)
+        {
+            context.setStatusErrorMessage(e.getMessage());
+        }
     }
 
     /**

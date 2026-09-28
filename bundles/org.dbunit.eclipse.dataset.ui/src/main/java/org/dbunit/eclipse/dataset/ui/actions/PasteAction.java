@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
+import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.tsv.TabSeparatedValues;
 import org.dbunit.eclipse.dataset.ui.Messages;
@@ -69,8 +70,9 @@ public final class PasteAction extends GridAction
             return;
         }
         final GridSelection selection = context.getSelection();
-        final DatasetTable table =
-                context.getDatasetDocument().getModel().findTable(selection.tableKey()).orElseThrow();
+        final DatasetTable table = context.getDatasetDocument().getModel().findTable(selection.tableKey())
+                .orElseThrow(() -> new DatasetEditException(
+                        NLS.bind(Messages.Edit_noSuchTable, selection.tableKey())));
         final List<Point> selectedCells = context.getSelectedCellPositions();
         if (parsedRows.size() == 1 && parsedRows.get(0).size() == 1 && selectedCells.size() > 1)
         {
