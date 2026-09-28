@@ -20,6 +20,7 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
+import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
@@ -51,8 +52,9 @@ public class DeleteTableAction extends GridAction
     protected void runOnGrid(final DatasetGridContext context)
     {
         final GridSelection selection = context.getSelection();
-        final DatasetTable table =
-                context.getDatasetDocument().getModel().findTable(selection.tableKey()).orElseThrow();
+        final DatasetTable table = context.getDatasetDocument().getModel().findTable(selection.tableKey())
+                .orElseThrow(() -> new DatasetEditException(
+                        NLS.bind(Messages.Edit_noSuchTable, selection.tableKey())));
         if (!confirmDelete(context.getShell(), table))
         {
             return;

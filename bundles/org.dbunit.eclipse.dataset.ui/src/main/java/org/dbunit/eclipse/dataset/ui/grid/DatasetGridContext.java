@@ -191,6 +191,14 @@ public interface DatasetGridContext
     void setStatusMessage(String message);
 
     /**
+     * Shows an error message on the editor's status line, where it takes priority over a message set with
+     * {@link #setStatusMessage}, and beeps, as for a rejected edit.
+     *
+     * @param message The error message to show.
+     */
+    void setStatusErrorMessage(String message);
+
+    /**
      * Writes text to the system clipboard.
      *
      * @param text The text to write.

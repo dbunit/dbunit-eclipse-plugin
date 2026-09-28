@@ -25,11 +25,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.tsv.TabSeparatedValues;
 import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
+import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Text;
 
@@ -67,8 +69,9 @@ public final class CopyAction extends GridAction
     static void copySelectedCellsToClipboard(final DatasetGridContext context)
     {
         final GridSelection selection = context.getSelection();
-        final DatasetTable table =
-                context.getDatasetDocument().getModel().findTable(selection.tableKey()).orElseThrow();
+        final DatasetTable table = context.getDatasetDocument().getModel().findTable(selection.tableKey())
+                .orElseThrow(() -> new DatasetEditException(
+                        NLS.bind(Messages.Edit_noSuchTable, selection.tableKey())));
         final Set<Point> selectedCells = new HashSet<>(context.getSelectedCellPositions());
         final List<List<String>> block = new ArrayList<>();
         for (int rowIndex = selection.firstRowIndex(); rowIndex <= selection.lastRowIndex(); rowIndex++)

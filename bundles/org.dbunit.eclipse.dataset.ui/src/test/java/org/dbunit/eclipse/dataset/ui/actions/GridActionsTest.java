@@ -203,6 +203,55 @@ class GridActionsTest
     }
 
     @Test
+    void testRun_whenRunOnGridThrowsADatasetEditException_reportsItAsAnErrorMessageInsteadOfPropagating()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final GridAction action = new GridAction(context)
+        {
+            @Override
+            protected void runOnGrid(final DatasetGridContext context)
+            {
+                throw new DatasetEditException("The selection is out of date.");
+            }
+
+            @Override
+            protected boolean isEnabledFor(final GridSelection selection)
+            {
+                return true;
+            }
+        };
+
+        action.run();
+
+        assertThat(context.statusErrorMessage)
+                .as("A DatasetEditException thrown directly by runOnGrid must be reported as the status "
+                        + "line's error message, like a rejected edit, instead of propagating.")
+                .isEqualTo("The selection is out of date.");
+        assertThat(context.statusMessage)
+                .as("The rejection must not be reported as a normal message, which an earlier error "
+                        + "message would hide.")
+                .isNull();
+    }
+
+    @Test
+    void testRun_whenTheSelectionNamesATableThatNoLongerExists_reportsItAsAnErrorMessage()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.staleSelection =
+                new GridSelection("GONE", 1, 1, 0, 0, List.of(0), List.of(0), 0, 0, 0, 0, false);
+        final AddColumnAction action = new AddColumnAction(context);
+
+        action.run();
+
+        assertThat(context.statusErrorMessage)
+                .as("A selection that names a table missing from the model must be reported as the "
+                        + "status line's error message.")
+                .isEqualTo("There is no table 'GONE'.");
+    }
+
+    @Test
     void testDuplicateRows_withTwoRowsSelected_insertsCopiesDirectlyAfterThemAndSelectsTheNewBlock()
     {
         final FlatXmlDatasetDocument datasetDocument =
@@ -1428,6 +1477,10 @@ class GridActionsTest
 
         private String statusMessage;
 
+        private String statusErrorMessage;
+
+        private GridSelection staleSelection;
+
         private String clipboardText;
 
         private Rectangle selectedRegion;
@@ -1507,6 +1560,10 @@ class GridActionsTest
         @Override
         public GridSelection getSelection()
         {
+            if (staleSelection != null)
+            {
+                return staleSelection;
+            }
             final DatasetTable table = datasetDocument.getModel().findTable(tableKey).orElseThrow();
             final int rowCount = table.getRows().size();
             final int columnCount = table.getColumns().size();
@@ -1593,6 +1650,12 @@ class GridActionsTest
         public void setStatusMessage(final String message)
         {
             statusMessage = message;
+        }
+
+        @Override
+        public void setStatusErrorMessage(final String message)
+        {
+            statusErrorMessage = message;
         }
 
         @Override

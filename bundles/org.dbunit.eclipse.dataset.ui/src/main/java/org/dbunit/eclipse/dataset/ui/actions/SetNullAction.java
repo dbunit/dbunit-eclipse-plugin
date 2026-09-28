@@ -24,11 +24,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
+import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
 import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
+import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.graphics.Point;
 
 /**
@@ -65,8 +67,9 @@ public final class SetNullAction extends GridAction
     static void setSelectedCellsToNull(final DatasetGridContext context)
     {
         final GridSelection selection = context.getSelection();
-        final DatasetTable table =
-                context.getDatasetDocument().getModel().findTable(selection.tableKey()).orElseThrow();
+        final DatasetTable table = context.getDatasetDocument().getModel().findTable(selection.tableKey())
+                .orElseThrow(() -> new DatasetEditException(
+                        NLS.bind(Messages.Edit_noSuchTable, selection.tableKey())));
         final List<CellChange> changes = new ArrayList<>();
         for (final Point cell : context.getSelectedCellPositions())
         {

@@ -521,6 +521,11 @@ class DatasetGridTest
         }
 
         @Override
+        public void setStatusErrorMessage(final String message)
+        {
+        }
+
+        @Override
         public void writeClipboardText(final String text)
         {
         }

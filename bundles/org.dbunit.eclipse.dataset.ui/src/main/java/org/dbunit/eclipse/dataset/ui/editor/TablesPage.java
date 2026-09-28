@@ -553,8 +553,7 @@ final class TablesPage implements DatasetGridContext
         }
         catch (final DatasetEditException e)
         {
-            editor.getEditorSite().getActionBars().getStatusLineManager().setErrorMessage(e.getMessage());
-            Display.getCurrent().beep();
+            setStatusErrorMessage(e.getMessage());
             return false;
         }
         editor.getEditorSite().getActionBars().getStatusLineManager().setErrorMessage(null);
@@ -710,6 +709,13 @@ final class TablesPage implements DatasetGridContext
     public void setStatusMessage(final String message)
     {
         editor.getEditorSite().getActionBars().getStatusLineManager().setMessage(message);
+    }
+
+    @Override
+    public void setStatusErrorMessage(final String message)
+    {
+        editor.getEditorSite().getActionBars().getStatusLineManager().setErrorMessage(message);
+        Display.getCurrent().beep();
     }
 
     @Override
