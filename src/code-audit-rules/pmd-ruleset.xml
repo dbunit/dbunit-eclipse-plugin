@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PMD ruleset for the dbUnit Eclipse Plugin, read by maven-pmd-plugin (see the root pom.xml).
+-->
+<ruleset name="dbUnit Eclipse Plugin"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+  <description>Rules for the dbUnit Eclipse Plugin's core and UI bundles.</description>
+
+  <rule ref="category/java/bestpractices.xml/AvoidPrintStackTrace" />
+  <rule ref="category/java/bestpractices.xml/AvoidReassigningParameters" />
+  <rule ref="category/java/bestpractices.xml/PreserveStackTrace" />
+  <rule ref="category/java/bestpractices.xml/NonExhaustiveSwitch" />
+  <rule ref="category/java/bestpractices.xml/SystemPrintln" />
+  <rule ref="category/java/codestyle.xml/ClassNamingConventions" />
+  <rule ref="category/java/codestyle.xml/ControlStatementBraces" />
+  <rule ref="category/java/codestyle.xml/EmptyControlStatement">
+    <properties>
+      <property name="allowCommentedBlocks" value="true" />
+    </properties>
+  </rule>
+  <rule ref="category/java/codestyle.xml/FieldNamingConventions" />
+  <rule ref="category/java/codestyle.xml/FormalParameterNamingConventions" />
+  <rule ref="category/java/codestyle.xml/LocalVariableNamingConventions" />
+  <rule ref="category/java/codestyle.xml/MethodNamingConventions">
+    <properties>
+      <!-- allow underscores in all instance, static, and test methods -->
+      <property name="methodPattern" value="[a-z][a-zA-Z0-9_]*" />
+      <property name="staticPattern" value="[a-z][a-zA-Z0-9_]*" />
+      <property name="nativePattern" value="[a-z][a-zA-Z0-9_]*" />
+      <property name="junit3TestPattern" value="test[A-Z0-9][a-zA-Z0-9_]*" />
+      <property name="junit4TestPattern" value="[a-z][a-zA-Z0-9_]*" />
+      <property name="junit5TestPattern" value="[a-z][a-zA-Z0-9_]*" />
+    </properties>
+  </rule>
+  <rule ref="category/java/codestyle.xml/NoPackage" />
+  <rule ref="category/java/codestyle.xml/PackageCase" />
+  <rule ref="category/java/design.xml/AvoidRethrowingException" />
+  <rule ref="category/java/design.xml/AvoidThrowingNewInstanceOfSameException" />
+  <rule ref="category/java/design.xml/AvoidThrowingNullPointerException" />
+  <rule ref="category/java/design.xml/AvoidThrowingRawExceptionTypes" />
+  <rule ref="category/java/design.xml/CyclomaticComplexity">
+    <properties>
+      <property name="classReportLevel" value="80" />
+      <property name="methodReportLevel" value="8" />
+    </properties>
+  </rule>
+  <rule ref="category/java/design.xml/DoNotExtendJavaLangError" />
+  <rule ref="category/java/design.xml/ExceptionAsFlowControl" />
+  <rule ref="category/java/design.xml/NPathComplexity">
+    <properties>
+      <property name="reportLevel" value="100" />
+    </properties>
+  </rule>
+  <rule ref="category/java/design.xml/SignatureDeclareThrowsException" />
+  <rule ref="category/java/design.xml/SwitchDensity" />
+  <rule ref="category/java/documentation.xml/UncommentedEmptyMethodBody" />
+  <rule ref="category/java/errorprone.xml/AvoidAssertAsIdentifier" />
+  <rule ref="category/java/errorprone.xml/AvoidDecimalLiteralsInBigDecimalConstructor" />
+  <rule ref="category/java/errorprone.xml/AvoidInstanceofChecksInCatchClause" />
+  <rule ref="category/java/errorprone.xml/BrokenNullCheck" />
+  <rule ref="category/java/errorprone.xml/ClassCastExceptionWithToArray" />
+  <rule ref="category/java/errorprone.xml/CloseResource" />
+  <rule ref="category/java/errorprone.xml/CompareObjectsWithEquals" />
+  <rule ref="category/java/errorprone.xml/ComparisonWithNaN" />
+  <rule ref="category/java/errorprone.xml/DoNotExtendJavaLangThrowable" />
+  <rule ref="category/java/errorprone.xml/DoNotTerminateVM" />
+  <rule ref="category/java/errorprone.xml/DoNotThrowExceptionInFinally" />
+  <rule ref="category/java/errorprone.xml/DontUseFloatTypeForLoopIndices" />
+  <rule ref="category/java/errorprone.xml/EmptyCatchBlock" />
+  <rule ref="category/java/errorprone.xml/EqualsNull" />
+  <rule ref="category/java/errorprone.xml/IdempotentOperations" />
+  <rule ref="category/java/errorprone.xml/InstantiationToGetClass" />
+  <rule ref="category/java/errorprone.xml/InvalidLogMessageFormat" />
+  <rule ref="category/java/errorprone.xml/MisplacedNullCheck" />
+  <rule ref="category/java/errorprone.xml/OverrideBothEqualsAndHashcode" />
+  <rule ref="category/java/errorprone.xml/ReturnFromFinallyBlock" />
+  <rule ref="category/java/errorprone.xml/UnnecessaryBooleanAssertion" />
+  <rule ref="category/java/errorprone.xml/UnnecessaryCaseChange" />
+  <rule ref="category/java/errorprone.xml/UnnecessaryConversionTemporary" />
+  <rule ref="category/java/errorprone.xml/UseEqualsToCompareStrings" />
+  <rule ref="category/java/errorprone.xml/UseProperClassLoader" />
+  <rule ref="category/java/multithreading.xml/UnsynchronizedStaticFormatter" />
+  <rule ref="category/java/performance.xml/AddEmptyString" />
+  <rule ref="category/java/performance.xml/AvoidArrayLoops" />
+  <rule ref="category/java/performance.xml/AvoidFileStream" />
+  <rule ref="category/java/performance.xml/BigIntegerInstantiation" />
+  <rule ref="category/java/performance.xml/InefficientStringBuffering" />
+  <rule ref="category/java/performance.xml/StringToString" />
+  <rule ref="category/java/performance.xml/UseArraysAsList" />
+  <rule ref="category/java/performance.xml/UseStringBufferForStringAppends" />
+  <rule ref="category/java/security.xml/HardCodedCryptoKey" />
+  <rule ref="category/java/security.xml/InsecureCryptoIv" />
+</ruleset>
