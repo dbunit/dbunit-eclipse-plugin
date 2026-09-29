@@ -28,9 +28,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.dbunit.eclipse.dataset.core.Messages;
-import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
-import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
 import org.eclipse.osgi.util.NLS;
 
 /**
@@ -51,7 +49,8 @@ final class FlatXmlParser
      */
     static FlatXmlParseResult parse(final CharSequence text)
     {
-        return new Scanner(text).scan();
+        final ScanProblems problems = new ScanProblems(text);
+        return new Scanner(text, problems).scan();
     }
 
     /**
@@ -63,9 +62,9 @@ final class FlatXmlParser
 
         private final int length;
 
-        private final List<FlatXmlElement> elements = new ArrayList<>();
+        private final ScanProblems problems;
 
-        private final List<DatasetProblem> problems = new ArrayList<>();
+        private final List<FlatXmlElement> elements = new ArrayList<>();
 
         /**
          * Each distinct element and attribute name, so that the elements share one string per name
@@ -85,12 +84,11 @@ final class FlatXmlParser
 
         private FlatXmlRoot root;
 
-        private boolean wellFormed = true;
-
-        private Scanner(final CharSequence text)
+        private Scanner(final CharSequence text, final ScanProblems problems)
         {
             this.text = text;
             this.length = text.length();
+            this.problems = problems;
         }
 
         private FlatXmlParseResult scan()
@@ -107,8 +105,8 @@ final class FlatXmlParser
                 // The scan stopped at the first blocking problem; the fields already hold the partial
                 // result.
             }
-            return new FlatXmlParseResult(doctype, root, List.copyOf(elements), List.copyOf(problems),
-                    wellFormed);
+            return new FlatXmlParseResult(doctype, root, List.copyOf(elements), problems.toList(),
+                    problems.isWellFormed());
         }
 
         private void skipBom()
@@ -126,7 +124,7 @@ final class FlatXmlParser
                 skipWhitespace();
                 if (pos >= length)
                 {
-                    throw blockingError(ProblemCode.ROOT_NOT_DATASET,
+                    throw problems.blockingError(ProblemCode.ROOT_NOT_DATASET,
                             Messages.Parser_noRootElement, pos);
                 }
                 if (isElementStart())
@@ -135,7 +133,7 @@ final class FlatXmlParser
                 }
                 if (!scanPrologMarkup())
                 {
-                    throw blockingError(ProblemCode.NOT_WELL_FORMED,
+                    throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
                             Messages.Parser_unexpectedBeforeRoot, pos);
                 }
             }
@@ -175,7 +173,7 @@ final class FlatXmlParser
             final StartTag startTag = scanStartTag();
             if (!"dataset".equals(startTag.name()))
             {
-                throw blockingError(ProblemCode.ROOT_NOT_DATASET,
+                throw problems.blockingError(ProblemCode.ROOT_NOT_DATASET,
                         NLS.bind(Messages.Parser_rootNotDataset, startTag.name()),
                         rootOffset);
             }
@@ -207,7 +205,7 @@ final class FlatXmlParser
                 }
                 else
                 {
-                    throw blockingError(ProblemCode.NOT_WELL_FORMED,
+                    throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
                             Messages.Parser_unexpectedAfterRoot, pos);
                 }
             }
@@ -282,11 +280,12 @@ final class FlatXmlParser
         {
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_endedInStartTag, pos);
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_endedInStartTag,
+                        pos);
             }
             if (!hadWhitespace)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED,
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
                         firstAttribute
                                 ? Messages.Parser_expectedAfterElementName
                                 : Messages.Parser_expectedWhitespaceBetweenAttributes,
@@ -299,7 +298,7 @@ final class FlatXmlParser
             if (!startTagAttributeNames.add(attribute.name()))
             {
                 final String message = NLS.bind(Messages.Parser_duplicateAttribute, attribute.name());
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, message, attribute.nameOffset());
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, message, attribute.nameOffset());
             }
         }
 
@@ -326,7 +325,7 @@ final class FlatXmlParser
         {
             if (pos >= length || text.charAt(pos) != expected)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, message, pos);
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, message, pos);
             }
             pos++;
         }
@@ -342,7 +341,7 @@ final class FlatXmlParser
             final boolean atQuote = pos < length && (text.charAt(pos) == '"' || text.charAt(pos) == '\'');
             if (!atQuote)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, message, pos);
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, message, pos);
             }
             final char quote = text.charAt(pos);
             pos++;
@@ -360,13 +359,14 @@ final class FlatXmlParser
             {
                 if (text.charAt(pos) == '<')
                 {
-                    throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_lessThanInValue, pos);
+                    throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_lessThanInValue,
+                            pos);
                 }
                 pos++;
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedValue,
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedValue,
                         valueOffset - 1);
             }
             return pos;
@@ -382,7 +382,7 @@ final class FlatXmlParser
             {
                 final ProblemCode code =
                         e.isUnsupportedEntity() ? ProblemCode.UNSUPPORTED_ENTITY : ProblemCode.NOT_WELL_FORMED;
-                throw blockingError(code, e.getMessage(), valueOffset + e.getOffset(), e);
+                throw problems.blockingError(code, e.getMessage(), valueOffset + e.getOffset(), e);
             }
         }
 
@@ -401,7 +401,7 @@ final class FlatXmlParser
             {
                 if (pos >= length)
                 {
-                    throw blockingError(ProblemCode.NOT_WELL_FORMED,
+                    throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
                             NLS.bind(Messages.Parser_endedBeforeEndTag, endTagName), pos);
                 }
                 final char ch = text.charAt(pos);
@@ -451,7 +451,7 @@ final class FlatXmlParser
             }
             else
             {
-                throw blockingError(ProblemCode.NESTED_ELEMENT, Messages.Parser_nestedElement, pos);
+                throw problems.blockingError(ProblemCode.NESTED_ELEMENT, Messages.Parser_nestedElement, pos);
             }
         }
 
@@ -464,12 +464,12 @@ final class FlatXmlParser
             if (pos >= length || text.charAt(pos) != '>')
             {
                 final String message = NLS.bind(Messages.Parser_unclosedEndTag, name);
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, message, pos);
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, message, pos);
             }
             pos++; // consume '>'
             if (!name.equals(expectedName))
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED,
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
                         NLS.bind(Messages.Parser_mismatchedEndTag, expectedName, name), endTagStart);
             }
             return endTagStart;
@@ -502,8 +502,8 @@ final class FlatXmlParser
             {
                 if (start >= 0 && significant)
                 {
-                    addInfoProblem(ProblemCode.TEXT_CONTENT_IGNORED, Messages.Parser_textIgnored, start,
-                            offset - start);
+                    problems.addInfoProblem(ProblemCode.TEXT_CONTENT_IGNORED, Messages.Parser_textIgnored,
+                            start, offset - start);
                 }
                 start = -1;
                 significant = false;
@@ -557,7 +557,7 @@ final class FlatXmlParser
             if (pos == beforeNameWhitespace || pos >= length
                     || !XmlNames.isNameStartChar(Character.codePointAt(text, pos)))
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED,
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
                         Messages.Parser_expectedDoctypeName, pos);
             }
             return scanName();
@@ -573,7 +573,7 @@ final class FlatXmlParser
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedLiteral,
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedLiteral,
                         start - 1);
             }
             final String value = text.subSequence(start, pos).toString();
@@ -593,7 +593,7 @@ final class FlatXmlParser
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedSubset,
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedSubset,
                         pos);
             }
         }
@@ -632,7 +632,7 @@ final class FlatXmlParser
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED,
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
                         Messages.Parser_unclosedSubsetLiteral, pos);
             }
             pos++; // consume the closing quote
@@ -643,7 +643,7 @@ final class FlatXmlParser
             final int start = pos;
             if (pos >= length || !XmlNames.isNameStartChar(Character.codePointAt(text, pos)))
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_expectedName, pos);
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_expectedName, pos);
             }
             pos += Character.charCount(Character.codePointAt(text, pos));
             while (pos < length)
@@ -699,7 +699,7 @@ final class FlatXmlParser
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED,
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
                         Messages.Parser_unclosedProcessingInstruction, start);
             }
             pos += 2;
@@ -715,7 +715,7 @@ final class FlatXmlParser
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedComment,
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedComment,
                         start);
             }
             pos += 3;
@@ -731,66 +731,10 @@ final class FlatXmlParser
             }
             if (pos >= length)
             {
-                throw blockingError(ProblemCode.NOT_WELL_FORMED,
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
                         Messages.Parser_unclosedCdata, start);
             }
             pos += 3;
-        }
-
-        private void addInfoProblem(final ProblemCode code, final String message, final int offset,
-                final int problemLength)
-        {
-            problems.add(new DatasetProblem(code, ProblemSeverity.INFO, message, null, null, -1, offset,
-                    problemLength));
-        }
-
-        private StopScanException blockingError(final ProblemCode code, final String message,
-                final int offset)
-        {
-            return blockingError(code, message, offset, null);
-        }
-
-        private StopScanException blockingError(final ProblemCode code, final String message,
-                final int offset, final Throwable cause)
-        {
-            problems.add(new DatasetProblem(code, ProblemSeverity.ERROR, withLocation(message, offset),
-                    null, null, -1, offset, 0));
-            wellFormed = false;
-            return new StopScanException(cause);
-        }
-
-        private String withLocation(final String message, final int offset)
-        {
-            int line = 1;
-            int column = 1;
-            int index = 0;
-            final int end = Math.min(offset, length);
-            while (index < end)
-            {
-                final char ch = text.charAt(index);
-                if (ch == '\n')
-                {
-                    line++;
-                    column = 1;
-                    index++;
-                }
-                else if (ch == '\r')
-                {
-                    line++;
-                    column = 1;
-                    index++;
-                    if (index < end && text.charAt(index) == '\n')
-                    {
-                        index++;
-                    }
-                }
-                else
-                {
-                    column++;
-                    index++;
-                }
-            }
-            return NLS.bind(Messages.Parser_position, new Object[] { message, line, column });
         }
     }
 
@@ -800,19 +744,5 @@ final class FlatXmlParser
     private record StartTag(String name, int nameEndOffset, List<FlatXmlAttribute> attributes,
             int attributesEndOffset, int startTagEndOffset, boolean selfClosing)
     {
-    }
-
-    /**
-     * Thrown internally to unwind the scan as soon as a blocking problem is recorded; carries no message
-     * or stack trace of its own, only the exception behind the problem when there is one.
-     */
-    private static final class StopScanException extends RuntimeException
-    {
-        private static final long serialVersionUID = 1L;
-
-        private StopScanException(final Throwable cause)
-        {
-            super(null, cause, false, false);
-        }
     }
 }
