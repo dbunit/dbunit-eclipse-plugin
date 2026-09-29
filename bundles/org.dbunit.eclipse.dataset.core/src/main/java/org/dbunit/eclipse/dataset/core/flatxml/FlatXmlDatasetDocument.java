@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.dbunit.eclipse.dataset.core.Messages;
@@ -87,6 +88,8 @@ import org.eclipse.text.undo.IDocumentUndoManager;
  */
 public final class FlatXmlDatasetDocument implements TextDatasetDocument
 {
+    private static final String PLUGIN_ID = "org.dbunit.eclipse.dataset.core";
+
     private static final int JOIN_EDITS_THRESHOLD = 50;
 
     private static final int PENDING_COLUMNS_HISTORY_LIMIT = 200;
@@ -119,6 +122,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
 
     private final Supplier<Charset> charset;
 
+    private final Consumer<IStatus> log;
+
     private IDocument document;
 
     private DtdSource dtdSource;
@@ -138,7 +143,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     private long lastRefreshModificationStamp = IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP;
 
     /**
-     * Creates a dataset document bound to a text document.
+     * Creates a dataset document bound to a text document, which logs nothing.
      *
      * @param document The text document; its content is the single source of truth.
      * @param dtdSource Loads external DTD files the document's DOCTYPE refers to.
@@ -149,10 +154,31 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     public FlatXmlDatasetDocument(final IDocument document, final DtdSource dtdSource,
             final FlatXmlOptions options, final Supplier<Charset> charset)
     {
+        this(document, dtdSource, options, charset, status ->
+        {
+        });
+    }
+
+    /**
+     * Creates a dataset document bound to a text document, which reports the failures it works around.
+     *
+     * @param document The text document; its content is the single source of truth.
+     * @param dtdSource Loads external DTD files the document's DOCTYPE refers to; one that throws is
+     *                  treated as a DTD that could not be found, and the failure is logged.
+     * @param options The case-sensitivity and column-sensing options.
+     * @param charset Returns the document's current charset, consulted only when escaping a value that
+     *                needs one; a null result falls back to UTF-8, and so does a thrown exception, which is
+     *                logged.
+     * @param log Receives a warning status for each failure that the document works around.
+     */
+    public FlatXmlDatasetDocument(final IDocument document, final DtdSource dtdSource,
+            final FlatXmlOptions options, final Supplier<Charset> charset, final Consumer<IStatus> log)
+    {
         this.document = document;
         this.dtdSource = dtdSource;
         this.options = options;
         this.charset = charset;
+        this.log = log;
         this.model = DatasetModel.EMPTY;
         this.index = EMPTY_INDEX;
         this.stale = true;
@@ -1206,7 +1232,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         {
             final String systemId = entry.getKey();
             final CachedDtd cached = entry.getValue();
-            final String freshText = dtdSource.load(cached.publicId(), systemId).orElse(null);
+            final String freshText = loadFromDtdSource(cached.publicId(), systemId);
             if (!Objects.equals(freshText, cached.text()))
             {
                 dtdCache.put(systemId, new CachedDtd(cached.publicId(), freshText));
@@ -1396,7 +1422,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
 
     /**
      * Loads from {@link #dtdSource}, treating a failure the same as a DTD it could not find, so that no
-     * {@link DtdSource} implementation can break the model by letting an unchecked exception escape.
+     * {@link DtdSource} implementation can break the model by letting an unchecked exception escape. The
+     * failure is logged.
      */
     private String loadFromDtdSource(final String publicId, final String systemId)
     {
@@ -1406,8 +1433,17 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         }
         catch (final RuntimeException e)
         {
+            final String message = "The DTD source failed to load the DTD \"" + systemId
+                    + "\", so it is treated as not found.";
+            warn(message, e);
             return null;
         }
+    }
+
+    private void warn(final String message, final RuntimeException cause)
+    {
+        final IStatus status = new Status(IStatus.WARNING, PLUGIN_ID, message, cause);
+        log.accept(status);
     }
 
     private void apply(final List<TextEdit> edits)
@@ -1619,7 +1655,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
 
     /**
      * Returns an encoder for the document's current charset, falling back to UTF-8 when the supplier
-     * returns null or throws.
+     * returns null or throws; a thrown exception is logged.
      */
     private CharsetEncoder currentEncoder()
     {
@@ -1630,6 +1666,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         }
         catch (final RuntimeException e)
         {
+            final String message = "The charset supplier failed, so the document escapes values for UTF-8.";
+            warn(message, e);
             return StandardCharsets.UTF_8.newEncoder();
         }
     }
