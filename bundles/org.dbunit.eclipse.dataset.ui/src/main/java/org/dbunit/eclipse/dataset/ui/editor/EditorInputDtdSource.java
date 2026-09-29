@@ -31,6 +31,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
@@ -38,6 +40,7 @@ import org.eclipse.core.filesystem.IFileStore;
 import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.ILog;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.content.IContentDescription;
 import org.eclipse.core.runtime.content.IContentType;
@@ -45,15 +48,31 @@ import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.ide.ResourceUtil;
 
 /**
- * Loads an external DTD relative to an editor input, without ever accessing the network.
+ * Loads an external DTD relative to an editor input, without ever accessing the network. It refuses a
+ * system ID that reaches a network share, such as {@code //host/share/dataset.dtd}, which Windows opens by
+ * connecting to the host. A DTD that cannot be read is logged with the reason, so that the "DTD not loaded"
+ * warning has an explanation; a DTD that stays unreadable is logged once, not each time the editor loads it
+ * again.
  *
  * @since 1.0.0
  */
 final class EditorInputDtdSource implements DtdSource
 {
+    private static final ILog LOG = ILog.of(EditorInputDtdSource.class);
+
     private static final String XML_CONTENT_TYPE = "org.eclipse.core.runtime.xml";
 
+    /**
+     * The start of the root of a Windows path on a network share, such as {@code \\host\share\}.
+     */
+    private static final String UNC_ROOT_PREFIX = "\\\\";
+
     private final IEditorInput input;
+
+    /**
+     * The reason last logged for each system ID whose DTD could not be read, until a load of it succeeds.
+     */
+    private final Map<String, String> reportedFailures = new HashMap<>();
 
     EditorInputDtdSource(final IEditorInput input)
     {
@@ -69,10 +88,16 @@ final class EditorInputDtdSource implements DtdSource
         }
         try
         {
-            return loadResolved(systemId);
+            final Optional<String> loaded = loadResolved(systemId);
+            if (loaded.isPresent())
+            {
+                reportedFailures.remove(systemId);
+            }
+            return loaded;
         }
         catch (final RuntimeException e)
         {
+            reportFailure(systemId, e);
             return Optional.empty();
         }
     }
@@ -81,7 +106,7 @@ final class EditorInputDtdSource implements DtdSource
     {
         if (isWindowsPath(systemId))
         {
-            return readLocalFile(Paths.get(systemId));
+            return readLocalFile(systemId, Paths.get(systemId));
         }
         final URI asUri = parseUri(systemId);
         if (asUri != null && asUri.isAbsolute())
@@ -90,7 +115,7 @@ final class EditorInputDtdSource implements DtdSource
             {
                 return Optional.empty();
             }
-            return readLocalFile(Paths.get(asUri));
+            return readLocalFile(systemId, Paths.get(asUri));
         }
         return loadRelative(systemId);
     }
@@ -115,7 +140,7 @@ final class EditorInputDtdSource implements DtdSource
         return Optional.empty();
     }
 
-    private static Optional<String> loadWorkspaceRelative(final IFile datasetFile, final String systemId)
+    private Optional<String> loadWorkspaceRelative(final IFile datasetFile, final String systemId)
     {
         final IContainer folder = datasetFile.getParent();
         if (folder == null)
@@ -134,11 +159,12 @@ final class EditorInputDtdSource implements DtdSource
         }
         catch (final CoreException | IOException e)
         {
+            reportFailure(systemId, e);
             return Optional.empty();
         }
     }
 
-    private static Optional<String> loadUriRelative(final URI datasetUri, final String systemId)
+    private Optional<String> loadUriRelative(final URI datasetUri, final String systemId)
     {
         final URI resolved;
         try
@@ -147,17 +173,19 @@ final class EditorInputDtdSource implements DtdSource
         }
         catch (final IllegalArgumentException e)
         {
+            reportFailure(systemId, e);
             return Optional.empty();
         }
         if (!"file".equalsIgnoreCase(resolved.getScheme()))
         {
             return Optional.empty();
         }
-        return readLocalFile(Paths.get(resolved));
+        return readLocalFile(systemId, Paths.get(resolved));
     }
 
-    private static Optional<String> readLocalFile(final Path path)
+    private Optional<String> readLocalFile(final String systemId, final Path path)
     {
+        requireNotOnNetworkShare(path);
         try
         {
             final byte[] content = Files.readAllBytes(path);
@@ -166,8 +194,45 @@ final class EditorInputDtdSource implements DtdSource
         }
         catch (final IOException e)
         {
+            reportFailure(systemId, e);
             return Optional.empty();
         }
+    }
+
+    /**
+     * Refuses a path on a network share. Windows opens a UNC path by connecting to its host and sending the
+     * user's credentials, so a DOCTYPE with a system ID that names a host, such as
+     * {@code //host/share/dataset.dtd} or {@code file://host/share/dataset.dtd}, would make the editor
+     * contact that host each time it loads the DTD.
+     */
+    private static void requireNotOnNetworkShare(final Path path)
+    {
+        final Path root = path.getRoot();
+        if (root == null)
+        {
+            return;
+        }
+        final String rootText = root.toString();
+        if (rootText.startsWith(UNC_ROOT_PREFIX))
+        {
+            throw new IllegalArgumentException(
+                    "The editor never reads a DTD from the network, and " + path + " is on a network share.");
+        }
+    }
+
+    /**
+     * Logs why the DTD could not be read, unless the same reason was already logged for it since the last
+     * time it was read successfully.
+     */
+    private void reportFailure(final String systemId, final Exception cause)
+    {
+        final String reason = cause.toString();
+        final String previousReason = reportedFailures.put(systemId, reason);
+        if (reason.equals(previousReason))
+        {
+            return;
+        }
+        LOG.warn("The DTD \"" + systemId + "\" could not be read.", cause);
     }
 
     /**
