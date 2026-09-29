@@ -49,7 +49,8 @@ final class FlatXmlParser
     {
         final ScanProblems problems = new ScanProblems(text);
         final XmlLexer lexer = new XmlLexer(text, problems);
-        return new Scanner(lexer, problems).scan();
+        final DoctypeScanner doctypeScanner = new DoctypeScanner(lexer, problems);
+        return new Scanner(lexer, problems, doctypeScanner).scan();
     }
 
     /**
@@ -60,6 +61,8 @@ final class FlatXmlParser
         private final XmlLexer lexer;
 
         private final ScanProblems problems;
+
+        private final DoctypeScanner doctypeScanner;
 
         private final List<FlatXmlElement> elements = new ArrayList<>();
 
@@ -73,10 +76,12 @@ final class FlatXmlParser
 
         private FlatXmlRoot root;
 
-        private Scanner(final XmlLexer lexer, final ScanProblems problems)
+        private Scanner(final XmlLexer lexer, final ScanProblems problems,
+                final DoctypeScanner doctypeScanner)
         {
             this.lexer = lexer;
             this.problems = problems;
+            this.doctypeScanner = doctypeScanner;
         }
 
         private FlatXmlParseResult scan()
@@ -138,7 +143,7 @@ final class FlatXmlParser
             }
             else if (doctype == null && lexer.atText("<!DOCTYPE"))
             {
-                scanDoctype();
+                doctype = doctypeScanner.scan();
             }
             else
             {
@@ -437,117 +442,6 @@ final class FlatXmlParser
                 start = -1;
                 significant = false;
             }
-        }
-
-        private void scanDoctype()
-        {
-            final int doctypeOffset = lexer.position();
-            lexer.advance("<!DOCTYPE".length());
-            final String rootName = scanDoctypeName();
-            lexer.skipWhitespace();
-            String publicId = null;
-            String systemId = null;
-            if (lexer.atText("SYSTEM"))
-            {
-                lexer.advance("SYSTEM".length());
-                lexer.skipWhitespace();
-                systemId = lexer.scanQuotedLiteral();
-                lexer.skipWhitespace();
-            }
-            else if (lexer.atText("PUBLIC"))
-            {
-                lexer.advance("PUBLIC".length());
-                lexer.skipWhitespace();
-                publicId = lexer.scanQuotedLiteral();
-                lexer.skipWhitespace();
-                systemId = lexer.scanQuotedLiteral();
-                lexer.skipWhitespace();
-            }
-            String internalSubset = null;
-            int internalSubsetOffset = -1;
-            if (lexer.atCharacter('['))
-            {
-                lexer.advance(1);
-                internalSubsetOffset = lexer.position();
-                skipToMatchingCloseBracket();
-                final int internalSubsetEndOffset = lexer.position();
-                internalSubset = lexer.textBetween(internalSubsetOffset, internalSubsetEndOffset).toString();
-                lexer.advance(1); // consume ']'
-                lexer.skipWhitespace();
-            }
-            lexer.expectCharacter('>', Messages.Parser_unclosedDoctype);
-            final int doctypeEndOffset = lexer.position();
-            doctype = new FlatXmlDoctype(rootName, publicId, systemId, internalSubset, internalSubsetOffset,
-                    doctypeOffset, doctypeEndOffset);
-        }
-
-        private String scanDoctypeName()
-        {
-            final int beforeNameWhitespace = lexer.position();
-            lexer.skipWhitespace();
-            if (lexer.position() == beforeNameWhitespace || !lexer.atNameStart())
-            {
-                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
-                        Messages.Parser_expectedDoctypeName, lexer.position());
-            }
-            return lexer.scanName();
-        }
-
-        /**
-         * Advances to the ']' that closes an internal subset, skipping quoted literals, comments, and
-         * processing instructions so that '>' and ']' inside them do not end it early.
-         */
-        private void skipToMatchingCloseBracket()
-        {
-            while (!lexer.atEnd() && lexer.currentCharacter() != ']')
-            {
-                skipSubsetItem();
-            }
-            if (lexer.atEnd())
-            {
-                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedSubset,
-                        lexer.position());
-            }
-        }
-
-        /**
-         * Skips the quoted literal, comment, processing instruction, or other character at the current
-         * position in an internal subset.
-         */
-        private void skipSubsetItem()
-        {
-            final char ch = lexer.currentCharacter();
-            if (ch == '"' || ch == '\'')
-            {
-                skipSubsetLiteral(ch);
-            }
-            else if (lexer.atText("<!--"))
-            {
-                lexer.skipComment();
-            }
-            else if (lexer.atText("<?"))
-            {
-                lexer.skipProcessingInstruction();
-            }
-            else
-            {
-                lexer.advance(1);
-            }
-        }
-
-        private void skipSubsetLiteral(final char quote)
-        {
-            lexer.advance(1);
-            while (!lexer.atEnd() && lexer.currentCharacter() != quote)
-            {
-                lexer.advance(1);
-            }
-            if (lexer.atEnd())
-            {
-                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
-                        Messages.Parser_unclosedSubsetLiteral, lexer.position());
-            }
-            lexer.advance(1); // consume the closing quote
         }
     }
 
