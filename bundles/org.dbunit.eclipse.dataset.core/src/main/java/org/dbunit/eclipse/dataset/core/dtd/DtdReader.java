@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.dbunit.eclipse.dataset.core.Messages;
-import org.dbunit.eclipse.dataset.core.flatxml.XmlNames;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
@@ -52,7 +51,8 @@ public final class DtdReader
      */
     public static DtdDeclarations read(final String dtdText)
     {
-        return new Scanner(dtdText).scan();
+        final DtdLexer lexer = new DtdLexer(dtdText);
+        return new Scanner(lexer).scan();
     }
 
     /**
@@ -60,15 +60,11 @@ public final class DtdReader
      */
     private static final class Scanner
     {
-        private final String dtdText;
-
-        private final int length;
+        private final DtdLexer lexer;
 
         private final Map<String, List<String>> elements = new LinkedHashMap<>();
 
         private final List<DatasetProblem> problems = new ArrayList<>();
-
-        private int pos;
 
         private boolean contentModelDeclared;
 
@@ -76,30 +72,29 @@ public final class DtdReader
 
         private List<String> contentModelNames = List.of();
 
-        private Scanner(final String dtdText)
+        private Scanner(final DtdLexer lexer)
         {
-            this.dtdText = dtdText;
-            this.length = dtdText.length();
+            this.lexer = lexer;
         }
 
         private DtdDeclarations scan()
         {
             while (true)
             {
-                skipWhitespace();
-                if (pos >= length)
+                lexer.skipWhitespace();
+                if (lexer.atEnd())
                 {
                     break;
                 }
-                if (matchesAt(pos, "<!"))
+                if (lexer.atText("<!"))
                 {
                     scanMarkupDeclaration();
                 }
-                else if (matchesAt(pos, "<?"))
+                else if (lexer.atText("<?"))
                 {
-                    skipProcessingInstruction();
+                    lexer.skipProcessingInstruction();
                 }
-                else if (dtdText.charAt(pos) == '%')
+                else if (lexer.atCharacter('%'))
                 {
                     scanParameterEntityReference();
                 }
@@ -114,27 +109,27 @@ public final class DtdReader
 
         private void scanMarkupDeclaration()
         {
-            if (matchesAt(pos, "<!--"))
+            if (lexer.atText("<!--"))
             {
-                skipComment();
+                lexer.skipComment();
             }
-            else if (matchesAt(pos, "<!ELEMENT"))
+            else if (lexer.atText("<!ELEMENT"))
             {
                 scanElementDeclaration();
             }
-            else if (matchesAt(pos, "<!ATTLIST"))
+            else if (lexer.atText("<!ATTLIST"))
             {
                 scanAttlistDeclaration();
             }
-            else if (matchesAt(pos, "<!ENTITY"))
+            else if (lexer.atText("<!ENTITY"))
             {
                 scanIgnoredDeclaration(Messages.Dtd_parameterEntityDeclarationsIgnored);
             }
-            else if (matchesAt(pos, "<!NOTATION"))
+            else if (lexer.atText("<!NOTATION"))
             {
                 scanIgnoredDeclaration(null);
             }
-            else if (matchesAt(pos, "<!["))
+            else if (lexer.atText("<!["))
             {
                 scanConditionalSection();
             }
@@ -150,18 +145,18 @@ public final class DtdReader
          */
         private void skipUnexpectedContent()
         {
-            pos++;
+            lexer.advance(1);
         }
 
         private void scanElementDeclaration()
         {
-            pos += "<!ELEMENT".length();
-            skipWhitespace();
-            final String name = scanName();
-            skipWhitespace();
+            lexer.advance("<!ELEMENT".length());
+            lexer.skipWhitespace();
+            final String name = lexer.scanName();
+            lexer.skipWhitespace();
             final String contentSpec = scanContentSpec();
-            skipWhitespace();
-            skipCharacter('>');
+            lexer.skipWhitespace();
+            lexer.skipCharacter('>');
             if ("dataset".equals(name))
             {
                 contentModelDeclared = true;
@@ -177,14 +172,14 @@ public final class DtdReader
 
         private String scanContentSpec()
         {
-            return atCharacter('(') ? scanParenthesizedContentSpec() : scanBareWord();
+            return lexer.atCharacter('(') ? lexer.scanParenthesizedContentSpec() : lexer.scanBareWord();
         }
 
         private void scanAttlistDeclaration()
         {
-            pos += "<!ATTLIST".length();
-            skipWhitespace();
-            final String elementName = scanName();
+            lexer.advance("<!ATTLIST".length());
+            lexer.skipWhitespace();
+            final String elementName = lexer.scanName();
             final boolean collectsColumns = !elementName.isEmpty() && !"dataset".equals(elementName);
             if (collectsColumns)
             {
@@ -192,26 +187,26 @@ public final class DtdReader
             }
             while (true)
             {
-                skipWhitespace();
-                if (atDeclarationEnd())
+                lexer.skipWhitespace();
+                if (lexer.atDeclarationEnd())
                 {
                     break;
                 }
-                final String attributeName = scanName();
+                final String attributeName = lexer.scanName();
                 if (attributeName.isEmpty())
                 {
                     break;
                 }
-                skipWhitespace();
+                lexer.skipWhitespace();
                 scanAttributeType();
-                skipWhitespace();
+                lexer.skipWhitespace();
                 scanAttributeDefault();
                 if (collectsColumns)
                 {
                     addColumn(elementName, attributeName);
                 }
             }
-            skipCharacter('>');
+            lexer.skipCharacter('>');
         }
 
         private void addColumn(final String elementName, final String attributeName)
@@ -225,260 +220,64 @@ public final class DtdReader
 
         private void scanAttributeType()
         {
-            if (pos < length && dtdText.charAt(pos) == '(')
+            if (lexer.atCharacter('('))
             {
-                skipParenthesizedList();
+                lexer.skipParenthesizedList();
                 return;
             }
-            final String word = scanBareWord();
+            final String word = lexer.scanBareWord();
             if ("NOTATION".equals(word))
             {
-                skipWhitespace();
-                if (pos < length && dtdText.charAt(pos) == '(')
+                lexer.skipWhitespace();
+                if (lexer.atCharacter('('))
                 {
-                    skipParenthesizedList();
+                    lexer.skipParenthesizedList();
                 }
             }
         }
 
         private void scanAttributeDefault()
         {
-            if (atCharacter('#'))
+            if (lexer.atCharacter('#'))
             {
-                final String word = scanBareWord();
+                final String word = lexer.scanBareWord();
                 if ("#FIXED".equals(word))
                 {
-                    skipWhitespace();
-                    scanQuotedLiteralIfPresent();
+                    lexer.skipWhitespace();
+                    lexer.scanQuotedLiteralIfPresent();
                 }
             }
             else
             {
-                scanQuotedLiteralIfPresent();
-            }
-        }
-
-        private void scanQuotedLiteralIfPresent()
-        {
-            if (pos < length && isQuote(dtdText.charAt(pos)))
-            {
-                scanQuotedLiteral();
+                lexer.scanQuotedLiteralIfPresent();
             }
         }
 
         private void scanIgnoredDeclaration(final String message)
         {
-            final int start = pos;
-            skipToMatchingCloseAngleBracket();
+            final int start = lexer.position();
+            lexer.skipToMatchingCloseAngleBracket();
             if (message != null)
             {
-                addInfoProblem(message, start, pos - start);
+                final int end = lexer.position();
+                addInfoProblem(message, start, end - start);
             }
         }
 
         private void scanConditionalSection()
         {
-            final int start = pos;
-            pos += "<![".length();
-            while (pos < length && !matchesAt(pos, "]]>"))
-            {
-                pos++;
-            }
-            if (pos < length)
-            {
-                pos += "]]>".length();
-            }
-            addInfoProblem(Messages.Dtd_conditionalSectionsIgnored, start, pos - start);
+            final int start = lexer.position();
+            lexer.skipConditionalSection();
+            final int end = lexer.position();
+            addInfoProblem(Messages.Dtd_conditionalSectionsIgnored, start, end - start);
         }
 
         private void scanParameterEntityReference()
         {
-            final int start = pos;
-            pos++; // consume '%'
-            scanName();
-            if (pos < length && dtdText.charAt(pos) == ';')
-            {
-                pos++;
-            }
-            addInfoProblem(Messages.Dtd_parameterEntityReferencesIgnored, start, pos - start);
-        }
-
-        private void skipToMatchingCloseAngleBracket()
-        {
-            while (pos < length && dtdText.charAt(pos) != '>')
-            {
-                final char ch = dtdText.charAt(pos);
-                if (isQuote(ch))
-                {
-                    pos++;
-                    while (pos < length && dtdText.charAt(pos) != ch)
-                    {
-                        pos++;
-                    }
-                }
-                pos++;
-            }
-            if (pos < length)
-            {
-                pos++; // consume '>'
-            }
-        }
-
-        private void skipParenthesizedList()
-        {
-            while (pos < length && dtdText.charAt(pos) != ')')
-            {
-                pos++;
-            }
-            if (pos < length)
-            {
-                pos++; // consume ')'
-            }
-        }
-
-        private void scanQuotedLiteral()
-        {
-            final char quote = dtdText.charAt(pos);
-            pos++;
-            while (pos < length && dtdText.charAt(pos) != quote)
-            {
-                pos++;
-            }
-            if (pos < length)
-            {
-                pos++; // consume the closing quote
-            }
-        }
-
-        private String scanParenthesizedContentSpec()
-        {
-            final int start = pos;
-            int depth = 0;
-            while (pos < length)
-            {
-                final char ch = dtdText.charAt(pos);
-                pos++;
-                if (ch == '(')
-                {
-                    depth++;
-                }
-                else if (ch == ')')
-                {
-                    depth--;
-                    if (depth == 0)
-                    {
-                        break;
-                    }
-                }
-            }
-            if (pos < length && isQuantifier(dtdText.charAt(pos)))
-            {
-                pos++;
-            }
-            return dtdText.substring(start, pos);
-        }
-
-        private String scanName()
-        {
-            final int start = pos;
-            if (pos < length && XmlNames.isNameStartChar(Character.codePointAt(dtdText, pos)))
-            {
-                pos += Character.charCount(Character.codePointAt(dtdText, pos));
-                while (pos < length && XmlNames.isNameChar(Character.codePointAt(dtdText, pos)))
-                {
-                    pos += Character.charCount(Character.codePointAt(dtdText, pos));
-                }
-            }
-            return dtdText.substring(start, pos);
-        }
-
-        private String scanBareWord()
-        {
-            final int start = pos;
-            while (pos < length && !Character.isWhitespace(dtdText.charAt(pos))
-                    && dtdText.charAt(pos) != '>')
-            {
-                pos++;
-            }
-            return dtdText.substring(start, pos);
-        }
-
-        private void skipWhitespace()
-        {
-            while (pos < length && Character.isWhitespace(dtdText.charAt(pos)))
-            {
-                pos++;
-            }
-        }
-
-        private boolean atCharacter(final char expected)
-        {
-            return pos < length && dtdText.charAt(pos) == expected;
-        }
-
-        private boolean atDeclarationEnd()
-        {
-            return pos >= length || dtdText.charAt(pos) == '>';
-        }
-
-        private void skipCharacter(final char expected)
-        {
-            if (atCharacter(expected))
-            {
-                pos++;
-            }
-        }
-
-        private boolean matchesAt(final int position, final String literal)
-        {
-            if (position + literal.length() > length)
-            {
-                return false;
-            }
-            for (int i = 0; i < literal.length(); i++)
-            {
-                if (dtdText.charAt(position + i) != literal.charAt(i))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        private void skipComment()
-        {
-            pos += "<!--".length();
-            while (pos < length && !matchesAt(pos, "-->"))
-            {
-                pos++;
-            }
-            if (pos < length)
-            {
-                pos += "-->".length();
-            }
-        }
-
-        private void skipProcessingInstruction()
-        {
-            pos += "<?".length();
-            while (pos < length && !matchesAt(pos, "?>"))
-            {
-                pos++;
-            }
-            if (pos < length)
-            {
-                pos += "?>".length();
-            }
-        }
-
-        private static boolean isQuote(final char ch)
-        {
-            return ch == '"' || ch == '\'';
-        }
-
-        private static boolean isQuantifier(final char ch)
-        {
-            return ch == '*' || ch == '?' || ch == '+';
+            final int start = lexer.position();
+            lexer.skipParameterEntityReference();
+            final int end = lexer.position();
+            addInfoProblem(Messages.Dtd_parameterEntityReferencesIgnored, start, end - start);
         }
 
         private static List<String> extractContentModelNames(final String contentSpec)

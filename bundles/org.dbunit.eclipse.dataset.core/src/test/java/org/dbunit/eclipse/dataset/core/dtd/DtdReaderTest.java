@@ -24,8 +24,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 
+import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
+import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -133,6 +135,89 @@ class DtdReaderTest
         assertThat(declarations.getProblems()).as("A parameter entity must produce exactly one info.")
                 .extracting(DatasetProblem::code).containsExactly(ProblemCode.UNSUPPORTED_DTD_CONSTRUCT);
         assertThat(declarations.tables()).as("Parsing must continue after the ignored entity.")
+                .extracting(DtdTable::name).containsExactly("USERS");
+    }
+
+    @Test
+    void testRead_whenAParameterEntityValueHoldsAGreaterThan_infoCoversTheWholeDeclaration()
+    {
+        final String declaration = "<!ENTITY % gt \"a > b\">";
+
+        final DtdDeclarations declarations =
+                DtdReader.read(declaration + "\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>");
+
+        assertThat(declarations.getProblems())
+                .as("The info must span the declaration up to its real closing bracket.")
+                .containsExactly(new DatasetProblem(ProblemCode.UNSUPPORTED_DTD_CONSTRUCT,
+                        ProblemSeverity.INFO, Messages.Dtd_parameterEntityDeclarationsIgnored, null, null, -1,
+                        0, declaration.length()));
+    }
+
+    @Test
+    void testRead_whenAConditionalSectionIsDeclared_infoCoversTheSectionAndItsContentIsIgnored()
+    {
+        final String prefix = "<!ELEMENT dataset (USERS*)>\n";
+        final String section = "<![IGNORE[ <!ELEMENT SKIPPED EMPTY> ]]>";
+
+        final DtdDeclarations declarations = DtdReader.read(prefix + section + "\n<!ELEMENT USERS EMPTY>");
+
+        assertThat(declarations.getProblems()).as("The info must span exactly the conditional section.")
+                .containsExactly(new DatasetProblem(ProblemCode.UNSUPPORTED_DTD_CONSTRUCT,
+                        ProblemSeverity.INFO, Messages.Dtd_conditionalSectionsIgnored, null, null, -1,
+                        prefix.length(), section.length()));
+        assertThat(declarations.missingDeclarations()).as("Nothing inside the section may be declared.")
+                .isEmpty();
+    }
+
+    @Test
+    void testRead_whenAParameterEntityIsReferenced_infoCoversTheReference()
+    {
+        final String prefix = "<!ELEMENT dataset (USERS*)>\n";
+
+        final DtdDeclarations declarations =
+                DtdReader.read(prefix + "%common;\n<!ELEMENT USERS EMPTY>");
+
+        assertThat(declarations.getProblems())
+                .as("The info must span the percent sign through the semicolon.")
+                .containsExactly(new DatasetProblem(ProblemCode.UNSUPPORTED_DTD_CONSTRUCT,
+                        ProblemSeverity.INFO, Messages.Dtd_parameterEntityReferencesIgnored, null, null, -1,
+                        prefix.length(), "%common;".length()));
+    }
+
+    @Test
+    void testRead_whenAParameterEntityReferenceHasNoSemicolon_infoCoversTheNameOnly()
+    {
+        final String prefix = "<!ELEMENT dataset (USERS*)>\n";
+
+        final DtdDeclarations declarations =
+                DtdReader.read(prefix + "%common\n<!ELEMENT USERS EMPTY>");
+
+        assertThat(declarations.getProblems())
+                .as("The info must end after the name when no semicolon follows.")
+                .containsExactly(new DatasetProblem(ProblemCode.UNSUPPORTED_DTD_CONSTRUCT,
+                        ProblemSeverity.INFO, Messages.Dtd_parameterEntityReferencesIgnored, null, null, -1,
+                        prefix.length(), "%common".length()));
+    }
+
+    @Test
+    void testRead_whenANotationIsDeclared_isIgnoredWithoutAProblem()
+    {
+        final DtdDeclarations declarations = DtdReader.read("<!NOTATION gif SYSTEM \"image/gif\">\n"
+                + "<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>");
+
+        assertThat(declarations.getProblems()).as("A notation declaration is skipped silently.").isEmpty();
+        assertThat(declarations.tables()).as("Parsing must continue after the notation.")
+                .extracting(DtdTable::name).containsExactly("USERS");
+    }
+
+    @Test
+    void testRead_whenAProcessingInstructionPrecedesTheDeclarations_isSkipped()
+    {
+        final DtdDeclarations declarations = DtdReader.read("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                + "<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>");
+
+        assertThat(declarations.getProblems()).as("A processing instruction is skipped silently.").isEmpty();
+        assertThat(declarations.tables()).as("Parsing must continue after the processing instruction.")
                 .extracting(DtdTable::name).containsExactly("USERS");
     }
 
