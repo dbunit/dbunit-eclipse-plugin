@@ -93,6 +93,7 @@ The IDocument (text) is the single source of truth: grid edits become minimal te
   - Use Eclipse code cleanup settings file `code-cleanup-eclipse.xml` when modifying or creating files (e.g., `final` parameters, locals, and private fields).
   - Start every Java file with the dbUnit LGPL license header used by the existing sources.
   - Place the Logger variable first in the class; log through Eclipse's `org.eclipse.core.runtime.ILog` (`private static final ILog LOG = ILog.of(ClassName.class);`), not a logging framework.
+    - The core bundle's unit tests run without OSGi, where `ILog.of` throws, so core classes never call it: they take a `Consumer<IStatus>` log sink through their constructor, as `FlatXmlDatasetDocument` does, and the UI bundle passes `LOG::log`.
   - Write JavaDoc comments on all public classes and methods in src/main.
   - In JavaDoc, use complete sentences for all descriptions, start with a capital letter and end with a period, for everything - the topic body, parameters, and return, including all annotations such as @param and @throws.
   - Tests:

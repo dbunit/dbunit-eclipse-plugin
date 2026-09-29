@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.dbunit.eclipse.dataset.core.TestDatasets;
@@ -41,6 +42,8 @@ import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Status;
 import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.DocumentRewriteSessionEvent;
@@ -254,6 +257,64 @@ class FlatXmlDatasetDocumentTest
                 .as("A DtdSource that throws must yield the same DTD_NOT_LOADED warning as one that finds "
                         + "nothing.")
                 .contains(ProblemCode.DTD_NOT_LOADED);
+    }
+
+    @Test
+    void testRefresh_whenTheDtdSourceThrows_logsAWarningThatNamesTheDtd()
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset SYSTEM \"my.dtd\"><dataset><USERS ID=\"1\"/></dataset>");
+        final IllegalArgumentException failure = new IllegalArgumentException("URI is not hierarchical");
+        final DtdSource throwingSource = (publicId, systemId) ->
+        {
+            throw failure;
+        };
+        final List<IStatus> logged = new ArrayList<>();
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, throwingSource,
+                FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8, logged::add);
+
+        datasetDocument.refresh();
+
+        assertThat(logged).as("A DtdSource that throws must be logged once, with its failure.")
+                .usingRecursiveComparison()
+                .isEqualTo(List.of(new Status(IStatus.WARNING, "org.dbunit.eclipse.dataset.core",
+                        "The DTD source failed to load the DTD \"my.dtd\", so it is treated as not found.",
+                        failure)));
+    }
+
+    @Test
+    void testReloadDtd_whenTheDtdSourceThrows_treatsTheDtdAsNotLoadedAndLogsAWarning()
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset SYSTEM \"my.dtd\"><dataset><USERS ID=\"1\"/></dataset>");
+        final AtomicBoolean failing = new AtomicBoolean();
+        final IllegalStateException failure = new IllegalStateException("The DTD source is broken.");
+        final DtdSource source = (publicId, systemId) ->
+        {
+            if (failing.get())
+            {
+                throw failure;
+            }
+            return Optional.of(
+                    "<!ELEMENT dataset (USERS*)><!ELEMENT USERS EMPTY><!ATTLIST USERS ID CDATA #REQUIRED>");
+        };
+        final List<IStatus> logged = new ArrayList<>();
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, source,
+                FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8, logged::add);
+        datasetDocument.refresh();
+        failing.set(true);
+
+        datasetDocument.reloadDtd();
+
+        assertThat(datasetDocument.getModel().getProblems()).extracting(DatasetProblem::code)
+                .as("A DtdSource that throws on reload must leave the DTD not loaded, like one that finds "
+                        + "nothing.")
+                .contains(ProblemCode.DTD_NOT_LOADED);
+        assertThat(logged).as("The failure while reloading must be logged once.")
+                .usingRecursiveComparison()
+                .isEqualTo(List.of(new Status(IStatus.WARNING, "org.dbunit.eclipse.dataset.core",
+                        "The DTD source failed to load the DTD \"my.dtd\", so it is treated as not found.",
+                        failure)));
     }
 
     @Test
@@ -715,6 +776,29 @@ class FlatXmlDatasetDocumentTest
                 "A character the document's encoder cannot represent must become a numeric character "
                         + "reference.")
                 .isEqualTo("<dataset><USERS ID=\"1\" NOTE=\"&#x20AC;\"/></dataset>");
+    }
+
+    @Test
+    void testSetCells_whenTheCharsetSupplierThrows_escapesForUtf8AndLogsAWarning()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NOTE=\"x\"/></dataset>");
+        final IllegalStateException failure = new IllegalStateException("The charset is unknown.");
+        final List<IStatus> logged = new ArrayList<>();
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, DtdSource.NONE,
+                FlatXmlOptions.DBUNIT_DEFAULTS, () ->
+                {
+                    throw failure;
+                }, logged::add);
+        datasetDocument.refresh();
+
+        datasetDocument.setCells("USERS", List.of(new CellChange(0, "NOTE", "€")));
+
+        assertThat(document.get()).as("A failing charset supplier must fall back to UTF-8, which can "
+                + "represent the euro sign.").isEqualTo("<dataset><USERS ID=\"1\" NOTE=\"€\"/></dataset>");
+        assertThat(logged).as("The failing charset supplier must be logged once, with its failure.")
+                .usingRecursiveComparison()
+                .isEqualTo(List.of(new Status(IStatus.WARNING, "org.dbunit.eclipse.dataset.core",
+                        "The charset supplier failed, so the document escapes values for UTF-8.", failure)));
     }
 
     @Test
