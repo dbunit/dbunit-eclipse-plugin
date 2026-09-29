@@ -27,6 +27,8 @@ import org.eclipse.osgi.util.NLS;
  *
  * @since 1.0.0
  */
+// NLS binds each field to the message key of the same name, so the field names follow the keys.
+@SuppressWarnings("PMD.FieldNamingConventions")
 public final class Messages extends NLS
 {
     private static final String BUNDLE_NAME = "org.dbunit.eclipse.dataset.core.messages";

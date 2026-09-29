@@ -40,12 +40,15 @@ The pass compiles the same sources with the same classpath into `target/error-pr
 which the build discards; the shipped classes still come from the Eclipse compiler.
 Any warning fails the build.
 Skip it with `-Dmaven.main.skip`.
+* https://pmd.github.io/[PMD] checks the main Java sources against `src/code-audit-rules/pmd-ruleset.xml`.
+Skip it with `-Dpmd.skip=true`.
 
 Fix a finding instead of suppressing it.
 When a SpotBugs finding does not apply to the design, add an entry with the reason to
 `src/code-audit-rules/spotbugs-exclude.xml`; each entry names the class, the field, and the pattern,
 so that the same finding anywhere else is still reported.
 For an Error Prone finding, put `@SuppressWarnings("CheckName")` on the smallest element,
+and for a PMD violation `@SuppressWarnings("PMD.RuleName")`,
 with a comment that gives the reason.
 
 == Installing a Local Build
