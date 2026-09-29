@@ -29,6 +29,7 @@ import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
 import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.preferences.PreferenceKeys;
+import org.eclipse.core.runtime.ILog;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.text.IDocument;
@@ -58,6 +59,8 @@ import org.eclipse.ui.texteditor.ITextEditor;
  */
 public final class FlatXmlDatasetEditor extends MultiPageEditorPart
 {
+    private static final ILog LOG = ILog.of(FlatXmlDatasetEditor.class);
+
     /**
      * The identifier this editor is registered under in {@code plugin.xml}.
      */
@@ -207,7 +210,7 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
                 sourceEditor.getDocumentProvider().getDocument(sourceEditor.getEditorInput());
         datasetDocument = new FlatXmlDatasetDocument(document,
                 new EditorInputDtdSource(getEditorInput()), PreferenceKeys.readOptions(),
-                this::currentCharset);
+                this::currentCharset, LOG::log);
         datasetDocument.refresh();
 
         tablesPage = new TablesPage(getContainer(), this, datasetDocument);
