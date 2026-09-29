@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SpotBugs exclusions, read by spotbugs-maven-plugin (see the root pom.xml).
+
+  Fix a finding rather than excluding it. An entry belongs here only when the finding does not apply to the
+  design, and each entry says why. The EI_EXPOSE_REP and EI_EXPOSE_REP2 entries are for members that share a
+  collaborator on purpose: a widget, a workbench service, or the text document that is the single source of
+  truth. Collections and arrays that a class owns are copied instead. An entry names the class, the field, and
+  the pattern, so the same finding anywhere else is still reported.
+-->
+<FindBugsFilter>
+  <!-- The dataset document works directly on the text document it is bound to. That document is the single
+       source of truth, and the edits and the change listeners depend on it being the same instance. -->
+  <Match>
+    <Class name="org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument"/>
+    <Field name="document"/>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+  </Match>
+
+  <!-- The Eclipse plug-in singleton: an activator hands out its own instance through getDefault(). -->
+  <Match>
+    <Class name="org.dbunit.eclipse.dataset.ui.DatasetUiPlugin"/>
+    <Field name="plugin"/>
+    <Bug pattern="MS_EXPOSE_REP"/>
+  </Match>
+
+  <!-- An action works on the grid context of the page it belongs to, which it shares with every other action. -->
+  <Match>
+    <Class name="org.dbunit.eclipse.dataset.ui.actions.FillDownAction"/>
+    <Field name="context"/>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+  </Match>
+
+  <!-- The Tables page exposes the dataset document that its editor owns, for its actions and its tests. -->
+  <Match>
+    <Class name="org.dbunit.eclipse.dataset.ui.editor.TablesPage"/>
+    <Field name="datasetDocument"/>
+    <Bug pattern="EI_EXPOSE_REP"/>
+  </Match>
+
+  <!-- A grid exposes its NatTable widget, which its callers place, focus, and query. -->
+  <Match>
+    <Class name="org.dbunit.eclipse.dataset.ui.grid.DatasetGrid"/>
+    <Field name="natTable"/>
+    <Bug pattern="EI_EXPOSE_REP"/>
+  </Match>
+
+  <!-- The syntax colors follow the workbench theme manager they are given. -->
+  <Match>
+    <Class name="org.dbunit.eclipse.dataset.ui.source.XmlTokenColors"/>
+    <Field name="themeManager"/>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+  </Match>
+
+  <!-- INewWizard.init hands the wizard the workbench that it runs in. -->
+  <Match>
+    <Class name="org.dbunit.eclipse.dataset.ui.wizards.NewFlatXmlDatasetWizard"/>
+    <Field name="workbench"/>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+  </Match>
+</FindBugsFilter>

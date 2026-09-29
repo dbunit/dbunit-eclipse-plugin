@@ -28,6 +28,18 @@ Use it for all build operations instead of a separately installed `mvn`.
 The core-only build lists the target platform module in `-pl` because `-am` does not find it.
 On Linux without a display, run the build under Xvfb: `xvfb-run -a ./mvnw clean verify`.
 
+== Static Analysis
+
+`./mvnw clean verify` also analyzes the core and UI bundles, and fails on any finding:
+
+* https://spotbugs.github.io/[SpotBugs] analyzes the compiled classes at its highest effort and lowest threshold.
+Skip it with `-Dspotbugs.skip`.
+
+Fix a finding instead of suppressing it.
+When a finding does not apply to the design, add an entry with the reason to `spotbugs-exclude.xml`
+at the repository root; each entry names the class, the field, and the pattern,
+so that the same finding anywhere else is still reported.
+
 == Installing a Local Build
 
 The update site is assembled in `releng/org.dbunit.eclipse.repository/target/repository/`

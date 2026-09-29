@@ -45,6 +45,7 @@
     <projectInfoReportsPluginVersion>3.9.0</projectInfoReportsPluginVersion>
     <resourcesPluginVersion>3.5.0</resourcesPluginVersion>
     <sitePluginVersion>3.22.0</sitePluginVersion>
+    <spotbugsMavenPluginVersion>4.10.4.1</spotbugsMavenPluginVersion>
     <surefirePluginVersion>3.6.0</surefirePluginVersion>
     <versionsMavenPluginVersion>2.22.0</versionsMavenPluginVersion>
   </properties>
@@ -129,6 +130,25 @@
 
     <pluginManagement>
       <plugins>
+        <plugin>
+          <groupId>com.github.spotbugs</groupId>
+          <artifactId>spotbugs-maven-plugin</artifactId>
+          <version>${spotbugsMavenPluginVersion}</version>
+          <configuration>
+            <effort>Max</effort>
+            <threshold>Low</threshold>
+            <!-- Each exclusion in this file states why its finding is by design. -->
+            <excludeFilterFile>${maven.multiModuleProjectDirectory}/src/code-audit-rules/spotbugs-exclude.xml</excludeFilterFile>
+          </configuration>
+          <executions>
+            <execution>
+              <id>spotbugs-check</id>
+              <goals>
+                <goal>check</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-resources-plugin</artifactId>
