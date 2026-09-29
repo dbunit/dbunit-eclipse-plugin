@@ -21,10 +21,8 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import org.dbunit.eclipse.dataset.core.Messages;
@@ -50,7 +48,8 @@ final class FlatXmlParser
     static FlatXmlParseResult parse(final CharSequence text)
     {
         final ScanProblems problems = new ScanProblems(text);
-        return new Scanner(text, problems).scan();
+        final XmlLexer lexer = new XmlLexer(text, problems);
+        return new Scanner(lexer, problems).scan();
     }
 
     /**
@@ -58,19 +57,11 @@ final class FlatXmlParser
      */
     private static final class Scanner
     {
-        private final CharSequence text;
-
-        private final int length;
+        private final XmlLexer lexer;
 
         private final ScanProblems problems;
 
         private final List<FlatXmlElement> elements = new ArrayList<>();
-
-        /**
-         * Each distinct element and attribute name, so that the elements share one string per name
-         * instead of holding one per occurrence.
-         */
-        private final Map<String, String> names = new HashMap<>();
 
         /**
          * The attribute names of the start tag being scanned; start tags never nest, so one set serves
@@ -78,16 +69,13 @@ final class FlatXmlParser
          */
         private final Set<String> startTagAttributeNames = new HashSet<>();
 
-        private int pos;
-
         private FlatXmlDoctype doctype;
 
         private FlatXmlRoot root;
 
-        private Scanner(final CharSequence text, final ScanProblems problems)
+        private Scanner(final XmlLexer lexer, final ScanProblems problems)
         {
-            this.text = text;
-            this.length = text.length();
+            this.lexer = lexer;
             this.problems = problems;
         }
 
@@ -95,7 +83,7 @@ final class FlatXmlParser
         {
             try
             {
-                skipBom();
+                lexer.skipBom();
                 scanProlog();
                 scanRoot();
                 scanEpilog();
@@ -109,32 +97,24 @@ final class FlatXmlParser
                     problems.isWellFormed());
         }
 
-        private void skipBom()
-        {
-            if (length > 0 && text.charAt(0) == '﻿')
-            {
-                pos = 1;
-            }
-        }
-
         private void scanProlog()
         {
             while (true)
             {
-                skipWhitespace();
-                if (pos >= length)
+                lexer.skipWhitespace();
+                if (lexer.atEnd())
                 {
                     throw problems.blockingError(ProblemCode.ROOT_NOT_DATASET,
-                            Messages.Parser_noRootElement, pos);
+                            Messages.Parser_noRootElement, lexer.position());
                 }
-                if (isElementStart())
+                if (lexer.isElementStart())
                 {
                     return;
                 }
                 if (!scanPrologMarkup())
                 {
                     throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
-                            Messages.Parser_unexpectedBeforeRoot, pos);
+                            Messages.Parser_unexpectedBeforeRoot, lexer.position());
                 }
             }
         }
@@ -148,15 +128,15 @@ final class FlatXmlParser
         private boolean scanPrologMarkup()
         {
             boolean scanned = true;
-            if (matchesAt(pos, "<?"))
+            if (lexer.atText("<?"))
             {
-                skipProcessingInstruction();
+                lexer.skipProcessingInstruction();
             }
-            else if (matchesAt(pos, "<!--"))
+            else if (lexer.atText("<!--"))
             {
-                skipComment();
+                lexer.skipComment();
             }
-            else if (doctype == null && matchesAt(pos, "<!DOCTYPE"))
+            else if (doctype == null && lexer.atText("<!DOCTYPE"))
             {
                 scanDoctype();
             }
@@ -169,7 +149,7 @@ final class FlatXmlParser
 
         private void scanRoot()
         {
-            final int rootOffset = pos;
+            final int rootOffset = lexer.position();
             final StartTag startTag = scanStartTag();
             if (!"dataset".equals(startTag.name()))
             {
@@ -184,42 +164,38 @@ final class FlatXmlParser
                 return;
             }
             final int endTagOffset = scanChildren("dataset", true);
-            root = new FlatXmlRoot(rootOffset, startTag.startTagEndOffset(), false, endTagOffset, pos);
+            final int endOffset = lexer.position();
+            root = new FlatXmlRoot(rootOffset, startTag.startTagEndOffset(), false, endTagOffset, endOffset);
         }
 
         private void scanEpilog()
         {
-            while (pos < length)
+            while (!lexer.atEnd())
             {
-                if (isWhitespace(text.charAt(pos)))
+                final char ch = lexer.currentCharacter();
+                if (XmlLexer.isWhitespace(ch))
                 {
-                    pos++;
+                    lexer.advance(1);
                 }
-                else if (matchesAt(pos, "<?"))
+                else if (lexer.atText("<?"))
                 {
-                    skipProcessingInstruction();
+                    lexer.skipProcessingInstruction();
                 }
-                else if (matchesAt(pos, "<!--"))
+                else if (lexer.atText("<!--"))
                 {
-                    skipComment();
+                    lexer.skipComment();
                 }
                 else
                 {
                     throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
-                            Messages.Parser_unexpectedAfterRoot, pos);
+                            Messages.Parser_unexpectedAfterRoot, lexer.position());
                 }
             }
         }
 
-        private boolean isElementStart()
-        {
-            return text.charAt(pos) == '<' && pos + 1 < length
-                    && XmlNames.isNameStartChar(Character.codePointAt(text, pos + 1));
-        }
-
         private void scanRowElement()
         {
-            final int elementOffset = pos;
+            final int elementOffset = lexer.position();
             final StartTag startTag = scanStartTag();
             if (startTag.selfClosing())
             {
@@ -229,9 +205,10 @@ final class FlatXmlParser
                 return;
             }
             final int endTagOffset = scanChildren(startTag.name(), false);
+            final int endOffset = lexer.position();
             elements.add(new FlatXmlElement(startTag.name(), elementOffset, startTag.nameEndOffset(),
                     startTag.attributes(), startTag.attributesEndOffset(), startTag.startTagEndOffset(),
-                    false, endTagOffset, pos));
+                    false, endTagOffset, endOffset));
         }
 
         /**
@@ -241,28 +218,30 @@ final class FlatXmlParser
          */
         private StartTag scanStartTag()
         {
-            pos++; // consume '<'
-            final String name = scanName();
-            final int nameEndOffset = pos;
+            lexer.advance(1); // consume '<'
+            final String name = lexer.scanName();
+            final int nameEndOffset = lexer.position();
             final List<FlatXmlAttribute> attributes = new ArrayList<>();
             startTagAttributeNames.clear();
             int attributesEndOffset = nameEndOffset;
             while (true)
             {
-                final int segmentOffset = pos;
-                skipWhitespace();
-                final boolean hadWhitespace = pos > segmentOffset;
-                if (matchesAt(pos, "/>"))
+                final int segmentOffset = lexer.position();
+                lexer.skipWhitespace();
+                final boolean hadWhitespace = lexer.position() > segmentOffset;
+                if (lexer.atText("/>"))
                 {
-                    pos += 2;
+                    lexer.advance(2);
+                    final int startTagEndOffset = lexer.position();
                     return new StartTag(name, nameEndOffset, List.copyOf(attributes), attributesEndOffset,
-                            pos, true);
+                            startTagEndOffset, true);
                 }
-                if (matchesAt(pos, ">"))
+                if (lexer.atText(">"))
                 {
-                    pos++;
+                    lexer.advance(1);
+                    final int startTagEndOffset = lexer.position();
                     return new StartTag(name, nameEndOffset, List.copyOf(attributes), attributesEndOffset,
-                            pos, false);
+                            startTagEndOffset, false);
                 }
                 requireAttributeStart(hadWhitespace, attributes.isEmpty());
                 final FlatXmlAttribute attribute = scanAttribute(segmentOffset);
@@ -278,10 +257,10 @@ final class FlatXmlParser
          */
         private void requireAttributeStart(final boolean hadWhitespace, final boolean firstAttribute)
         {
-            if (pos >= length)
+            if (lexer.atEnd())
             {
                 throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_endedInStartTag,
-                        pos);
+                        lexer.position());
             }
             if (!hadWhitespace)
             {
@@ -289,7 +268,7 @@ final class FlatXmlParser
                         firstAttribute
                                 ? Messages.Parser_expectedAfterElementName
                                 : Messages.Parser_expectedWhitespaceBetweenAttributes,
-                        pos);
+                        lexer.position());
             }
         }
 
@@ -304,72 +283,19 @@ final class FlatXmlParser
 
         private FlatXmlAttribute scanAttribute(final int segmentOffset)
         {
-            final int nameOffset = pos;
-            final String name = scanName();
-            skipWhitespace();
-            expectCharacter('=', Messages.Parser_expectedEquals);
-            skipWhitespace();
-            final char quote = scanOpeningQuote(Messages.Parser_expectedQuotedValue);
-            final int valueOffset = pos;
-            final int valueEndOffset = scanToClosingQuote(quote, valueOffset);
-            final String value = decodeValue(text.subSequence(valueOffset, valueEndOffset), valueOffset);
-            pos++; // consume the closing quote
+            final int nameOffset = lexer.position();
+            final String name = lexer.scanName();
+            lexer.skipWhitespace();
+            lexer.expectCharacter('=', Messages.Parser_expectedEquals);
+            lexer.skipWhitespace();
+            final char quote = lexer.scanOpeningQuote(Messages.Parser_expectedQuotedValue);
+            final int valueOffset = lexer.position();
+            final int valueEndOffset = lexer.scanToClosingQuote(quote, valueOffset);
+            final CharSequence rawValue = lexer.textBetween(valueOffset, valueEndOffset);
+            final String value = decodeValue(rawValue, valueOffset);
+            lexer.advance(1); // consume the closing quote
             return new FlatXmlAttribute(name, value, segmentOffset, nameOffset, valueOffset, valueEndOffset,
                     quote);
-        }
-
-        /**
-         * Consumes the expected character, or records the blocking problem that the message describes.
-         */
-        private void expectCharacter(final char expected, final String message)
-        {
-            if (pos >= length || text.charAt(pos) != expected)
-            {
-                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, message, pos);
-            }
-            pos++;
-        }
-
-        /**
-         * Consumes the quote that opens a quoted value, or records the blocking problem that the message
-         * describes.
-         *
-         * @return The quote, which also closes the value.
-         */
-        private char scanOpeningQuote(final String message)
-        {
-            final boolean atQuote = pos < length && (text.charAt(pos) == '"' || text.charAt(pos) == '\'');
-            if (!atQuote)
-            {
-                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, message, pos);
-            }
-            final char quote = text.charAt(pos);
-            pos++;
-            return quote;
-        }
-
-        /**
-         * Advances to the quote that closes an attribute value, which may not contain a {@code <}.
-         *
-         * @return The offset of the closing quote.
-         */
-        private int scanToClosingQuote(final char quote, final int valueOffset)
-        {
-            while (pos < length && text.charAt(pos) != quote)
-            {
-                if (text.charAt(pos) == '<')
-                {
-                    throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_lessThanInValue,
-                            pos);
-                }
-                pos++;
-            }
-            if (pos >= length)
-            {
-                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedValue,
-                        valueOffset - 1);
-            }
-            return pos;
         }
 
         private String decodeValue(final CharSequence raw, final int valueOffset)
@@ -399,20 +325,21 @@ final class FlatXmlParser
             int endTagOffset = -1;
             while (endTagOffset < 0)
             {
-                if (pos >= length)
+                if (lexer.atEnd())
                 {
                     throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
-                            NLS.bind(Messages.Parser_endedBeforeEndTag, endTagName), pos);
+                            NLS.bind(Messages.Parser_endedBeforeEndTag, endTagName), lexer.position());
                 }
-                final char ch = text.charAt(pos);
+                final char ch = lexer.currentCharacter();
+                final int offset = lexer.position();
                 if (ch != '<')
                 {
-                    run.include(pos, !isWhitespace(ch));
-                    pos++;
+                    run.include(offset, !XmlLexer.isWhitespace(ch));
+                    lexer.advance(1);
                 }
-                else if (matchesAt(pos, "</"))
+                else if (lexer.atText("</"))
                 {
-                    run.end(pos);
+                    run.end(offset);
                     endTagOffset = scanEndTag(endTagName);
                 }
                 else
@@ -429,44 +356,46 @@ final class FlatXmlParser
          */
         private void scanMarkup(final TextRun run, final boolean allowElements)
         {
-            if (matchesAt(pos, "<?"))
+            final int offset = lexer.position();
+            if (lexer.atText("<?"))
             {
-                run.end(pos);
-                skipProcessingInstruction();
+                run.end(offset);
+                lexer.skipProcessingInstruction();
             }
-            else if (matchesAt(pos, "<!--"))
+            else if (lexer.atText("<!--"))
             {
-                run.end(pos);
-                skipComment();
+                run.end(offset);
+                lexer.skipComment();
             }
-            else if (matchesAt(pos, "<![CDATA["))
+            else if (lexer.atText("<![CDATA["))
             {
-                run.include(pos, true);
-                skipCData();
+                run.include(offset, true);
+                lexer.skipCData();
             }
             else if (allowElements)
             {
-                run.end(pos);
+                run.end(offset);
                 scanRowElement();
             }
             else
             {
-                throw problems.blockingError(ProblemCode.NESTED_ELEMENT, Messages.Parser_nestedElement, pos);
+                throw problems.blockingError(ProblemCode.NESTED_ELEMENT, Messages.Parser_nestedElement,
+                        offset);
             }
         }
 
         private int scanEndTag(final String expectedName)
         {
-            final int endTagStart = pos;
-            pos += 2; // consume "</"
-            final String name = scanName();
-            skipWhitespace();
-            if (pos >= length || text.charAt(pos) != '>')
+            final int endTagStart = lexer.position();
+            lexer.advance(2); // consume "</"
+            final String name = lexer.scanName();
+            lexer.skipWhitespace();
+            if (!lexer.atCharacter('>'))
             {
                 final String message = NLS.bind(Messages.Parser_unclosedEndTag, name);
-                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, message, pos);
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, message, lexer.position());
             }
-            pos++; // consume '>'
+            lexer.advance(1); // consume '>'
             if (!name.equals(expectedName))
             {
                 throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
@@ -512,73 +441,56 @@ final class FlatXmlParser
 
         private void scanDoctype()
         {
-            final int doctypeOffset = pos;
-            pos += "<!DOCTYPE".length();
+            final int doctypeOffset = lexer.position();
+            lexer.advance("<!DOCTYPE".length());
             final String rootName = scanDoctypeName();
-            skipWhitespace();
+            lexer.skipWhitespace();
             String publicId = null;
             String systemId = null;
-            if (matchesAt(pos, "SYSTEM"))
+            if (lexer.atText("SYSTEM"))
             {
-                pos += "SYSTEM".length();
-                skipWhitespace();
-                systemId = scanQuotedLiteral();
-                skipWhitespace();
+                lexer.advance("SYSTEM".length());
+                lexer.skipWhitespace();
+                systemId = lexer.scanQuotedLiteral();
+                lexer.skipWhitespace();
             }
-            else if (matchesAt(pos, "PUBLIC"))
+            else if (lexer.atText("PUBLIC"))
             {
-                pos += "PUBLIC".length();
-                skipWhitespace();
-                publicId = scanQuotedLiteral();
-                skipWhitespace();
-                systemId = scanQuotedLiteral();
-                skipWhitespace();
+                lexer.advance("PUBLIC".length());
+                lexer.skipWhitespace();
+                publicId = lexer.scanQuotedLiteral();
+                lexer.skipWhitespace();
+                systemId = lexer.scanQuotedLiteral();
+                lexer.skipWhitespace();
             }
             String internalSubset = null;
             int internalSubsetOffset = -1;
-            if (pos < length && text.charAt(pos) == '[')
+            if (lexer.atCharacter('['))
             {
-                pos++;
-                internalSubsetOffset = pos;
+                lexer.advance(1);
+                internalSubsetOffset = lexer.position();
                 skipToMatchingCloseBracket();
-                internalSubset = text.subSequence(internalSubsetOffset, pos).toString();
-                pos++; // consume ']'
-                skipWhitespace();
+                final int internalSubsetEndOffset = lexer.position();
+                internalSubset = lexer.textBetween(internalSubsetOffset, internalSubsetEndOffset).toString();
+                lexer.advance(1); // consume ']'
+                lexer.skipWhitespace();
             }
-            expectCharacter('>', Messages.Parser_unclosedDoctype);
+            lexer.expectCharacter('>', Messages.Parser_unclosedDoctype);
+            final int doctypeEndOffset = lexer.position();
             doctype = new FlatXmlDoctype(rootName, publicId, systemId, internalSubset, internalSubsetOffset,
-                    doctypeOffset, pos);
+                    doctypeOffset, doctypeEndOffset);
         }
 
         private String scanDoctypeName()
         {
-            final int beforeNameWhitespace = pos;
-            skipWhitespace();
-            if (pos == beforeNameWhitespace || pos >= length
-                    || !XmlNames.isNameStartChar(Character.codePointAt(text, pos)))
+            final int beforeNameWhitespace = lexer.position();
+            lexer.skipWhitespace();
+            if (lexer.position() == beforeNameWhitespace || !lexer.atNameStart())
             {
                 throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
-                        Messages.Parser_expectedDoctypeName, pos);
+                        Messages.Parser_expectedDoctypeName, lexer.position());
             }
-            return scanName();
-        }
-
-        private String scanQuotedLiteral()
-        {
-            final char quote = scanOpeningQuote(Messages.Parser_expectedQuotedLiteral);
-            final int start = pos;
-            while (pos < length && text.charAt(pos) != quote)
-            {
-                pos++;
-            }
-            if (pos >= length)
-            {
-                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedLiteral,
-                        start - 1);
-            }
-            final String value = text.subSequence(start, pos).toString();
-            pos++; // consume the closing quote
-            return value;
+            return lexer.scanName();
         }
 
         /**
@@ -587,14 +499,14 @@ final class FlatXmlParser
          */
         private void skipToMatchingCloseBracket()
         {
-            while (pos < length && text.charAt(pos) != ']')
+            while (!lexer.atEnd() && lexer.currentCharacter() != ']')
             {
                 skipSubsetItem();
             }
-            if (pos >= length)
+            if (lexer.atEnd())
             {
                 throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedSubset,
-                        pos);
+                        lexer.position());
             }
         }
 
@@ -604,137 +516,38 @@ final class FlatXmlParser
          */
         private void skipSubsetItem()
         {
-            final char ch = text.charAt(pos);
+            final char ch = lexer.currentCharacter();
             if (ch == '"' || ch == '\'')
             {
                 skipSubsetLiteral(ch);
             }
-            else if (matchesAt(pos, "<!--"))
+            else if (lexer.atText("<!--"))
             {
-                skipComment();
+                lexer.skipComment();
             }
-            else if (matchesAt(pos, "<?"))
+            else if (lexer.atText("<?"))
             {
-                skipProcessingInstruction();
+                lexer.skipProcessingInstruction();
             }
             else
             {
-                pos++;
+                lexer.advance(1);
             }
         }
 
         private void skipSubsetLiteral(final char quote)
         {
-            pos++;
-            while (pos < length && text.charAt(pos) != quote)
+            lexer.advance(1);
+            while (!lexer.atEnd() && lexer.currentCharacter() != quote)
             {
-                pos++;
+                lexer.advance(1);
             }
-            if (pos >= length)
-            {
-                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
-                        Messages.Parser_unclosedSubsetLiteral, pos);
-            }
-            pos++; // consume the closing quote
-        }
-
-        private String scanName()
-        {
-            final int start = pos;
-            if (pos >= length || !XmlNames.isNameStartChar(Character.codePointAt(text, pos)))
-            {
-                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_expectedName, pos);
-            }
-            pos += Character.charCount(Character.codePointAt(text, pos));
-            while (pos < length)
-            {
-                final int codePoint = Character.codePointAt(text, pos);
-                if (!XmlNames.isNameChar(codePoint))
-                {
-                    break;
-                }
-                pos += Character.charCount(codePoint);
-            }
-            final String name = text.subSequence(start, pos).toString();
-            final String sharedName = names.putIfAbsent(name, name);
-            return sharedName != null ? sharedName : name;
-        }
-
-        private void skipWhitespace()
-        {
-            while (pos < length && isWhitespace(text.charAt(pos)))
-            {
-                pos++;
-            }
-        }
-
-        private static boolean isWhitespace(final char ch)
-        {
-            return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
-        }
-
-        private boolean matchesAt(final int position, final String literal)
-        {
-            if (position + literal.length() > length)
-            {
-                return false;
-            }
-            for (int i = 0; i < literal.length(); i++)
-            {
-                if (text.charAt(position + i) != literal.charAt(i))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        private void skipProcessingInstruction()
-        {
-            final int start = pos;
-            pos += 2; // "<?"
-            while (pos < length && !matchesAt(pos, "?>"))
-            {
-                pos++;
-            }
-            if (pos >= length)
+            if (lexer.atEnd())
             {
                 throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
-                        Messages.Parser_unclosedProcessingInstruction, start);
+                        Messages.Parser_unclosedSubsetLiteral, lexer.position());
             }
-            pos += 2;
-        }
-
-        private void skipComment()
-        {
-            final int start = pos;
-            pos += 4; // "<!--"
-            while (pos < length && !matchesAt(pos, "-->"))
-            {
-                pos++;
-            }
-            if (pos >= length)
-            {
-                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedComment,
-                        start);
-            }
-            pos += 3;
-        }
-
-        private void skipCData()
-        {
-            final int start = pos;
-            pos += "<![CDATA[".length();
-            while (pos < length && !matchesAt(pos, "]]>"))
-            {
-                pos++;
-            }
-            if (pos >= length)
-            {
-                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
-                        Messages.Parser_unclosedCdata, start);
-            }
-            pos += 3;
+            lexer.advance(1); // consume the closing quote
         }
     }
 
