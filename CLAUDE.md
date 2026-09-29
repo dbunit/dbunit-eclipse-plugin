@@ -28,6 +28,9 @@ The project uses a Maven wrapper. Always use `./mvnw` instead of `mvn`. Tycho 5 
 
 # Skip tests
 ./mvnw clean verify -DskipTests
+
+# Skip SpotBugs, which verify runs on the core and UI bundles, failing the build on any finding
+./mvnw clean verify -Dspotbugs.skip
 ```
 
 UI tests (`bundles/org.dbunit.eclipse.dataset.ui/src/test/java`) run inside an Eclipse workbench via `tycho-surefire-plugin:plugin-test`; on Linux without a display, prefix the command with `xvfb-run -a`.
@@ -120,6 +123,7 @@ The IDocument (text) is the single source of truth: grid edits become minimal te
   - Monitor a branch's CI build result at <https://github.com/dbunit/dbunit-eclipse-plugin/actions/workflows/build-any-branch.yml> for issues to correct.
   - Keep `org.dbunit.eclipse.dataset.core` free of UI dependencies (no `org.eclipse.ui*`, `org.eclipse.swt`, `org.eclipse.jface` other than `org.eclipse.jface.text` types from the `org.eclipse.text` bundle).
   - All SWT access happens on the UI thread; dispose every Color, Font, Image, and Cursor you create (prefer `JFaceResources`/`LocalResourceManager`).
+  - Fix static analysis findings instead of suppressing them. Exclude a SpotBugs finding that is by design only in `src/code-audit-rules/spotbugs-exclude.xml`, naming the class, the field, and the pattern, with the reason.
 
 ## Troubleshooting
 
