@@ -21,9 +21,7 @@
 package org.dbunit.eclipse.dataset.ui.editor;
 
 import java.nio.charset.Charset;
-import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
-import java.nio.charset.UnsupportedCharsetException;
 
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
@@ -69,6 +67,8 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
     private static final int TABLES_PAGE_INDEX = 0;
 
     private static final int SOURCE_PAGE_INDEX = 1;
+
+    private final EncodingResolver encodingResolver = new EncodingResolver();
 
     private final IPropertyListener sourceInputListener = (source, propertyId) ->
     {
@@ -424,13 +424,6 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         {
             return StandardCharsets.UTF_8;
         }
-        try
-        {
-            return Charset.forName(encoding);
-        }
-        catch (final IllegalCharsetNameException | UnsupportedCharsetException e)
-        {
-            return StandardCharsets.UTF_8;
-        }
+        return encodingResolver.charsetOf(encoding);
     }
 }
