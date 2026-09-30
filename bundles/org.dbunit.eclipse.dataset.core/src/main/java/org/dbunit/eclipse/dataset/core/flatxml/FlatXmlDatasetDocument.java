@@ -22,7 +22,6 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -47,10 +46,8 @@ import org.dbunit.eclipse.dataset.core.model.CellAddress;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
-import org.dbunit.eclipse.dataset.core.model.DatasetRow;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.core.runtime.IStatus;
-import org.eclipse.core.runtime.Status;
 import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentExtension4;
@@ -71,8 +68,6 @@ import org.eclipse.text.edits.TextEdit;
  */
 public final class FlatXmlDatasetDocument implements TextDatasetDocument
 {
-    private static final String PLUGIN_ID = "org.dbunit.eclipse.dataset.core";
-
     private static final FlatXmlIndex EMPTY_INDEX =
             new FlatXmlIndex(null, null, "", List.of(), Map.of(), Map.of(), Map.of());
 
@@ -203,7 +198,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     public void setCells(final String tableKey, final List<CellChange> changes)
     {
         final DatasetTable table = editableTable(tableKey);
-        final List<TextEdit> edits = cellEdits(tableKey, table, changes);
+        final List<TextEdit> edits = new CellEdits(editContext()).plan(tableKey, table, changes);
         if (edits.isEmpty())
         {
             return;
@@ -232,7 +227,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         final DatasetTable table = editableTable(tableKey);
         // Both sets of edits come from the same index: the cell edits rewrite start tags of existing
         // rows, and the appended rows go after the last row element, so they never overlap.
-        final List<TextEdit> edits = new ArrayList<>(cellEdits(tableKey, table, changes));
+        final EditContext context = editContext();
+        final List<TextEdit> edits = new ArrayList<>(new CellEdits(context).plan(tableKey, table, changes));
         if (!rows.isEmpty())
         {
             edits.addAll(rowInsertEdits(tableKey, table, table.getRows().size(), rows));
@@ -243,6 +239,11 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         }
         applier.apply(document, edits);
         refreshInternal(ChangeOrigin.EDIT);
+    }
+
+    private EditContext editContext()
+    {
+        return new EditContext(document::get, index, layout, charset, log);
     }
 
     /**
@@ -272,77 +273,6 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     }
 
     /**
-     * Validates cell changes and returns the start-tag rewrites that make them, one per changed row
-     * element, computed against the current index.
-     */
-    private List<TextEdit> cellEdits(final String tableKey, final DatasetTable table,
-            final List<CellChange> changes)
-    {
-        requireExistingCells(table, changes);
-
-        final Map<Integer, Map<String, String>> changesByRow = new LinkedHashMap<>();
-        for (final CellChange change : changes)
-        {
-            final String columnKey = change.columnName().toUpperCase(Locale.ENGLISH);
-            changesByRow.computeIfAbsent(change.rowIndex(), unused -> new LinkedHashMap<>())
-                    .put(columnKey, change.value());
-        }
-
-        final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
-        final CharsetEncoder encoder = currentEncoder();
-        final List<TextEdit> edits = new ArrayList<>();
-        final String text = document.get();
-        for (final Map.Entry<Integer, Map<String, String>> entry : changesByRow.entrySet())
-        {
-            final int rowIndex = entry.getKey();
-            final Map<String, String> rowChanges = entry.getValue();
-            final FlatXmlElement element = rowElements.get(rowIndex);
-            final String ambiguousKey = findCaseVariantColumnKey(element, rowChanges.keySet());
-            if (ambiguousKey != null)
-            {
-                final String columnName = table.getColumns().get(table.getColumnIndex(ambiguousKey)).name();
-                throw new DatasetEditException(NLS.bind(Messages.Edit_cellHasCaseVariantAttributes,
-                        new Object[] { columnName, rowIndex, table.getName() }));
-            }
-            requireRowNotEmptied(table, rowIndex, rowChanges);
-            final String rewritten = StartTagRewriter.rewrite(text, element, table.getColumns(),
-                    rowChanges, Map.of(), encoder);
-            if (rewritten != null)
-            {
-                edits.add(new ReplaceEdit(element.nameEndOffset(),
-                        element.attributesEndOffset() - element.nameEndOffset(), rewritten));
-            }
-        }
-        return edits;
-    }
-
-    private static void requireExistingCells(final DatasetTable table, final List<CellChange> changes)
-    {
-        for (final CellChange change : changes)
-        {
-            if (change.rowIndex() < 0 || change.rowIndex() >= table.getRows().size())
-            {
-                throw new DatasetEditException(
-                        NLS.bind(Messages.Edit_noSuchRow, change.rowIndex(), table.getName()));
-            }
-            if (table.getColumnIndex(change.columnName()) < 0)
-            {
-                throw new DatasetEditException(
-                        NLS.bind(Messages.Edit_noSuchColumn, change.columnName(), table.getName()));
-            }
-        }
-    }
-
-    private void requireRowNotEmptied(final DatasetTable table, final int rowIndex,
-            final Map<String, String> rowChanges)
-    {
-        if (wouldEmptyRow(table, rowIndex, rowChanges))
-        {
-            throw new DatasetEditException(NLS.bind(Messages.Edit_rowWouldBeEmpty, rowIndex, table.getName()));
-        }
-    }
-
-    /**
      * Validates new rows and returns the edit that inserts them before the row at rowIndex, or after the
      * last row when rowIndex is the row count, computed against the current index; no edit when there are
      * no rows.
@@ -361,7 +291,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             return List.of();
         }
 
-        final CharsetEncoder encoder = currentEncoder();
+        final CharsetEncoder encoder = editContext().encoder();
         final List<String> rowTexts = new ArrayList<>();
         for (final List<String> values : rows)
         {
@@ -763,7 +693,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     private List<TextEdit> startTagEdits(final DatasetTable table, final List<FlatXmlElement> rowElements,
             final Map<String, String> changes, final Map<String, String> renames)
     {
-        final CharsetEncoder encoder = currentEncoder();
+        final CharsetEncoder encoder = editContext().encoder();
         final String text = document.get();
         final List<TextEdit> edits = new ArrayList<>();
         for (final FlatXmlElement element : rowElements)
@@ -1049,73 +979,11 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         return IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP;
     }
 
-    private void warn(final String message, final RuntimeException cause)
-    {
-        final IStatus status = new Status(IStatus.WARNING, PLUGIN_ID, message, cause);
-        log.accept(status);
-    }
-
     private void notifyListeners(final DatasetModelChangeEvent event)
     {
         for (final DatasetModelListener listener : new ArrayList<>(listeners))
         {
             listener.modelChanged(event);
-        }
-    }
-
-    /**
-     * Returns whether applying rowChanges (column key to new value) to a row would leave every column
-     * NULL; a row with no values would leave its element without attributes, which is not a valid row.
-     */
-    private static boolean wouldEmptyRow(final DatasetTable table, final int rowIndex,
-            final Map<String, String> rowChanges)
-    {
-        final DatasetRow row = table.getRows().get(rowIndex);
-        for (int columnIndex = 0; columnIndex < table.getColumns().size(); columnIndex++)
-        {
-            final String columnKey = table.getColumns().get(columnIndex).name().toUpperCase(Locale.ENGLISH);
-            final String value = rowChanges.containsKey(columnKey) ? rowChanges.get(columnKey)
-                    : row.getValue(columnIndex);
-            if (value != null)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Returns the first key in columnKeys whose element has two or more attributes that differ only in
-     * letter case, or null when none do.
-     */
-    private static String findCaseVariantColumnKey(final FlatXmlElement element, final Set<String> columnKeys)
-    {
-        for (final String columnKey : columnKeys)
-        {
-            if (element.hasCaseVariantAttributes(columnKey))
-            {
-                return columnKey;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Returns an encoder for the document's current charset, falling back to UTF-8 when the supplier
-     * returns null or throws; a thrown exception is logged.
-     */
-    private CharsetEncoder currentEncoder()
-    {
-        try
-        {
-            final Charset result = charset.get();
-            return (result != null ? result : StandardCharsets.UTF_8).newEncoder();
-        }
-        catch (final RuntimeException e)
-        {
-            final String message = "The charset supplier failed, so the document escapes values for UTF-8.";
-            warn(message, e);
-            return StandardCharsets.UTF_8.newEncoder();
         }
     }
 
