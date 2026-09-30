@@ -20,9 +20,7 @@
  */
 package org.dbunit.eclipse.dataset.ui.editor;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
@@ -31,40 +29,11 @@ import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
 import org.dbunit.eclipse.dataset.ui.Messages;
-import org.dbunit.eclipse.dataset.ui.actions.AddColumnAction;
-import org.dbunit.eclipse.dataset.ui.actions.AddTableAction;
-import org.dbunit.eclipse.dataset.ui.actions.CopyAction;
-import org.dbunit.eclipse.dataset.ui.actions.CutAction;
-import org.dbunit.eclipse.dataset.ui.actions.DeleteAction;
-import org.dbunit.eclipse.dataset.ui.actions.DeleteColumnAction;
-import org.dbunit.eclipse.dataset.ui.actions.DeleteRowsAction;
-import org.dbunit.eclipse.dataset.ui.actions.DeleteTableAction;
-import org.dbunit.eclipse.dataset.ui.actions.DuplicateRowsAction;
-import org.dbunit.eclipse.dataset.ui.actions.EditCellInDialogAction;
-import org.dbunit.eclipse.dataset.ui.actions.FillDownAction;
-import org.dbunit.eclipse.dataset.ui.actions.GridAction;
-import org.dbunit.eclipse.dataset.ui.actions.InsertRowAboveAction;
-import org.dbunit.eclipse.dataset.ui.actions.InsertRowBelowAction;
-import org.dbunit.eclipse.dataset.ui.actions.MoveRowsDownAction;
-import org.dbunit.eclipse.dataset.ui.actions.MoveRowsUpAction;
-import org.dbunit.eclipse.dataset.ui.actions.PasteAction;
-import org.dbunit.eclipse.dataset.ui.actions.RenameColumnAction;
-import org.dbunit.eclipse.dataset.ui.actions.RenameTableAction;
-import org.dbunit.eclipse.dataset.ui.actions.SelectAllAction;
-import org.dbunit.eclipse.dataset.ui.actions.SetEmptyStringAction;
-import org.dbunit.eclipse.dataset.ui.actions.SetNullAction;
-import org.dbunit.eclipse.dataset.ui.actions.ShowInSourceAction;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.dbunit.eclipse.dataset.ui.preferences.PreferenceKeys;
-import org.eclipse.core.commands.operations.IOperationHistoryListener;
-import org.eclipse.core.commands.operations.OperationHistoryEvent;
-import org.eclipse.core.commands.operations.OperationHistoryFactory;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.action.IMenuManager;
-import org.eclipse.jface.action.MenuManager;
-import org.eclipse.jface.action.ToolBarManager;
-import org.eclipse.jface.commands.ActionHandler;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.jface.resource.LocalResourceManager;
 import org.eclipse.jface.text.DocumentEvent;
@@ -73,10 +42,8 @@ import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.jface.text.Region;
-import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
-import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.custom.StackLayout;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.Point;
@@ -85,18 +52,10 @@ import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
-import org.eclipse.swt.widgets.ToolBar;
-import org.eclipse.text.undo.DocumentUndoManagerRegistry;
-import org.eclipse.text.undo.IDocumentUndoManager;
 import org.eclipse.ui.actions.ActionFactory;
-import org.eclipse.ui.contexts.IContextActivation;
-import org.eclipse.ui.contexts.IContextService;
-import org.eclipse.ui.handlers.IHandlerActivation;
-import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 /**
@@ -107,8 +66,6 @@ import org.eclipse.ui.texteditor.ITextEditor;
  */
 final class TablesPage implements DatasetGridContext
 {
-    private static final String TABLES_PAGE_CONTEXT_ID = "org.dbunit.eclipse.dataset.ui.tablesPageContext";
-
     private final FlatXmlDatasetEditor editor;
 
     private final FlatXmlDatasetDocument datasetDocument;
@@ -137,6 +94,8 @@ final class TablesPage implements DatasetGridContext
 
     private final ActiveGrid activeGrid;
 
+    private final TablesPageActions actions;
+
     private final Button createEmptyDatasetButton;
 
     private final Composite noTablesComposite;
@@ -161,66 +120,6 @@ final class TablesPage implements DatasetGridContext
             }
         }
     };
-
-    private final DocumentUndoAction undoAction;
-
-    private final DocumentUndoAction redoAction;
-
-    private final IOperationHistoryListener operationHistoryListener;
-
-    private final InsertRowAboveAction insertRowAboveAction;
-
-    private final InsertRowBelowAction insertRowBelowAction;
-
-    private final DeleteRowsAction deleteRowsAction;
-
-    private final DuplicateRowsAction duplicateRowsAction;
-
-    private final MoveRowsUpAction moveRowsUpAction;
-
-    private final MoveRowsDownAction moveRowsDownAction;
-
-    private final AddColumnAction addColumnAction;
-
-    private final RenameColumnAction renameColumnAction;
-
-    private final DeleteColumnAction deleteColumnAction;
-
-    private final AddTableAction addTableAction;
-
-    private final RenameTableAction renameTableAction;
-
-    private final DeleteTableAction deleteTableAction;
-
-    private final SetNullAction setNullAction;
-
-    private final SetEmptyStringAction setEmptyStringAction;
-
-    private final FillDownAction fillDownAction;
-
-    private final EditCellInDialogAction editCellInDialogAction;
-
-    private final ShowInSourceAction showInSourceAction;
-
-    private final CutAction cutAction;
-
-    private final CopyAction copyAction;
-
-    private final PasteAction pasteAction;
-
-    private final DeleteAction deleteAction;
-
-    private final SelectAllAction selectAllAction;
-
-    private final Map<String, IAction> globalActionHandlers;
-
-    private final List<GridAction> gridActions = new ArrayList<>();
-
-    private final List<GridAction> retargetableActions = new ArrayList<>();
-
-    private final List<IHandlerActivation> handlerActivations = new ArrayList<>();
-
-    private IContextActivation contextActivation;
 
     private boolean active;
 
@@ -282,97 +181,15 @@ final class TablesPage implements DatasetGridContext
                 SelectionListener.widgetSelectedAdapter(event -> runAddTableAction()));
 
         tabFolder = new CTabFolder(contentStack, SWT.TOP | SWT.BORDER | SWT.FLAT);
-        tabs = new TableTabs(tabFolder, this, resources, this::updateGridActionsEnablement);
+        actions = new TablesPageActions(this, tabFolder, control, editor::getEditorSite, this::sourceDocument,
+                this::hasActiveCellEditor, this::getSelection);
+        tabs = new TableTabs(tabFolder, this, resources, actions::updateGridActionsEnablement);
         activeGrid = new ActiveGrid(tabFolder, tabs::activeGrid);
-        tabFolder.addSelectionListener(
-                SelectionListener.widgetSelectedAdapter(event -> updateGridActionsEnablement()));
-
-        insertRowAboveAction = new InsertRowAboveAction(this);
-        insertRowBelowAction = new InsertRowBelowAction(this);
-        deleteRowsAction = new DeleteRowsAction(this);
-        duplicateRowsAction = new DuplicateRowsAction(this);
-        moveRowsUpAction = new MoveRowsUpAction(this);
-        moveRowsDownAction = new MoveRowsDownAction(this);
-        addColumnAction = new AddColumnAction(this);
-        renameColumnAction = new RenameColumnAction(this);
-        deleteColumnAction = new DeleteColumnAction(this);
-        addTableAction = new AddTableAction(this);
-        renameTableAction = new RenameTableAction(this);
-        deleteTableAction = new DeleteTableAction(this);
-        setNullAction = new SetNullAction(this);
-        setEmptyStringAction = new SetEmptyStringAction(this);
-        fillDownAction = new FillDownAction(this);
-        editCellInDialogAction = new EditCellInDialogAction(this);
-        showInSourceAction = new ShowInSourceAction(this);
-        cutAction = new CutAction(this);
-        copyAction = new CopyAction(this);
-        pasteAction = new PasteAction(this);
-        deleteAction = new DeleteAction(this);
-        selectAllAction = new SelectAllAction(this);
-        gridActions.add(insertRowAboveAction);
-        gridActions.add(insertRowBelowAction);
-        gridActions.add(deleteRowsAction);
-        gridActions.add(duplicateRowsAction);
-        gridActions.add(moveRowsUpAction);
-        gridActions.add(moveRowsDownAction);
-        gridActions.add(addColumnAction);
-        gridActions.add(renameColumnAction);
-        gridActions.add(deleteColumnAction);
-        gridActions.add(addTableAction);
-        gridActions.add(renameTableAction);
-        gridActions.add(deleteTableAction);
-        gridActions.add(setNullAction);
-        gridActions.add(setEmptyStringAction);
-        gridActions.add(fillDownAction);
-        gridActions.add(editCellInDialogAction);
-        gridActions.add(showInSourceAction);
-        retargetableActions.add(cutAction);
-        retargetableActions.add(copyAction);
-        retargetableActions.add(pasteAction);
-        retargetableActions.add(deleteAction);
-        retargetableActions.add(selectAllAction);
-
-        final ToolBarManager toolBarManager = new ToolBarManager(SWT.FLAT);
-        toolBarManager.add(insertRowBelowAction);
-        toolBarManager.add(deleteRowsAction);
-        toolBarManager.add(addColumnAction);
-        toolBarManager.add(deleteColumnAction);
-        toolBarManager.add(addTableAction);
-        final ToolBar toolBar = toolBarManager.createControl(tabFolder);
-        tabFolder.setTopRight(toolBar);
-
-        tabFolder.addMenuDetectListener(event ->
-        {
-            final Point point = tabFolder.toControl(event.x, event.y);
-            final CTabItem item = tabFolder.getItem(point);
-            if (item != null)
-            {
-                tabFolder.setSelection(item);
-                updateGridActionsEnablement();
-            }
-        });
-        final MenuManager tabMenuManager = new MenuManager();
-        tabMenuManager.setRemoveAllWhenShown(true);
-        tabMenuManager.addMenuListener(manager ->
-        {
-            manager.add(addTableAction);
-            manager.add(renameTableAction);
-            manager.add(deleteTableAction);
-        });
-        tabFolder.setMenu(tabMenuManager.createContextMenu(tabFolder));
 
         final IDocument document = sourceDocument();
         listenedDocument = document;
         document.addDocumentListener(sourceDocumentListener);
         datasetDocument.addModelListener(event -> reconcile());
-        undoAction = new DocumentUndoAction(this::sourceDocument, false, this::hasActiveCellEditor);
-        redoAction = new DocumentUndoAction(this::sourceDocument, true, this::hasActiveCellEditor);
-        globalActionHandlers = Map.of(ActionFactory.UNDO.getId(), undoAction, ActionFactory.REDO.getId(),
-                redoAction, ActionFactory.CUT.getId(), cutAction, ActionFactory.COPY.getId(), copyAction,
-                ActionFactory.PASTE.getId(), pasteAction, ActionFactory.DELETE.getId(), deleteAction,
-                ActionFactory.SELECT_ALL.getId(), selectAllAction);
-        operationHistoryListener = this::handleOperationHistoryEvent;
-        OperationHistoryFactory.getOperationHistory().addOperationHistoryListener(operationHistoryListener);
 
         reconcile();
     }
@@ -394,16 +211,7 @@ final class TablesPage implements DatasetGridContext
     void activate()
     {
         active = true;
-        final IContextService contextService = editor.getEditorSite().getService(IContextService.class);
-        contextActivation = contextService.activateContext(TABLES_PAGE_CONTEXT_ID);
-        final IHandlerService handlerService = editor.getEditorSite().getService(IHandlerService.class);
-        for (final GridAction action : gridActions)
-        {
-            handlerActivations.add(handlerService.activateHandler(action.getActionDefinitionId(),
-                    new ActionHandler(action)));
-        }
-        updateUndoRedoActions();
-        updateGridActionsEnablement();
+        actions.activate();
         if (refreshPending)
         {
             refreshPending = false;
@@ -416,12 +224,7 @@ final class TablesPage implements DatasetGridContext
     {
         pageSelectionSync.onDeactivate(activeGrid.currentCellAddress());
         active = false;
-        final IContextService contextService = editor.getEditorSite().getService(IContextService.class);
-        contextService.deactivateContext(contextActivation);
-        contextActivation = null;
-        final IHandlerService handlerService = editor.getEditorSite().getService(IHandlerService.class);
-        handlerService.deactivateHandlers(handlerActivations);
-        handlerActivations.clear();
+        actions.deactivate();
     }
 
     /**
@@ -432,7 +235,7 @@ final class TablesPage implements DatasetGridContext
         listenedDocument.removeDocumentListener(sourceDocumentListener);
         listenedDocument = sourceDocument();
         listenedDocument.addDocumentListener(sourceDocumentListener);
-        updateUndoRedoActions();
+        actions.updateUndoRedoActions();
     }
 
     /**
@@ -441,7 +244,7 @@ final class TablesPage implements DatasetGridContext
     void dispose()
     {
         listenedDocument.removeDocumentListener(sourceDocumentListener);
-        OperationHistoryFactory.getOperationHistory().removeOperationHistoryListener(operationHistoryListener);
+        actions.dispose();
     }
 
     /**
@@ -453,7 +256,7 @@ final class TablesPage implements DatasetGridContext
      */
     IAction getGlobalActionHandler(final String actionDefinitionId)
     {
-        return globalActionHandlers.get(actionDefinitionId);
+        return actions.getGlobalActionHandler(actionDefinitionId);
     }
 
     /**
@@ -527,38 +330,7 @@ final class TablesPage implements DatasetGridContext
     @Override
     public void fillContextMenu(final IMenuManager menu, final String region)
     {
-        if (GridRegion.BODY.equals(region))
-        {
-            menu.add(cutAction);
-            menu.add(copyAction);
-            menu.add(pasteAction);
-            menu.add(insertRowAboveAction);
-            menu.add(insertRowBelowAction);
-            menu.add(duplicateRowsAction);
-            menu.add(deleteRowsAction);
-            menu.add(moveRowsUpAction);
-            menu.add(moveRowsDownAction);
-            menu.add(setNullAction);
-            menu.add(setEmptyStringAction);
-            menu.add(fillDownAction);
-            menu.add(editCellInDialogAction);
-            menu.add(showInSourceAction);
-        }
-        else if (GridRegion.ROW_HEADER.equals(region))
-        {
-            menu.add(insertRowAboveAction);
-            menu.add(insertRowBelowAction);
-            menu.add(duplicateRowsAction);
-            menu.add(deleteRowsAction);
-            menu.add(moveRowsUpAction);
-            menu.add(moveRowsDownAction);
-        }
-        else if (GridRegion.COLUMN_HEADER.equals(region))
-        {
-            menu.add(addColumnAction);
-            menu.add(renameColumnAction);
-            menu.add(deleteColumnAction);
-        }
+        actions.fillContextMenu(menu, region);
     }
 
     @Override
@@ -687,61 +459,6 @@ final class TablesPage implements DatasetGridContext
         return sourceEditor.getDocumentProvider().getDocument(sourceEditor.getEditorInput());
     }
 
-    private void updateUndoRedoActions()
-    {
-        undoAction.update();
-        redoAction.update();
-    }
-
-    private void handleOperationHistoryEvent(final OperationHistoryEvent event)
-    {
-        if (!isUndoRedoEnablementEvent(event.getEventType()))
-        {
-            return;
-        }
-        final IDocumentUndoManager manager = DocumentUndoManagerRegistry.getDocumentUndoManager(sourceDocument());
-        if (manager == null || !event.getOperation().hasContext(manager.getUndoContext()))
-        {
-            return;
-        }
-        if (Display.getCurrent() == null)
-        {
-            control.getDisplay().asyncExec(() ->
-            {
-                if (!control.isDisposed())
-                {
-                    updateUndoRedoActions();
-                }
-            });
-        }
-        else
-        {
-            updateUndoRedoActions();
-        }
-    }
-
-    private static boolean isUndoRedoEnablementEvent(final int eventType)
-    {
-        return eventType == OperationHistoryEvent.DONE || eventType == OperationHistoryEvent.UNDONE
-                || eventType == OperationHistoryEvent.REDONE
-                || eventType == OperationHistoryEvent.OPERATION_ADDED
-                || eventType == OperationHistoryEvent.OPERATION_REMOVED
-                || eventType == OperationHistoryEvent.OPERATION_CHANGED;
-    }
-
-    private void updateGridActionsEnablement()
-    {
-        final GridSelection selection = getSelection();
-        for (final GridAction action : gridActions)
-        {
-            action.update(selection);
-        }
-        for (final GridAction action : retargetableActions)
-        {
-            action.update(selection);
-        }
-    }
-
     void selectProblem(final DatasetProblem problem)
     {
         if (problem.tableKey() == null)
@@ -817,7 +534,7 @@ final class TablesPage implements DatasetGridContext
         // A blank document's only problem is its missing root element, which the blank state explains.
         final DatasetModel listedModel = datasetDocument.isBlank() ? DatasetModel.EMPTY : model;
         problemsSection.update(listedModel);
-        updateGridActionsEnablement();
+        actions.updateGridActionsEnablement();
     }
 
     private void updateBanner(final DatasetModel model)
@@ -853,7 +570,7 @@ final class TablesPage implements DatasetGridContext
 
     private void runAddTableAction()
     {
-        addTableAction.run();
+        actions.runAddTableAction();
     }
 
 }
