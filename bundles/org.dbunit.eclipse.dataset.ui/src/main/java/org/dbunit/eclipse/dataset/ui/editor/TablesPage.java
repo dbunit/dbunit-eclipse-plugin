@@ -21,20 +21,14 @@
 package org.dbunit.eclipse.dataset.ui.editor;
 
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.core.model.CellAddress;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
-import org.dbunit.eclipse.dataset.core.model.DatasetTable;
-import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
 import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.actions.AddColumnAction;
@@ -72,7 +66,6 @@ import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.action.MenuManager;
 import org.eclipse.jface.action.ToolBarManager;
 import org.eclipse.jface.commands.ActionHandler;
-import org.eclipse.jface.resource.FontDescriptor;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.jface.resource.LocalResourceManager;
 import org.eclipse.jface.text.DocumentEvent;
@@ -84,14 +77,11 @@ import org.eclipse.jface.text.Region;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.edit.editor.ICellEditor;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
-import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.custom.StackLayout;
 import org.eclipse.swt.events.SelectionListener;
-import org.eclipse.swt.graphics.Font;
-import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
@@ -105,8 +95,6 @@ import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.ToolBar;
 import org.eclipse.text.undo.DocumentUndoManagerRegistry;
 import org.eclipse.text.undo.IDocumentUndoManager;
-import org.eclipse.ui.ISharedImages;
-import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.actions.ActionFactory;
 import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
@@ -148,15 +136,13 @@ final class TablesPage implements DatasetGridContext
 
     private final CTabFolder tabFolder;
 
+    private final TableTabs tabs;
+
     private final Button createEmptyDatasetButton;
 
     private final Composite noTablesComposite;
 
     private final Button addTableButton;
-
-    private final Map<String, CTabItem> tabsByKey = new LinkedHashMap<>();
-
-    private final Map<String, DatasetGrid> gridsByKey = new LinkedHashMap<>();
 
     private final IDocumentListener sourceDocumentListener = new IDocumentListener()
     {
@@ -247,12 +233,6 @@ final class TablesPage implements DatasetGridContext
 
     private boolean editable;
 
-    private String expectedRenameOldKey;
-
-    private String expectedRenameNewKey;
-
-    private String expectedNewTableKey;
-
     TablesPage(final Composite parent, final FlatXmlDatasetEditor editor,
             final FlatXmlDatasetDocument datasetDocument)
     {
@@ -303,6 +283,7 @@ final class TablesPage implements DatasetGridContext
                 SelectionListener.widgetSelectedAdapter(event -> runAddTableAction()));
 
         tabFolder = new CTabFolder(contentStack, SWT.TOP | SWT.BORDER | SWT.FLAT);
+        tabs = new TableTabs(tabFolder, this, resources, this::updateGridActionsEnablement);
         tabFolder.addSelectionListener(
                 SelectionListener.widgetSelectedAdapter(event -> updateGridActionsEnablement()));
 
@@ -407,10 +388,7 @@ final class TablesPage implements DatasetGridContext
      */
     void commitActiveCellEditor()
     {
-        for (final DatasetGrid grid : gridsByKey.values())
-        {
-            grid.commitActiveCellEditor();
-        }
+        tabs.commitActiveCellEditor();
     }
 
     void activate()
@@ -431,7 +409,7 @@ final class TablesPage implements DatasetGridContext
             refreshPending = false;
             datasetDocument.refresh();
         }
-        pageSelectionSync.onActivate().ifPresent(this::selectCellAddress);
+        pageSelectionSync.onActivate().ifPresent(tabs::selectCell);
     }
 
     void deactivate()
@@ -483,36 +461,31 @@ final class TablesPage implements DatasetGridContext
      */
     void repaintGrids()
     {
-        for (final DatasetGrid grid : gridsByKey.values())
-        {
-            grid.repaint();
-        }
+        tabs.repaintGrids();
     }
 
     @Override
     public void expectRename(final String oldKey, final String newKey)
     {
-        expectedRenameOldKey = oldKey;
-        expectedRenameNewKey = newKey;
+        tabs.expectRename(oldKey, newKey);
     }
 
     @Override
     public void expectNewTableSelected(final String tableKey)
     {
-        expectedNewTableKey = tableKey;
+        tabs.expectNewTableSelected(tableKey);
     }
 
     @Override
     public void cancelExpectedRename()
     {
-        expectedRenameOldKey = null;
-        expectedRenameNewKey = null;
+        tabs.cancelExpectedRename();
     }
 
     @Override
     public void cancelExpectedNewTableSelected()
     {
-        expectedNewTableKey = null;
+        tabs.cancelExpectedNewTableSelected();
     }
 
     @Override
@@ -599,7 +572,7 @@ final class TablesPage implements DatasetGridContext
     @Override
     public GridSelection getSelection()
     {
-        final DatasetGrid grid = activeGrid();
+        final DatasetGrid grid = tabs.activeGrid();
         return grid != null ? grid.getSelection() : GridSelection.NONE;
     }
 
@@ -607,7 +580,7 @@ final class TablesPage implements DatasetGridContext
     public void selectRegion(final int firstColumnIndex, final int firstRowIndex, final int columnCount,
             final int rowCount)
     {
-        final DatasetGrid grid = activeGrid();
+        final DatasetGrid grid = tabs.activeGrid();
         if (grid != null)
         {
             grid.selectRegion(firstColumnIndex, firstRowIndex, columnCount, rowCount);
@@ -640,14 +613,14 @@ final class TablesPage implements DatasetGridContext
     @Override
     public List<Point> getSelectedCellPositions()
     {
-        final DatasetGrid grid = activeGrid();
+        final DatasetGrid grid = tabs.activeGrid();
         return grid != null ? grid.getSelectedCellPositions() : List.of();
     }
 
     @Override
     public void selectAll()
     {
-        final DatasetGrid grid = activeGrid();
+        final DatasetGrid grid = tabs.activeGrid();
         if (grid != null)
         {
             grid.selectAll();
@@ -657,7 +630,7 @@ final class TablesPage implements DatasetGridContext
     @Override
     public void editCellInDialog()
     {
-        final DatasetGrid grid = activeGrid();
+        final DatasetGrid grid = tabs.activeGrid();
         if (grid != null)
         {
             grid.editCellInDialog();
@@ -796,23 +769,6 @@ final class TablesPage implements DatasetGridContext
         }
     }
 
-    private DatasetGrid activeGrid()
-    {
-        final CTabItem selected = tabFolder.getSelection();
-        if (selected == null)
-        {
-            return null;
-        }
-        for (final DatasetGrid grid : gridsByKey.values())
-        {
-            if (grid.getControl().equals(selected.getControl()))
-            {
-                return grid;
-            }
-        }
-        return null;
-    }
-
     void selectProblem(final DatasetProblem problem)
     {
         if (problem.tableKey() == null)
@@ -823,23 +779,7 @@ final class TablesPage implements DatasetGridContext
         final int columnIndex = problem.columnName() == null ? -1
                 : datasetDocument.getModel().findTable(problem.tableKey())
                         .map(table -> table.getColumnIndex(problem.columnName())).orElse(-1);
-        selectCellAddress(new CellAddress(problem.tableKey(), Math.max(problem.rowIndex(), 0), columnIndex));
-    }
-
-    private void selectCellAddress(final CellAddress address)
-    {
-        final CTabItem item = tabsByKey.get(address.tableKey());
-        if (item != null)
-        {
-            tabFolder.setSelection(item);
-            updateGridActionsEnablement();
-        }
-        final DatasetGrid grid = gridsByKey.get(address.tableKey());
-        if (grid == null || address.columnIndex() < 0)
-        {
-            return;
-        }
-        grid.selectCell(address.columnIndex(), address.rowIndex());
+        tabs.selectCell(new CellAddress(problem.tableKey(), Math.max(problem.rowIndex(), 0), columnIndex));
     }
 
     private CellAddress currentCellAddress()
@@ -895,19 +835,19 @@ final class TablesPage implements DatasetGridContext
 
         if (datasetDocument.isBlank())
         {
-            reconcileTabs(DatasetModel.EMPTY);
+            tabs.reconcile(DatasetModel.EMPTY);
             createEmptyDatasetButton.setEnabled(inputModifiable);
             contentStackLayout.topControl = blankComposite;
         }
         else if (model.getTables().isEmpty())
         {
-            reconcileTabs(DatasetModel.EMPTY);
+            tabs.reconcile(DatasetModel.EMPTY);
             addTableButton.setEnabled(editable);
             contentStackLayout.topControl = noTablesComposite;
         }
         else
         {
-            reconcileTabs(model);
+            tabs.reconcile(model);
             contentStackLayout.topControl = tabFolder;
         }
         contentStack.layout();
@@ -917,140 +857,6 @@ final class TablesPage implements DatasetGridContext
         final DatasetModel listedModel = datasetDocument.isBlank() ? DatasetModel.EMPTY : model;
         problemsSection.update(listedModel);
         updateGridActionsEnablement();
-    }
-
-    private void reconcileTabs(final DatasetModel model)
-    {
-        final Set<String> seenKeys = new HashSet<>();
-        int index = 0;
-        for (final DatasetTable table : model.getTables())
-        {
-            final String key = resolveRenamedKey(table.getKey());
-            if (!seenKeys.add(key))
-            {
-                continue;
-            }
-            CTabItem item = tabsByKey.get(key);
-            DatasetGrid grid = gridsByKey.get(key);
-            if (item == null)
-            {
-                grid = new DatasetGrid(tabFolder, this, key);
-                grid.selectCell(0, 0);
-                grid.addSelectionListener(this::updateGridActionsEnablement);
-                gridsByKey.put(key, grid);
-                item = new CTabItem(tabFolder, SWT.NONE, index);
-                item.setControl(grid.getControl());
-                tabsByKey.put(key, item);
-                if (key.equals(expectedNewTableKey))
-                {
-                    tabFolder.setSelection(item);
-                }
-            }
-            else if (tabFolder.indexOf(item) != index)
-            {
-                item = moveTab(item, index);
-                tabsByKey.put(key, item);
-            }
-            grid.tableChanged(table);
-            updateTab(item, table, model);
-            index++;
-        }
-        expectedRenameOldKey = null;
-        expectedRenameNewKey = null;
-        expectedNewTableKey = null;
-
-        disposeStaleTabs(seenKeys);
-        selectFirstTabIfNoneSelected();
-    }
-
-    private void disposeStaleTabs(final Set<String> seenKeys)
-    {
-        final Iterator<Map.Entry<String, CTabItem>> iterator = tabsByKey.entrySet().iterator();
-        while (iterator.hasNext())
-        {
-            final Map.Entry<String, CTabItem> entry = iterator.next();
-            if (!seenKeys.contains(entry.getKey()))
-            {
-                entry.getValue().getControl().dispose();
-                entry.getValue().dispose();
-                iterator.remove();
-                gridsByKey.remove(entry.getKey());
-            }
-        }
-    }
-
-    private void selectFirstTabIfNoneSelected()
-    {
-        if (tabFolder.getSelection() == null && tabFolder.getItemCount() > 0)
-        {
-            tabFolder.setSelection(0);
-        }
-    }
-
-    private String resolveRenamedKey(final String currentKey)
-    {
-        if (currentKey.equals(expectedRenameNewKey) && tabsByKey.containsKey(expectedRenameOldKey))
-        {
-            tabsByKey.put(currentKey, tabsByKey.remove(expectedRenameOldKey));
-            final DatasetGrid grid = gridsByKey.remove(expectedRenameOldKey);
-            grid.tableRenamed(currentKey);
-            gridsByKey.put(currentKey, grid);
-        }
-        return currentKey;
-    }
-
-    private CTabItem moveTab(final CTabItem oldItem, final int index)
-    {
-        final Control tabControl = oldItem.getControl();
-        oldItem.setControl(null);
-        oldItem.dispose();
-        final CTabItem newItem = new CTabItem(tabFolder, SWT.NONE, index);
-        newItem.setControl(tabControl);
-        return newItem;
-    }
-
-    private void updateTab(final CTabItem item, final DatasetTable table, final DatasetModel model)
-    {
-        item.setText(table.getName());
-        final String tooltip = table.isDeclaredOnly() ? Messages.TablesPage_declaredOnlyTableTooltip
-                : countsTooltip(table);
-        item.setToolTipText(tooltip);
-        item.setFont(table.getRows().isEmpty() ? italicFont() : null);
-        item.setImage(problemImage(model.getProblems(table.getKey())));
-    }
-
-    private static String countsTooltip(final DatasetTable table)
-    {
-        final int rowCount = table.getRows().size();
-        final int columnCount = table.getColumns().size();
-        final String rows = rowCount == 1 ? Messages.TablesPage_tableTooltipOneRow
-                : NLS.bind(Messages.TablesPage_tableTooltipRows, rowCount);
-        final String columns = columnCount == 1 ? Messages.TablesPage_tableTooltipOneColumn
-                : NLS.bind(Messages.TablesPage_tableTooltipColumns, columnCount);
-        return NLS.bind(Messages.TablesPage_tableTooltip, rows, columns);
-    }
-
-    private Font italicFont()
-    {
-        final FontDescriptor descriptor = FontDescriptor.createFrom(tabFolder.getFont()).setStyle(SWT.ITALIC);
-        return resources.createFont(descriptor);
-    }
-
-    private static Image problemImage(final List<DatasetProblem> problems)
-    {
-        boolean hasWarning = false;
-        for (final DatasetProblem problem : problems)
-        {
-            if (problem.severity() == ProblemSeverity.ERROR)
-            {
-                return sharedImage(ISharedImages.IMG_OBJS_ERROR_TSK);
-            }
-            if (problem.severity() == ProblemSeverity.WARNING)
-            {
-                hasWarning = true;
-            }
-        }
-        return hasWarning ? sharedImage(ISharedImages.IMG_OBJS_WARN_TSK) : null;
     }
 
     private void updateBanner(final DatasetModel model)
@@ -1089,8 +895,4 @@ final class TablesPage implements DatasetGridContext
         addTableAction.run();
     }
 
-    private static Image sharedImage(final String key)
-    {
-        return PlatformUI.getWorkbench().getSharedImages().getImage(key);
-    }
 }
