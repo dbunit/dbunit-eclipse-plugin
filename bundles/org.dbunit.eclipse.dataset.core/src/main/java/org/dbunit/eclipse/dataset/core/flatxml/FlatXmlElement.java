@@ -21,6 +21,7 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * One element parsed from the flat XML body: a table row when it has attributes, or a marker when it
@@ -41,4 +42,22 @@ record FlatXmlElement(String name, int offset, int nameEndOffset, List<FlatXmlAt
         int attributesEndOffset, int startTagEndOffset, boolean selfClosing, int endTagOffset,
         int endOffset)
 {
+    /**
+     * Returns whether this element has two or more attributes whose upper-cased name equals columnKey.
+     *
+     * @param columnKey An upper-cased column name.
+     * @return True when two or more attributes have names that differ from the column key only in case.
+     */
+    boolean hasCaseVariantAttributes(final String columnKey)
+    {
+        int matches = 0;
+        for (final FlatXmlAttribute attribute : attributes)
+        {
+            if (attribute.name().toUpperCase(Locale.ENGLISH).equals(columnKey))
+            {
+                matches++;
+            }
+        }
+        return matches > 1;
+    }
 }

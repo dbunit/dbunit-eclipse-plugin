@@ -629,7 +629,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
         for (final FlatXmlElement element : rowElements)
         {
-            if (hasCaseVariantAttributes(element, key))
+            if (element.hasCaseVariantAttributes(key))
             {
                 throw new DatasetEditException(NLS.bind(Messages.Edit_renameColumnWithCaseVariants,
                         column.name(), table.getName()));
@@ -1090,28 +1090,12 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     {
         for (final String columnKey : columnKeys)
         {
-            if (hasCaseVariantAttributes(element, columnKey))
+            if (element.hasCaseVariantAttributes(columnKey))
             {
                 return columnKey;
             }
         }
         return null;
-    }
-
-    /**
-     * Returns whether element has two or more attributes whose upper-cased name equals columnKey.
-     */
-    private static boolean hasCaseVariantAttributes(final FlatXmlElement element, final String columnKey)
-    {
-        int matches = 0;
-        for (final FlatXmlAttribute attribute : element.attributes())
-        {
-            if (attribute.name().toUpperCase(Locale.ENGLISH).equals(columnKey))
-            {
-                matches++;
-            }
-        }
-        return matches > 1;
     }
 
     /**
