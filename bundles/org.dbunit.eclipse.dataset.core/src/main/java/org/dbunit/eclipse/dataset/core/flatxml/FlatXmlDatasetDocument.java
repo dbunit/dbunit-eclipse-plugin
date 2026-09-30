@@ -31,15 +31,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.dbunit.eclipse.dataset.core.Messages;
-import org.dbunit.eclipse.dataset.core.dtd.DtdDeclarations;
-import org.dbunit.eclipse.dataset.core.dtd.DtdReader;
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.edit.ChangeOrigin;
@@ -107,8 +104,6 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
 
     private final List<DatasetModelListener> listeners = new ArrayList<>();
 
-    private final Map<String, CachedDtd> dtdCache = new LinkedHashMap<>();
-
     private final Map<String, List<String>> pendingColumns = new LinkedHashMap<>();
 
     private final Map<Long, Map<String, List<String>>> pendingColumnsHistory = new LinkedHashMap<>();
@@ -121,7 +116,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
 
     private IDocument document;
 
-    private DtdSource dtdSource;
+    private DtdResolver dtdResolver;
 
     private FlatXmlOptions options;
 
@@ -168,7 +163,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             final FlatXmlOptions options, final Supplier<Charset> charset, final Consumer<IStatus> log)
     {
         this.document = document;
-        this.dtdSource = dtdSource;
+        this.dtdResolver = new DtdResolver(dtdSource, log);
         this.options = options;
         this.charset = charset;
         this.log = log;
@@ -1136,25 +1131,9 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
     }
 
-    /**
-     * Reads every cached DTD again through the {@link DtdSource}. When any text differs from the cached
-     * one, including a DTD that became readable or unreadable, replaces the cache, marks the model stale,
-     * and refreshes with {@link ChangeOrigin#DOCUMENT}. Does nothing when nothing changed.
-     */
     public void reloadDtd()
     {
-        boolean changed = false;
-        for (final Map.Entry<String, CachedDtd> entry : new LinkedHashMap<>(dtdCache).entrySet())
-        {
-            final String systemId = entry.getKey();
-            final CachedDtd cached = entry.getValue();
-            final String freshText = loadFromDtdSource(cached.publicId(), systemId);
-            if (!Objects.equals(freshText, cached.text()))
-            {
-                dtdCache.put(systemId, new CachedDtd(cached.publicId(), freshText));
-                changed = true;
-            }
-        }
+        final boolean changed = dtdResolver.reload();
         if (changed)
         {
             stale = true;
@@ -1173,8 +1152,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     {
         document.removeDocumentListener(documentListener);
         this.document = newDocument;
-        this.dtdSource = newDtdSource;
-        this.dtdCache.clear();
+        this.dtdResolver = new DtdResolver(newDtdSource, log);
         this.pendingColumnsHistory.clear();
         this.lastRefreshModificationStamp = IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP;
         document.addDocumentListener(documentListener);
@@ -1192,7 +1170,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         restorePendingColumns(modificationStamp);
         final String text = document.get();
         final FlatXmlParseResult parse = FlatXmlParser.parse(text);
-        final DtdResolution dtdResolution = resolveDtd(parse.doctype());
+        final DtdResolution dtdResolution = dtdResolver.resolve(parse.doctype());
         final FlatXmlModelBuilder.Result built = FlatXmlModelBuilder.build(text, parse,
                 dtdResolution.declarations(), options, pendingColumns);
         prunePendingColumns(built.model().getTables());
@@ -1294,65 +1272,6 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             final Iterator<Long> oldest = pendingColumnsHistory.keySet().iterator();
             oldest.next();
             oldest.remove();
-        }
-    }
-
-    private DtdResolution resolveDtd(final FlatXmlDoctype doctype)
-    {
-        if (doctype == null)
-        {
-            return new DtdResolution(null, DtdState.NONE);
-        }
-        final String internalSubsetText = doctype.internalSubset();
-        DtdDeclarations internalSubset =
-                DtdReader.read(internalSubsetText == null ? "" : internalSubsetText);
-        if (internalSubsetText != null)
-        {
-            internalSubset = internalSubset.withProblemsShiftedBy(doctype.internalSubsetOffset());
-        }
-        if (doctype.systemId() == null)
-        {
-            return new DtdResolution(internalSubset, DtdState.LOADED);
-        }
-        final String externalText = loadExternalDtd(doctype.publicId(), doctype.systemId());
-        if (externalText == null)
-        {
-            return new DtdResolution(internalSubset, DtdState.NOT_LOADED);
-        }
-        final DtdDeclarations external = DtdReader.read(externalText)
-                .withProblemsAt(doctype.offset(), doctype.endOffset() - doctype.offset());
-        return new DtdResolution(internalSubset.merge(external), DtdState.LOADED);
-    }
-
-    private String loadExternalDtd(final String publicId, final String systemId)
-    {
-        final CachedDtd cached = dtdCache.get(systemId);
-        if (cached != null)
-        {
-            return cached.text();
-        }
-        final String text = loadFromDtdSource(publicId, systemId);
-        dtdCache.put(systemId, new CachedDtd(publicId, text));
-        return text;
-    }
-
-    /**
-     * Loads from {@link #dtdSource}, treating a failure the same as a DTD it could not find, so that no
-     * {@link DtdSource} implementation can break the model by letting an unchecked exception escape. The
-     * failure is logged.
-     */
-    private String loadFromDtdSource(final String publicId, final String systemId)
-    {
-        try
-        {
-            return dtdSource.load(publicId, systemId).orElse(null);
-        }
-        catch (final RuntimeException e)
-        {
-            final String message = "The DTD source failed to load the DTD \"" + systemId
-                    + "\", so it is treated as not found.";
-            warn(message, e);
-            return null;
         }
     }
 
@@ -1502,13 +1421,5 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             return new InsertEdit(lineStart, childIndentation + childrenText + delimiter);
         }
         return new InsertEdit(root.endTagOffset(), delimiter + childIndentation + childrenText + delimiter);
-    }
-
-    private record DtdResolution(DtdDeclarations declarations, DtdState state)
-    {
-    }
-
-    private record CachedDtd(String publicId, String text)
-    {
     }
 }
