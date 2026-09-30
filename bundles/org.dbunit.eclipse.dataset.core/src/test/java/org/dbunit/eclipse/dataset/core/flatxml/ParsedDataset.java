@@ -25,6 +25,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
+import org.dbunit.eclipse.dataset.core.dtd.DtdDeclarations;
+import org.dbunit.eclipse.dataset.core.dtd.DtdReader;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.Document;
@@ -65,9 +67,29 @@ record ParsedDataset(String text, DatasetModel model, FlatXmlIndex index, FlatXm
      */
     static ParsedDataset of(final String text, final FlatXmlOptions options, final String lineDelimiter)
     {
+        return of(text, null, options, lineDelimiter);
+    }
+
+    /**
+     * Parses a text with dbUnit's default options and the line delimiter of a line feed, the way the dataset
+     * document does for a DOCTYPE that brings in a DTD: the tables that the DTD declares and the text does not
+     * use become tables without rows.
+     *
+     * @param text The dataset text.
+     * @param dtdText The text of the DTD that the dataset's DOCTYPE names.
+     * @return The parse.
+     */
+    static ParsedDataset withDtd(final String text, final String dtdText)
+    {
+        return of(text, DtdReader.read(dtdText), FlatXmlOptions.DBUNIT_DEFAULTS, "\n");
+    }
+
+    private static ParsedDataset of(final String text, final DtdDeclarations declarations,
+            final FlatXmlOptions options, final String lineDelimiter)
+    {
         final FlatXmlParseResult parse = FlatXmlParser.parse(text);
         final FlatXmlModelBuilder.Result built =
-                FlatXmlModelBuilder.build(text, parse, null, options, Map.of());
+                FlatXmlModelBuilder.build(text, parse, declarations, options, Map.of());
         final FlatXmlTextLayout layout = new FlatXmlTextLayout(text, lineDelimiter);
         return new ParsedDataset(text, built.model(), built.index(), layout, options);
     }
