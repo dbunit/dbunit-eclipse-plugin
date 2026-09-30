@@ -25,7 +25,6 @@ import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -62,7 +61,6 @@ import org.eclipse.core.runtime.IAdaptable;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
-import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentExtension4;
@@ -73,8 +71,6 @@ import org.eclipse.jface.text.TextUtilities;
 import org.eclipse.osgi.util.NLS;
 import org.eclipse.text.edits.DeleteEdit;
 import org.eclipse.text.edits.InsertEdit;
-import org.eclipse.text.edits.MalformedTreeException;
-import org.eclipse.text.edits.MultiTextEdit;
 import org.eclipse.text.edits.ReplaceEdit;
 import org.eclipse.text.edits.TextEdit;
 import org.eclipse.text.undo.DocumentUndoManagerRegistry;
@@ -89,8 +85,6 @@ import org.eclipse.text.undo.IDocumentUndoManager;
 public final class FlatXmlDatasetDocument implements TextDatasetDocument
 {
     private static final String PLUGIN_ID = "org.dbunit.eclipse.dataset.core";
-
-    private static final int JOIN_EDITS_THRESHOLD = 50;
 
     private static final int PENDING_COLUMNS_HISTORY_LIMIT = 200;
 
@@ -120,6 +114,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
 
     private final Map<Long, Map<String, List<String>>> pendingColumnsHistory = new LinkedHashMap<>();
 
+    private final TextEditApplier applier = new TextEditApplier();
+
     private final Supplier<Charset> charset;
 
     private final Consumer<IStatus> log;
@@ -137,8 +133,6 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     private FlatXmlTextLayout layout;
 
     private boolean stale;
-
-    private int batchDepth;
 
     private long lastRefreshModificationStamp = IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP;
 
@@ -218,25 +212,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     @Override
     public void batch(final Runnable operations)
     {
-        final IDocumentUndoManager undoManager = DocumentUndoManagerRegistry.getDocumentUndoManager(document);
-        final boolean outermost = batchDepth == 0;
-        batchDepth++;
-        if (outermost && undoManager != null)
-        {
-            undoManager.beginCompoundChange();
-        }
-        try
-        {
-            operations.run();
-        }
-        finally
-        {
-            batchDepth--;
-            if (batchDepth == 0 && undoManager != null)
-            {
-                undoManager.endCompoundChange();
-            }
-        }
+        applier.batch(document, operations);
     }
 
     @Override
@@ -248,7 +224,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         {
             return;
         }
-        apply(edits);
+        applier.apply(document, edits);
         refreshInternal(ChangeOrigin.EDIT);
     }
 
@@ -261,7 +237,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         {
             return;
         }
-        apply(edits);
+        applier.apply(document, edits);
         refreshInternal(ChangeOrigin.EDIT);
     }
 
@@ -281,7 +257,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         {
             return;
         }
-        apply(edits);
+        applier.apply(document, edits);
         refreshInternal(ChangeOrigin.EDIT);
     }
 
@@ -511,7 +487,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
                     element.endOffset());
         }
 
-        apply(List.of(new InsertEdit(lastSelected.endOffset(), insertText.toString())));
+        applier.apply(document, List.of(new InsertEdit(lastSelected.endOffset(), insertText.toString())));
         refreshInternal(ChangeOrigin.EDIT);
     }
 
@@ -544,7 +520,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             }
         }
 
-        apply(edits);
+        applier.apply(document, edits);
         refreshInternal(ChangeOrigin.EDIT);
     }
 
@@ -577,7 +553,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         requireOneRowStep(delta);
         requireRoomToMove(table, rowElements.size(), firstRowIndex, rowCount, delta);
 
-        apply(rowMoveEdits(rowElements, firstRowIndex, rowCount, delta));
+        applier.apply(document, rowMoveEdits(rowElements, firstRowIndex, rowCount, delta));
         refreshInternal(ChangeOrigin.EDIT);
     }
 
@@ -694,7 +670,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         {
             return;
         }
-        apply(edits);
+        applier.apply(document, edits);
         refreshInternal(ChangeOrigin.EDIT);
     }
 
@@ -726,7 +702,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         {
             return;
         }
-        apply(edits);
+        applier.apply(document, edits);
         refreshInternal(ChangeOrigin.EDIT);
     }
 
@@ -960,7 +936,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         requireUnusedTableName(tableName, Set.of());
         requireNewColumnNames(tableName, columnNames);
 
-        apply(List.of(insertAsLastChildOfRoot("<" + tableName + "/>")));
+        applier.apply(document, List.of(insertAsLastChildOfRoot("<" + tableName + "/>")));
         if (!columnNames.isEmpty())
         {
             pendingColumns.put(tableKeyOf(tableName), new ArrayList<>(columnNames));
@@ -984,7 +960,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         final List<TextEdit> edits = tableNameEdits(elements, newTableName);
         if (!edits.isEmpty())
         {
-            apply(edits);
+            applier.apply(document, edits);
         }
 
         final List<String> pending = pendingColumns.remove(tableKey);
@@ -1015,7 +991,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         }
         if (!edits.isEmpty())
         {
-            apply(edits);
+            applier.apply(document, edits);
         }
 
         pendingColumns.remove(tableKey);
@@ -1120,7 +1096,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         }
         final String delimiter = TextUtilities.getDefaultLineDelimiter(document);
         final String newText = emptyDatasetText(delimiter);
-        apply(List.of(new ReplaceEdit(0, document.getLength(), newText)));
+        applier.apply(document, List.of(new ReplaceEdit(0, document.getLength(), newText)));
         refreshInternal(ChangeOrigin.EDIT);
     }
 
@@ -1444,108 +1420,6 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     {
         final IStatus status = new Status(IStatus.WARNING, PLUGIN_ID, message, cause);
         log.accept(status);
-    }
-
-    private void apply(final List<TextEdit> edits)
-    {
-        final TextEdit change = edits.size() > JOIN_EDITS_THRESHOLD ? joinEdits(edits) : combineEdits(edits);
-        final boolean outermost = batchDepth == 0;
-        final IDocumentUndoManager undoManager =
-                DocumentUndoManagerRegistry.getDocumentUndoManager(document);
-        if (outermost && undoManager != null)
-        {
-            undoManager.beginCompoundChange();
-        }
-        try
-        {
-            applyToDocument(change);
-        }
-        finally
-        {
-            if (outermost && undoManager != null)
-            {
-                undoManager.endCompoundChange();
-            }
-        }
-    }
-
-    private void applyToDocument(final TextEdit change)
-    {
-        try
-        {
-            change.apply(document, TextEdit.NONE);
-        }
-        catch (final MalformedTreeException | BadLocationException e)
-        {
-            throw new IllegalStateException("Computed text edits do not fit the document.", e);
-        }
-    }
-
-    private static MultiTextEdit combineEdits(final List<TextEdit> edits)
-    {
-        final MultiTextEdit root = new MultiTextEdit();
-        for (final TextEdit edit : edits)
-        {
-            root.addChild(edit);
-        }
-        return root;
-    }
-
-    /**
-     * Joins edits into one replacement of the text from the first edit to the last, which keeps the text
-     * between the edits as it is. The document changes once, however many edits there are: each edit
-     * that widens the text store's gap past its limit makes the store copy the whole text, so applying
-     * many scattered edits one by one takes time in proportion to their number times the document's
-     * length.
-     *
-     * @param edits The edits to join; they must not overlap.
-     * @return The replacement.
-     */
-    private ReplaceEdit joinEdits(final List<TextEdit> edits)
-    {
-        final List<TextEdit> ordered = new ArrayList<>(edits);
-        ordered.sort(Comparator.comparingInt(TextEdit::getOffset));
-        final int start = ordered.get(0).getOffset();
-        final int end = ordered.get(ordered.size() - 1).getExclusiveEnd();
-        final String original;
-        try
-        {
-            original = document.get(start, end - start);
-        }
-        catch (final BadLocationException e)
-        {
-            throw new IllegalStateException("Computed text edits do not fit the document.", e);
-        }
-        final StringBuilder replacement = new StringBuilder(original.length());
-        int position = start;
-        for (final TextEdit edit : ordered)
-        {
-            if (edit.getOffset() < position)
-            {
-                throw new IllegalStateException("Computed text edits overlap.");
-            }
-            replacement.append(original, position - start, edit.getOffset() - start);
-            replacement.append(newTextOf(edit));
-            position = edit.getExclusiveEnd();
-        }
-        return new ReplaceEdit(start, end - start, replacement.toString());
-    }
-
-    private static String newTextOf(final TextEdit edit)
-    {
-        if (edit instanceof final ReplaceEdit replaceEdit)
-        {
-            return replaceEdit.getText();
-        }
-        if (edit instanceof final InsertEdit insertEdit)
-        {
-            return insertEdit.getText();
-        }
-        if (edit instanceof DeleteEdit)
-        {
-            return "";
-        }
-        throw new IllegalStateException("Unsupported text edit " + edit.getClass().getName() + ".");
     }
 
     private void notifyListeners(final DatasetModelChangeEvent event)
