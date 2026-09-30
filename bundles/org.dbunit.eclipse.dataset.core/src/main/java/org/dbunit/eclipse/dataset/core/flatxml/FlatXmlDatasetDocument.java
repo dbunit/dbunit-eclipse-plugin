@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -51,7 +50,6 @@ import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.TextUtilities;
 import org.eclipse.osgi.util.NLS;
-import org.eclipse.text.edits.DeleteEdit;
 import org.eclipse.text.edits.ReplaceEdit;
 import org.eclipse.text.edits.TextEdit;
 
@@ -241,6 +239,11 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         return new EditContext(document::get, index, layout, charset, log);
     }
 
+    private TableEdits tableEdits()
+    {
+        return new TableEdits(editContext(), getModel(), this::tableKeyOf);
+    }
+
     /**
      * Refreshes the model, then returns the table with a key.
      *
@@ -357,13 +360,8 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     public void addTable(final String tableName, final List<String> columnNames)
     {
         refreshForEdit();
-        requireValidTableName(tableName);
-        requireUnusedTableName(tableName, Set.of());
-        ColumnEdits.requireNewColumnNames(tableName, columnNames);
-
-        final TextEdit insertion =
-                layout.insertAsLastChildOfRoot(index.getRoot(), index.getElements(), "<" + tableName + "/>");
-        applier.apply(document, List.of(insertion));
+        final List<TextEdit> edits = tableEdits().addEdits(tableName, columnNames);
+        applier.apply(document, edits);
         pendingColumns.addTable(tableKeyOf(tableName), columnNames);
         refreshInternal(ChangeOrigin.EDIT);
     }
@@ -372,16 +370,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     public void renameTable(final String tableKey, final String newTableName)
     {
         final DatasetTable tableToRename = editableTable(tableKey);
-        if (tableToRename.isDeclaredOnly())
-        {
-            throw new DatasetEditException(
-                    NLS.bind(Messages.Edit_renameTableIsDeclaredOnly, tableToRename.getName()));
-        }
-        requireValidTableName(newTableName);
-        requireUnusedTableName(newTableName, Set.of(tableKey));
-
-        final List<FlatXmlElement> elements = index.getAllElementsInOrder(tableKey);
-        final List<TextEdit> edits = tableNameEdits(elements, newTableName);
+        final List<TextEdit> edits = tableEdits().renameEdits(tableKey, tableToRename, newTableName);
         if (!edits.isEmpty())
         {
             applier.apply(document, edits);
@@ -396,19 +385,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     public void deleteTable(final String tableKey)
     {
         final DatasetTable tableToDelete = editableTable(tableKey);
-        if (tableToDelete.isDeclaredOnly())
-        {
-            throw new DatasetEditException(
-                    NLS.bind(Messages.Edit_deleteTableIsDeclaredOnly, tableToDelete.getName()));
-        }
-
-        final List<FlatXmlElement> elements = index.getAllElementsInOrder(tableKey);
-        final List<TextEdit> edits = new ArrayList<>();
-        for (final FlatXmlElement element : elements)
-        {
-            final IRegion region = layout.lineExtent(element);
-            edits.add(new DeleteEdit(region.getOffset(), region.getLength()));
-        }
+        final List<TextEdit> edits = tableEdits().deleteEdits(tableKey, tableToDelete);
         if (!edits.isEmpty())
         {
             applier.apply(document, edits);
@@ -417,61 +394,6 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         pendingColumns.deleteTable(tableKey);
         stale = true;
         refreshInternal(ChangeOrigin.EDIT);
-    }
-
-    private void requireValidTableName(final String tableName)
-    {
-        if (!XmlNames.isValidName(tableName))
-        {
-            throw new DatasetEditException(NLS.bind(Messages.Edit_invalidTableName, tableName));
-        }
-        if (isReservedRootName(tableName))
-        {
-            throw new DatasetEditException(NLS.bind(Messages.Edit_reservedTableName, tableName));
-        }
-    }
-
-    /**
-     * Requires that no table has the name, other than the tables with the keys to ignore.
-     *
-     * @param ignoredTableKeys The keys of the tables that may have the name: the one that is being renamed.
-     */
-    private void requireUnusedTableName(final String tableName, final Set<String> ignoredTableKeys)
-    {
-        for (final DatasetTable existing : getModel().getTables())
-        {
-            if (!ignoredTableKeys.contains(existing.getKey()) && sameTableName(existing.getName(), tableName))
-            {
-                throw new DatasetEditException(NLS.bind(Messages.Edit_tableExists, tableName));
-            }
-        }
-    }
-
-    /**
-     * Returns the edits that rename the start tag and the end tag of each element to a table name.
-     */
-    private static List<TextEdit> tableNameEdits(final List<FlatXmlElement> elements, final String tableName)
-    {
-        final List<TextEdit> edits = new ArrayList<>();
-        for (final FlatXmlElement element : elements)
-        {
-            edits.add(new ReplaceEdit(element.offset() + 1, element.name().length(), tableName));
-            if (!element.selfClosing())
-            {
-                edits.add(new ReplaceEdit(element.endTagOffset() + 2, element.name().length(), tableName));
-            }
-        }
-        return edits;
-    }
-
-    private boolean isReservedRootName(final String tableName)
-    {
-        return sameTableName("dataset", tableName);
-    }
-
-    private boolean sameTableName(final String oneName, final String otherName)
-    {
-        return tableKeyOf(oneName).equals(tableKeyOf(otherName));
     }
 
     @Override
