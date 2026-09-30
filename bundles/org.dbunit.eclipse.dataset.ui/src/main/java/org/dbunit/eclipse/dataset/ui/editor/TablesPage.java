@@ -54,7 +54,6 @@ import org.dbunit.eclipse.dataset.ui.actions.SelectAllAction;
 import org.dbunit.eclipse.dataset.ui.actions.SetEmptyStringAction;
 import org.dbunit.eclipse.dataset.ui.actions.SetNullAction;
 import org.dbunit.eclipse.dataset.ui.actions.ShowInSourceAction;
-import org.dbunit.eclipse.dataset.ui.grid.DatasetGrid;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.dbunit.eclipse.dataset.ui.preferences.PreferenceKeys;
@@ -74,8 +73,6 @@ import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.jface.text.Region;
-import org.eclipse.nebula.widgets.nattable.NatTable;
-import org.eclipse.nebula.widgets.nattable.edit.editor.ICellEditor;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
@@ -137,6 +134,8 @@ final class TablesPage implements DatasetGridContext
     private final CTabFolder tabFolder;
 
     private final TableTabs tabs;
+
+    private final ActiveGrid activeGrid;
 
     private final Button createEmptyDatasetButton;
 
@@ -284,6 +283,7 @@ final class TablesPage implements DatasetGridContext
 
         tabFolder = new CTabFolder(contentStack, SWT.TOP | SWT.BORDER | SWT.FLAT);
         tabs = new TableTabs(tabFolder, this, resources, this::updateGridActionsEnablement);
+        activeGrid = new ActiveGrid(tabFolder, tabs::activeGrid);
         tabFolder.addSelectionListener(
                 SelectionListener.widgetSelectedAdapter(event -> updateGridActionsEnablement()));
 
@@ -414,7 +414,7 @@ final class TablesPage implements DatasetGridContext
 
     void deactivate()
     {
-        pageSelectionSync.onDeactivate(currentCellAddress());
+        pageSelectionSync.onDeactivate(activeGrid.currentCellAddress());
         active = false;
         final IContextService contextService = editor.getEditorSite().getService(IContextService.class);
         contextService.deactivateContext(contextActivation);
@@ -564,27 +564,20 @@ final class TablesPage implements DatasetGridContext
     @Override
     public boolean hasActiveCellEditor()
     {
-        final CTabItem selected = tabFolder.getSelection();
-        return selected != null && selected.getControl() instanceof NatTable
-                && ((NatTable) selected.getControl()).getActiveCellEditor() != null;
+        return activeGrid.hasActiveCellEditor();
     }
 
     @Override
     public GridSelection getSelection()
     {
-        final DatasetGrid grid = tabs.activeGrid();
-        return grid != null ? grid.getSelection() : GridSelection.NONE;
+        return activeGrid.getSelection();
     }
 
     @Override
     public void selectRegion(final int firstColumnIndex, final int firstRowIndex, final int columnCount,
             final int rowCount)
     {
-        final DatasetGrid grid = tabs.activeGrid();
-        if (grid != null)
-        {
-            grid.selectRegion(firstColumnIndex, firstRowIndex, columnCount, rowCount);
-        }
+        activeGrid.selectRegion(firstColumnIndex, firstRowIndex, columnCount, rowCount);
     }
 
     @Override
@@ -596,51 +589,31 @@ final class TablesPage implements DatasetGridContext
     @Override
     public Text getActiveCellEditorText()
     {
-        final CTabItem selected = tabFolder.getSelection();
-        if (selected == null || !(selected.getControl() instanceof NatTable))
-        {
-            return null;
-        }
-        final ICellEditor cellEditor = ((NatTable) selected.getControl()).getActiveCellEditor();
-        if (cellEditor == null)
-        {
-            return null;
-        }
-        final Control editorControl = cellEditor.getEditorControl();
-        return editorControl instanceof final Text text ? text : null;
+        return activeGrid.getActiveCellEditorText();
     }
 
     @Override
     public List<Point> getSelectedCellPositions()
     {
-        final DatasetGrid grid = tabs.activeGrid();
-        return grid != null ? grid.getSelectedCellPositions() : List.of();
+        return activeGrid.getSelectedCellPositions();
     }
 
     @Override
     public void selectAll()
     {
-        final DatasetGrid grid = tabs.activeGrid();
-        if (grid != null)
-        {
-            grid.selectAll();
-        }
+        activeGrid.selectAll();
     }
 
     @Override
     public void editCellInDialog()
     {
-        final DatasetGrid grid = tabs.activeGrid();
-        if (grid != null)
-        {
-            grid.editCellInDialog();
-        }
+        activeGrid.editCellInDialog();
     }
 
     @Override
     public void showInSource()
     {
-        final CellAddress address = currentCellAddress();
+        final CellAddress address = activeGrid.currentCellAddress();
         if (address == null)
         {
             return;
@@ -780,18 +753,6 @@ final class TablesPage implements DatasetGridContext
                 : datasetDocument.getModel().findTable(problem.tableKey())
                         .map(table -> table.getColumnIndex(problem.columnName())).orElse(-1);
         tabs.selectCell(new CellAddress(problem.tableKey(), Math.max(problem.rowIndex(), 0), columnIndex));
-    }
-
-    private CellAddress currentCellAddress()
-    {
-        final GridSelection selection = getSelection();
-        if (selection.tableKey() == null || selection.anchorRowIndex() < 0
-                || selection.anchorColumnIndex() < 0)
-        {
-            return null;
-        }
-        return new CellAddress(selection.tableKey(), selection.anchorRowIndex(),
-                selection.anchorColumnIndex());
     }
 
     private IRegion sourceSelectionRegion()
