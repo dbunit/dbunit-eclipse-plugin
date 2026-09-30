@@ -5,10 +5,17 @@
 * Eclipse IDE 2024-06 or newer, any package (the plugin needs only the Eclipse Platform).
 * Java 17 or newer to run Eclipse (every Eclipse release from 2024-06 on already requires it).
 
+*Read <<install-risk>> before you install.*
+Installing from an update site with Eclipse's default settings can leave an Eclipse that cannot start.
+This is not specific to the dbUnit Eclipse plugin, and clearing one checkbox avoids it.
+
 == Install from the update site
 
 . In Eclipse, open *Help > Install New Software...*.
 . In *Work with*, enter `https://dbunit.github.io/dbunit-eclipse-plugin/updates/` and press Enter.
+. Clear *Contact all update sites during install to find required software*, below the list of software.
+Eclipse checks this box by default, and with it checked Eclipse can also replace components you already have
+with newer ones from its other update sites (see <<install-risk>>).
 . Select *dbUnit Dataset Editor* in the *dbUnit* category, then *Next*.
 . Review the items to install, then *Next*.
 . Accept the license (GNU LGPL 2.1), then *Finish*.
@@ -16,7 +23,8 @@
 . Restart Eclipse when prompted.
 
 The update site is self-contained: the feature includes the Eclipse Nebula NatTable grid widget
-and Eclipse Collections, so no other update site is needed.
+and Eclipse Collections, so no other update site is needed,
+and clearing the "Contact all update sites" box costs nothing.
 They install alongside any other versions of them already present.
 
 === Offline installation
@@ -25,14 +33,77 @@ Every release attaches its update site as a zip file,
 `dbunit-eclipse-plugin-VERSION-p2-repository.zip`, to its
 https://github.com/dbunit/dbunit-eclipse-plugin/releases[GitHub Release].
 Download it, then in *Help > Install New Software...* choose *Add... > Archive...* and select the zip.
+Clear *Contact all update sites during install to find required software* here too.
 
 === Nightly builds
 
 The latest build of the `main` branch that passed all tests is at
 `https://dbunit.github.io/dbunit-eclipse-plugin/updates/nightly/`.
-Nightly builds are for testing unreleased fixes; they are not signed.
+These builds are for testing unreleased changes; note that they are not signed.
 
-== Updating and uninstalling
+[[install-risk]]
+== Installation risk: Eclipse may not start
+
+Eclipse's installer, p2, does not only add the software you select.
+When it contacts all of Eclipse's update sites, it can also replace components you already have
+with newer versions that those sites offer.
+The Eclipse IDE packages enable the *Latest Eclipse Simultaneous Release* site by default,
+and that site always offers the newest Eclipse release.
+If you run an older release, the installer can therefore upgrade some of the libraries that Eclipse itself needs
+(for example EMF, Jetty, and ASM) but not others that must match them, and then Eclipse cannot start.
+
+This is not specific to the dbUnit Eclipse plugin: installing other plugins that extend the Eclipse user interface has the same effect.
+It was reproduced with the Eclipse IDE for Enterprise Java and Web Developers 2026-06 after the 2026-09 release:
+the installer upgraded some of the ASM bundles to 9.10, while the EclEmma code coverage tool held the others at 9.9.
+The SPI Fly bundle needs one consistent ASM version, so it failed to resolve, and every bundle that depends on it failed with it.
+Uninstalling the plugin afterwards does not undo the upgrades.
+
+The risk is gone if you do any of these:
+
+* Clear *Contact all update sites during install to find required software* whenever you install from the dbUnit Eclipse plugin update site.
+With the box cleared, Eclipse installs dbUnit, NatTable, and Eclipse Collections and changes nothing else.
+* Update Eclipse to the newest release first (*Help > Check for Updates*), then install the dbUnit or other plugins.
+When you run the newest release, the site has nothing newer to offer.
+* Copy the Eclipse installation folder before you install any plugin.
+If something goes wrong, delete the broken folder and use the copy (see <<recovery>>).
+
+[[recovery]]
+== If Eclipse does not start after an installation
+
+Eclipse may open no window at all, or it may report a startup error.
+The cause is in the log files of the Eclipse installation folder, the folder that contains `eclipse.exe`
+(on macOS, `Eclipse.app/Contents/Eclipse`):
+
+. Open the newest `configuration/NNNN.log` file, and the `.bak_N.log` files next to it if there are any.
+. Search for `Uses constraint violation`.
+The problem described on this page names `org.apache.aries.spifly.dynamic.bundle` and `org.objectweb.asm`,
+and many `Could not resolve module` entries follow it.
+
+Uninstalling the dbUnit Eclipse plugin does not repair this because the upgraded libraries stay installed.
+Choose one of these instead:
+
+. *Restore your copy.*
+If you copied the Eclipse installation folder before installing, delete the broken folder and use the copy.
+. *Install the missing ASM bundle.*
+This repairs the ASM problem described above.
+In the Eclipse installation folder, run the following command, then start Eclipse:
++
+[source,shell]
+----
+eclipsec.exe -nosplash -data @none -application org.eclipse.equinox.p2.director -repository https://download.eclipse.org/releases/2026-09 -installIU org.objectweb.asm.commons/9.10.1
+----
++
+On Linux and macOS, run the `eclipse` launcher instead of `eclipsec.exe`
+(on macOS it is `Eclipse.app/Contents/MacOS/eclipse`).
+The command needs an internet connection, prints `Operation completed` when it is done, and leaves your plugins in place.
+It fits the case above, where the log mentions both version 9.10.1 and version 9.9.1 of `org.objectweb.asm`.
+If the log names other bundles, use the next option.
+. *Start with a new Eclipse.*
+Download the newest Eclipse from https://www.eclipse.org/downloads/, unpack it into a new folder,
+and open an existing workspace with it; the failed installation does not affect project workspaces.
+Install the plugins again, this time with *Contact all update sites during install to find required software* cleared.
+
+== Updating and Uninstalling
 
 * Update: *Help > Check for Updates*.
 * Uninstall: *Help > About Eclipse IDE > Installation Details*, select *dbUnit Dataset Editor*, *Uninstall...*.
