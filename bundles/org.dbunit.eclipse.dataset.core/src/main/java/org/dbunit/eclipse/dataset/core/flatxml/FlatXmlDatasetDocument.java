@@ -66,7 +66,6 @@ import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentExtension4;
 import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.jface.text.IRegion;
-import org.eclipse.jface.text.Region;
 import org.eclipse.jface.text.TextUtilities;
 import org.eclipse.osgi.util.NLS;
 import org.eclipse.text.edits.DeleteEdit;
@@ -1116,72 +1115,13 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     @Override
     public Optional<IRegion> locate(final CellAddress address)
     {
-        final Optional<DatasetTable> maybeTable = model.findTable(address.tableKey());
-        if (maybeTable.isEmpty())
-        {
-            return Optional.empty();
-        }
-        final DatasetTable table = maybeTable.get();
-        final List<FlatXmlElement> rowElements = index.getRowElements(address.tableKey());
-        if (address.rowIndex() < 0 || address.rowIndex() >= rowElements.size())
-        {
-            return Optional.empty();
-        }
-        final FlatXmlElement element = rowElements.get(address.rowIndex());
-        if (address.columnIndex() < 0)
-        {
-            return Optional.of(new Region(element.offset(), element.endOffset() - element.offset()));
-        }
-        if (address.columnIndex() >= table.getColumns().size())
-        {
-            return Optional.empty();
-        }
-        final String columnName = table.getColumns().get(address.columnIndex()).name();
-        final FlatXmlAttribute attribute = findAttribute(element, columnName);
-        if (attribute == null)
-        {
-            return Optional.of(new Region(element.offset() + 1,
-                    element.nameEndOffset() - element.offset() - 1));
-        }
-        return Optional.of(
-                new Region(attribute.valueOffset(), attribute.valueEndOffset() - attribute.valueOffset()));
+        return new CellLocator(model, index, options).locate(address);
     }
 
     @Override
     public Optional<CellAddress> cellAt(final int offset)
     {
-        final FlatXmlElement element = findElementContaining(offset);
-        if (element == null)
-        {
-            return Optional.empty();
-        }
-        final String key = tableKey(element.name());
-        final List<FlatXmlElement> rowElements = index.getRowElements(key);
-        final int rowIndex = rowElements.indexOf(element);
-        if (rowIndex < 0)
-        {
-            return Optional.empty();
-        }
-        final Optional<DatasetTable> table = model.findTable(key);
-        if (table.isEmpty())
-        {
-            return Optional.empty();
-        }
-        final int columnIndex = columnIndexAt(table.get(), element, offset);
-        return Optional.of(new CellAddress(key, rowIndex, columnIndex));
-    }
-
-    private static int columnIndexAt(final DatasetTable table, final FlatXmlElement element, final int offset)
-    {
-        int columnIndex = 0;
-        for (final FlatXmlAttribute attribute : element.attributes())
-        {
-            if (offset >= attribute.nameOffset() && offset < attribute.endOffset())
-            {
-                columnIndex = Math.max(0, table.getColumnIndex(attribute.name()));
-            }
-        }
-        return columnIndex;
+        return new CellLocator(model, index, options).cellAt(offset);
     }
 
     /**
@@ -1428,50 +1368,6 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         {
             listener.modelChanged(event);
         }
-    }
-
-    private FlatXmlElement findElementContaining(final int offset)
-    {
-        final List<FlatXmlElement> elements = index.getElements();
-        int low = 0;
-        int high = elements.size() - 1;
-        while (low <= high)
-        {
-            final int middle = (low + high) >>> 1;
-            final FlatXmlElement element = elements.get(middle);
-            if (offset < element.offset())
-            {
-                high = middle - 1;
-            }
-            else if (offset >= element.endOffset())
-            {
-                low = middle + 1;
-            }
-            else
-            {
-                return element;
-            }
-        }
-        return null;
-    }
-
-    private static FlatXmlAttribute findAttribute(final FlatXmlElement element, final String columnName)
-    {
-        final String columnKey = columnName.toUpperCase(Locale.ENGLISH);
-        FlatXmlAttribute found = null;
-        for (final FlatXmlAttribute attribute : element.attributes())
-        {
-            if (attribute.name().toUpperCase(Locale.ENGLISH).equals(columnKey))
-            {
-                found = attribute;
-            }
-        }
-        return found;
-    }
-
-    private String tableKey(final String name)
-    {
-        return options.caseSensitiveTableNames() ? name : name.toUpperCase(Locale.ENGLISH);
     }
 
     /**
