@@ -443,7 +443,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         {
             final String indent = layout.childIndentation(index.getRoot(), index.getElements());
             final String joined = String.join(delimiter + indent, rowTexts);
-            edit = insertAsLastChildOfRoot(joined);
+            edit = layout.insertAsLastChildOfRoot(index.getRoot(), index.getElements(), joined);
         }
         return edit;
     }
@@ -787,7 +787,9 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         requireUnusedTableName(tableName, Set.of());
         requireNewColumnNames(tableName, columnNames);
 
-        applier.apply(document, List.of(insertAsLastChildOfRoot("<" + tableName + "/>")));
+        final TextEdit insertion =
+                layout.insertAsLastChildOfRoot(index.getRoot(), index.getElements(), "<" + tableName + "/>");
+        applier.apply(document, List.of(insertion));
         pendingColumns.addTable(tableKeyOf(tableName), columnNames);
         refreshInternal(ChangeOrigin.EDIT);
     }
@@ -1155,27 +1157,4 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         return true;
     }
 
-    /**
-     * Inserts text as the last child of the root: before the root's end tag (at the start of its line
-     * when only whitespace precedes it there), or, when the root is self-closing, by replacing it with an
-     * open and close tag around the new text.
-     */
-    private TextEdit insertAsLastChildOfRoot(final String childrenText)
-    {
-        final FlatXmlRoot root = index.getRoot();
-        final String delimiter = layout.getLineDelimiter();
-        final String childIndentation = layout.childIndentation(root, index.getElements());
-        if (root.selfClosing())
-        {
-            final String replacement =
-                    ">" + delimiter + childIndentation + childrenText + delimiter + "</dataset>";
-            return new ReplaceEdit(root.startTagEndOffset() - 2, 2, replacement);
-        }
-        if (layout.isAtStartOfItsLine(root.endTagOffset()))
-        {
-            final int lineStart = layout.startOfLineContaining(root.endTagOffset());
-            return new InsertEdit(lineStart, childIndentation + childrenText + delimiter);
-        }
-        return new InsertEdit(root.endTagOffset(), delimiter + childIndentation + childrenText + delimiter);
-    }
 }

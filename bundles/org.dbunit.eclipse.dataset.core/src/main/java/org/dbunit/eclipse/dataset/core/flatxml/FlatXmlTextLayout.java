@@ -24,6 +24,9 @@ import java.util.List;
 
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.Region;
+import org.eclipse.text.edits.InsertEdit;
+import org.eclipse.text.edits.ReplaceEdit;
+import org.eclipse.text.edits.TextEdit;
 
 /**
  * The layout facts the edit engine needs to keep new and moved text looking like the rest of the
@@ -109,6 +112,35 @@ final class FlatXmlTextLayout
     boolean isAtStartOfItsLine(final int offset)
     {
         return isBlank(text, lineStartOffset(offset), offset);
+    }
+
+    /**
+     * Returns the edit that inserts text as the last child of the root: before the root's end tag (at the
+     * start of its line when only whitespace precedes it there), or, when the root is self-closing, by
+     * replacing it with an open and close tag around the new text.
+     *
+     * @param root The root element.
+     * @param children The root's current children, in document order.
+     * @param childrenText The text of the new child or children.
+     * @return The edit.
+     */
+    TextEdit insertAsLastChildOfRoot(final FlatXmlRoot root, final List<FlatXmlElement> children,
+            final String childrenText)
+    {
+        final String delimiter = getLineDelimiter();
+        final String childIndentation = childIndentation(root, children);
+        if (root.selfClosing())
+        {
+            final String replacement =
+                    ">" + delimiter + childIndentation + childrenText + delimiter + "</dataset>";
+            return new ReplaceEdit(root.startTagEndOffset() - 2, 2, replacement);
+        }
+        if (isAtStartOfItsLine(root.endTagOffset()))
+        {
+            final int lineStart = startOfLineContaining(root.endTagOffset());
+            return new InsertEdit(lineStart, childIndentation + childrenText + delimiter);
+        }
+        return new InsertEdit(root.endTagOffset(), delimiter + childIndentation + childrenText + delimiter);
     }
 
     private static IRegion elementRegion(final FlatXmlElement element)
