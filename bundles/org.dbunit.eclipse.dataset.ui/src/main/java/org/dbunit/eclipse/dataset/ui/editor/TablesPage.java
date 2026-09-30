@@ -29,7 +29,6 @@ import java.util.Map;
 import java.util.Set;
 
 import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
-import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.core.model.CellAddress;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
@@ -73,7 +72,6 @@ import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.action.MenuManager;
 import org.eclipse.jface.action.ToolBarManager;
 import org.eclipse.jface.commands.ActionHandler;
-import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.jface.resource.FontDescriptor;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.jface.resource.LocalResourceManager;
@@ -91,11 +89,7 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.custom.StackLayout;
-import org.eclipse.swt.dnd.Clipboard;
-import org.eclipse.swt.dnd.TextTransfer;
-import org.eclipse.swt.dnd.Transfer;
 import org.eclipse.swt.events.SelectionListener;
-import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.Point;
@@ -137,6 +131,8 @@ final class TablesPage implements DatasetGridContext
     private final LocalResourceManager resources;
 
     private final Composite control;
+
+    private final PageServices services;
 
     private final ErrorBanner errorBanner;
 
@@ -272,6 +268,9 @@ final class TablesPage implements DatasetGridContext
         controlLayout.marginHeight = 0;
         control.setLayout(controlLayout);
 
+        services = new PageServices(control, () -> editable,
+                () -> editor.getSourceEditor().validateEditorInputState(),
+                () -> editor.getEditorSite().getActionBars().getStatusLineManager());
         errorBanner = new ErrorBanner(control, editor);
 
         contentStack = new Composite(control, SWT.NONE);
@@ -537,47 +536,19 @@ final class TablesPage implements DatasetGridContext
     @Override
     public boolean isDarkTheme()
     {
-        return relativeLuminance(control.getBackground()) < 0.5;
+        return services.isDarkTheme();
     }
 
     @Override
     public boolean executeEdit(final Runnable edit)
     {
-        if (!editable || !editor.getSourceEditor().validateEditorInputState())
-        {
-            return false;
-        }
-        try
-        {
-            edit.run();
-        }
-        catch (final DatasetEditException e)
-        {
-            setStatusErrorMessage(e.getMessage());
-            return false;
-        }
-        editor.getEditorSite().getActionBars().getStatusLineManager().setErrorMessage(null);
-        return true;
+        return services.executeEdit(edit);
     }
 
     @Override
     public boolean executeMultiCellEdit(final String title, final Runnable edit)
     {
-        if (!editable || !editor.getSourceEditor().validateEditorInputState())
-        {
-            return false;
-        }
-        try
-        {
-            edit.run();
-        }
-        catch (final DatasetEditException e)
-        {
-            MessageDialog.openError(control.getShell(), title, e.getMessage());
-            return false;
-        }
-        editor.getEditorSite().getActionBars().getStatusLineManager().setErrorMessage(null);
-        return true;
+        return services.executeMultiCellEdit(title, edit);
     }
 
     @Override
@@ -646,7 +617,7 @@ final class TablesPage implements DatasetGridContext
     @Override
     public Shell getShell()
     {
-        return control.getShell();
+        return services.getShell();
     }
 
     @Override
@@ -708,54 +679,25 @@ final class TablesPage implements DatasetGridContext
     @Override
     public void setStatusMessage(final String message)
     {
-        editor.getEditorSite().getActionBars().getStatusLineManager().setMessage(message);
+        services.setStatusMessage(message);
     }
 
     @Override
     public void setStatusErrorMessage(final String message)
     {
-        editor.getEditorSite().getActionBars().getStatusLineManager().setErrorMessage(message);
-        Display.getCurrent().beep();
+        services.setStatusErrorMessage(message);
     }
 
     @Override
     public void writeClipboardText(final String text)
     {
-        final Clipboard clipboard = new Clipboard(control.getDisplay());
-        try
-        {
-            clipboard.setContents(new Object[] { text }, new Transfer[] { TextTransfer.getInstance() });
-        }
-        finally
-        {
-            clipboard.dispose();
-        }
+        services.writeClipboardText(text);
     }
 
     @Override
     public String readClipboardText()
     {
-        final Clipboard clipboard = new Clipboard(control.getDisplay());
-        try
-        {
-            return (String) clipboard.getContents(TextTransfer.getInstance());
-        }
-        finally
-        {
-            clipboard.dispose();
-        }
-    }
-
-    private static double relativeLuminance(final Color color)
-    {
-        return 0.2126 * linearize(color.getRed()) + 0.7152 * linearize(color.getGreen())
-                + 0.0722 * linearize(color.getBlue());
-    }
-
-    private static double linearize(final int channelValue)
-    {
-        final double normalized = channelValue / 255.0;
-        return normalized <= 0.03928 ? normalized / 12.92 : Math.pow((normalized + 0.055) / 1.055, 2.4);
+        return services.readClipboardText();
     }
 
     CTabFolder getTabFolder()
