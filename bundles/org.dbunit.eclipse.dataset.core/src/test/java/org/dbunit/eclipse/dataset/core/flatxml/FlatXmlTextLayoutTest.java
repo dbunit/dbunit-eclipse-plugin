@@ -22,7 +22,9 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IRegion;
+import org.eclipse.text.edits.TextEdit;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -143,6 +145,76 @@ class FlatXmlTextLayoutTest
         assertThat(substringOf(text, region))
                 .as("The CR LF delimiter must be included whole, not split.")
                 .isEqualTo("    <USERS ID=\"1\"/>\r\n");
+    }
+
+    @Test
+    void testInsertAsLastChildOfRoot_whenTheRootIsSelfClosing_opensAndClosesTheRootAroundTheText()
+            throws Exception
+    {
+        final String text = "<dataset/>\n";
+
+        final String result = insertAsLastChildOfRoot(text, "\n", "<T/>");
+
+        assertThat(result).as("The self-closing root must become an open and a close tag around the child.")
+                .isEqualTo("<dataset>\n  <T/>\n</dataset>\n");
+    }
+
+    @Test
+    void testInsertAsLastChildOfRoot_whenTheEndTagIsAloneOnItsLine_insertsAtTheStartOfThatLine()
+            throws Exception
+    {
+        final String text = "<dataset>\n    <USERS ID=\"1\"/>\n</dataset>\n";
+
+        final String result = insertAsLastChildOfRoot(text, "\n", "<T/>");
+
+        assertThat(result).as("The new child must get its own line with the indentation of its siblings.")
+                .isEqualTo("<dataset>\n    <USERS ID=\"1\"/>\n    <T/>\n</dataset>\n");
+    }
+
+    @Test
+    void testInsertAsLastChildOfRoot_whenTheEndTagFollowsContentOnItsLine_insertsOnNewLines()
+            throws Exception
+    {
+        final String text = "<dataset><USERS ID=\"1\"/></dataset>";
+
+        final String result = insertAsLastChildOfRoot(text, "\n", "<T/>");
+
+        assertThat(result).as("The child must go between two line breaks before the end tag.")
+                .isEqualTo("<dataset><USERS ID=\"1\"/>\n<T/>\n</dataset>");
+    }
+
+    @Test
+    void testInsertAsLastChildOfRoot_whenTheRootHasNoChildren_indentsTheChildTwoSpacesDeeperThanTheRoot()
+            throws Exception
+    {
+        final String text = "  <dataset>\n  </dataset>\n";
+
+        final String result = insertAsLastChildOfRoot(text, "\n", "<T/>");
+
+        assertThat(result).as("Without siblings, the child is indented like the root plus two spaces.")
+                .isEqualTo("  <dataset>\n    <T/>\n  </dataset>\n");
+    }
+
+    @Test
+    void testInsertAsLastChildOfRoot_whenTheDelimiterIsCrLf_usesItForTheNewLines() throws Exception
+    {
+        final String text = "<dataset/>\r\n";
+
+        final String result = insertAsLastChildOfRoot(text, "\r\n", "<T/>");
+
+        assertThat(result).as("The new lines must end with the layout's delimiter.")
+                .isEqualTo("<dataset>\r\n  <T/>\r\n</dataset>\r\n");
+    }
+
+    private static String insertAsLastChildOfRoot(final String text, final String delimiter,
+            final String childrenText) throws Exception
+    {
+        final FlatXmlParseResult parse = FlatXmlParser.parse(text);
+        final FlatXmlTextLayout layout = new FlatXmlTextLayout(text, delimiter);
+        final TextEdit edit = layout.insertAsLastChildOfRoot(parse.root(), parse.elements(), childrenText);
+        final Document document = new Document(text);
+        edit.apply(document);
+        return document.get();
     }
 
     private static String substringOf(final String text, final IRegion region)
