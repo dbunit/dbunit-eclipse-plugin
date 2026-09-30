@@ -20,9 +20,16 @@
  */
 package org.dbunit.eclipse.dataset.core.flatxml;
 
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
+import org.eclipse.jface.text.BadLocationException;
+import org.eclipse.jface.text.Document;
+import org.eclipse.text.edits.MultiTextEdit;
+import org.eclipse.text.edits.TextEdit;
 
 /**
  * A dataset text together with the model, the index, and the layout of one parse of it, which the tests of
@@ -63,5 +70,48 @@ record ParsedDataset(String text, DatasetModel model, FlatXmlIndex index, FlatXm
                 FlatXmlModelBuilder.build(text, parse, null, options, Map.of());
         final FlatXmlTextLayout layout = new FlatXmlTextLayout(text, lineDelimiter);
         return new ParsedDataset(text, built.model(), built.index(), layout, options);
+    }
+
+    /**
+     * Returns the context of an operation on this parse, for a document that is saved as UTF-8.
+     *
+     * @return The context.
+     */
+    EditContext editContext()
+    {
+        return editContext(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Returns the context of an operation on this parse.
+     *
+     * @param charset The charset that the document is saved in.
+     * @return The context.
+     */
+    EditContext editContext(final Charset charset)
+    {
+        return new EditContext(() -> text, index, layout, () -> charset, status ->
+        {
+            // These tests do not look at the log.
+        });
+    }
+
+    /**
+     * Applies planned edits to this text.
+     *
+     * @param edits The edits, which must not overlap.
+     * @return The text after the edits.
+     * @throws BadLocationException When an edit does not fit the text.
+     */
+    String apply(final List<TextEdit> edits) throws BadLocationException
+    {
+        final Document document = new Document(text);
+        final MultiTextEdit root = new MultiTextEdit();
+        for (final TextEdit edit : edits)
+        {
+            root.addChild(edit);
+        }
+        root.apply(document);
+        return document.get();
     }
 }
