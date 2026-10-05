@@ -27,6 +27,8 @@ import java.util.List;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.action.IAction;
+import org.eclipse.jface.action.IContributionItem;
+import org.eclipse.jface.action.IStatusLineManager;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
@@ -40,7 +42,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests that {@link DatasetEditorContributor} installs the global Edit, Revert, and Print actions of the
- * active dataset editor's active page.
+ * active dataset editor's active page, and shows the status fields of the Source page only while it is
+ * active.
  */
 class DatasetEditorContributorTest
 {
@@ -198,6 +201,134 @@ class DatasetEditorContributorTest
                     .isSameAs(first.getSourceEditor().getAction(ITextEditorActionConstants.REVERT))
                     .isNotSameAs(second.getSourceEditor().getAction(ITextEditorActionConstants.REVERT));
         }
+    }
+
+    @Test
+    void testContributeToStatusLine_whenAnEditorOpens_addsTheTextEditorsFieldsToItsStatusLine()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", DATASET);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IActionBars actionBars = editor.getEditorSite().getActionBars();
+            final IStatusLineManager statusLine = actionBars.getStatusLineManager();
+
+            final List<IContributionItem> fields = new ArrayList<>();
+            for (final String category : StatusFieldProbe.CATEGORIES)
+            {
+                fields.add(statusLine.find(category));
+            }
+
+            assertThat(fields).as("The status line of the dataset editor must have the Source page's fields.")
+                    .doesNotContainNull();
+        }
+    }
+
+    @Test
+    void testSetActivePage_toTheSourcePage_showsTheStatusFieldsOfTheSourcePage() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", DATASET);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final int usersOffset = DATASET.indexOf("<USERS");
+
+            editor.showOnSourcePage(usersOffset, 0);
+            UiTestWorkspace.processEvents();
+
+            try (StatusFieldProbe probe = new StatusFieldProbe(statusFieldsOf(editor)))
+            {
+                assertThat(probe.visibleCategories()).as("The Source page must show its status fields.")
+                        .containsExactly(StatusFieldProbe.ELEMENT_STATE, StatusFieldProbe.INPUT_MODE,
+                                StatusFieldProbe.INPUT_POSITION);
+                assertThat(probe.position())
+                        .as("The position field must show the text cursor of the Source page.")
+                        .isEqualTo("1:" + (usersOffset + 1));
+            }
+        }
+    }
+
+    @Test
+    void testSetActiveEditor_whenAnEditorOpensOnTheSourcePage_showsTheStatusFields() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("broken.xml", "<dataset><USERS ID=\"1\"</dataset>");
+
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+
+            try (StatusFieldProbe probe = new StatusFieldProbe(statusFieldsOf(editor)))
+            {
+                assertThat(editor.isSourcePageActive())
+                        .as("A file with an XML error must open on the Source page.").isTrue();
+                assertThat(probe.visibleCategories())
+                        .as("An editor that opens on the Source page must show its status fields.")
+                        .containsExactly(StatusFieldProbe.ELEMENT_STATE, StatusFieldProbe.INPUT_MODE,
+                                StatusFieldProbe.INPUT_POSITION);
+            }
+        }
+    }
+
+    @Test
+    void testSetActivePage_backToTheTablesPage_hidesTheStatusFields() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", DATASET);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            editor.showOnSourcePage(0, 0);
+            UiTestWorkspace.processEvents();
+
+            showTablesPage(editor);
+
+            try (StatusFieldProbe probe = new StatusFieldProbe(statusFieldsOf(editor)))
+            {
+                assertThat(probe.visibleCategories())
+                        .as("The Tables page has no use for the status fields of the text editor.").isEmpty();
+            }
+        }
+    }
+
+    @Test
+    void testSetActiveEditor_withTwoDatasetEditorsOpen_showsTheStatusFieldsOfTheActivatedSourcePageOnly()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final FlatXmlDatasetEditor first =
+                    (FlatXmlDatasetEditor) workspace.open(workspace.createFile("first.xml", DATASET));
+            first.showOnSourcePage(0, 0);
+            final FlatXmlDatasetEditor second =
+                    (FlatXmlDatasetEditor) workspace.open(workspace.createFile("second.xml", DATASET));
+            final int usersOffset = DATASET.indexOf("<USERS");
+            try (StatusFieldProbe probe = new StatusFieldProbe(statusFieldsOf(second)))
+            {
+                final List<String> whileTheSecondEditorShowsItsTablesPage = probe.visibleCategories();
+
+                PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage().activate(first);
+                UiTestWorkspace.processEvents();
+                second.getSourceEditor().selectAndReveal(1, 0);
+                first.getSourceEditor().selectAndReveal(usersOffset, 0);
+
+                assertThat(whileTheSecondEditorShowsItsTablesPage)
+                        .as("An editor on its Tables page must show no status fields.").isEmpty();
+                assertThat(probe.visibleCategories())
+                        .as("Activating an editor on its Source page must show the fields.")
+                        .containsExactly(StatusFieldProbe.ELEMENT_STATE, StatusFieldProbe.INPUT_MODE,
+                                StatusFieldProbe.INPUT_POSITION);
+                assertThat(probe.position())
+                        .as("The fields must follow the activated editor, not the one before.")
+                        .isEqualTo("1:" + (usersOffset + 1));
+            }
+        }
+    }
+
+    private static SourceStatusFields statusFieldsOf(final FlatXmlDatasetEditor editor)
+    {
+        final DatasetEditorContributor contributor =
+                (DatasetEditorContributor) editor.getEditorSite().getActionBarContributor();
+        return contributor.getStatusFields();
     }
 
     private static IAction installedAction(final FlatXmlDatasetEditor editor, final ActionFactory factory)

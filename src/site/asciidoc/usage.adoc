@@ -256,6 +256,9 @@ and when you switch back, the cell at the text cursor is selected.
 
 *File > Print* prints the XML text; the Tables page has nothing to print.
 
+While the Source page is shown, the status line shows the line and column of the text cursor,
+the input mode (insert or overwrite), and whether the file is writable.
+
 [[dtd]]
 == DTDs
 
