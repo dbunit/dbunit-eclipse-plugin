@@ -20,7 +20,6 @@
  */
 package org.dbunit.eclipse.dataset.ui.editor;
 
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,7 +42,6 @@ import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.Image;
-import org.eclipse.swt.widgets.Control;
 import org.eclipse.ui.ISharedImages;
 import org.eclipse.ui.PlatformUI;
 
@@ -51,8 +49,9 @@ import org.eclipse.ui.PlatformUI;
  * The sheet tabs of the Tables page: one tab with a {@link DatasetGrid} for each table of the dataset model,
  * in the order of the model, with the name, the tooltip, the font, and the problem icon of each tab. The page
  * tells the tabs before it renames or adds a table, so that the renamed table keeps its tab and its grid and
- * the added table's tab is selected. All of it belongs to the tab folder, so it may be used on the UI thread
- * only.
+ * the added table's tab is selected. A tab stays selected when the tabs move, and when the selected table is
+ * gone, the tab that takes its place is selected. All of it belongs to the tab folder, so it may be used on
+ * the UI thread only.
  */
 final class TableTabs
 {
@@ -169,57 +168,69 @@ final class TableTabs
         grid.selectCell(address.columnIndex(), address.rowIndex());
     }
 
+    /**
+     * Brings the tabs in line with the tables of the model. The tabs of tables that are gone are disposed
+     * first, so that they do not make the tabs after them move, then the tab of each table is created or
+     * moved to the table's place and updated. The tab that was selected stays selected, also when it moves,
+     * and when its table is gone, the tab that takes its place is selected. The tab of a table that the page
+     * announced as new is selected in any case.
+     *
+     * @param model The model whose tables the tabs show.
+     */
     void reconcile(final DatasetModel model)
     {
-        final Set<String> seenKeys = new HashSet<>();
+        final Map<String, DatasetTable> tables = tablesByKey(model);
+        final DatasetGrid selectedGrid = activeGrid();
+        final int selectedIndex = tabFolder.getSelectionIndex();
+
+        applyExpectedRename(tables.keySet());
+        disposeStaleTabs(tables.keySet());
         int index = 0;
-        for (final DatasetTable table : model.getTables())
+        for (final DatasetTable table : tables.values())
         {
-            final String key = resolveRenamedKey(table.getKey());
-            if (!seenKeys.add(key))
-            {
-                continue;
-            }
-            CTabItem item = tabsByKey.get(key);
-            DatasetGrid grid = gridsByKey.get(key);
-            if (item == null)
-            {
-                grid = new DatasetGrid(tabFolder, context, key);
-                grid.selectCell(0, 0);
-                grid.addSelectionListener(selectionChanged);
-                gridsByKey.put(key, grid);
-                item = new CTabItem(tabFolder, SWT.NONE, index);
-                item.setControl(grid.getControl());
-                tabsByKey.put(key, item);
-                if (key.equals(expectedNewTableKey))
-                {
-                    tabFolder.setSelection(item);
-                }
-            }
-            else if (tabFolder.indexOf(item) != index)
-            {
-                item = moveTab(item, index);
-                tabsByKey.put(key, item);
-            }
-            grid.tableChanged(table);
+            final String key = table.getKey();
+            final CTabItem item = placeTab(key, index);
+            gridsByKey.get(key).tableChanged(table);
             updateTab(item, table, model);
             index++;
         }
+        selectTab(selectedGrid, selectedIndex);
         expectedRenameOldKey = null;
         expectedRenameNewKey = null;
         expectedNewTableKey = null;
-
-        disposeStaleTabs(seenKeys);
-        selectFirstTabIfNoneSelected();
     }
 
-    private void disposeStaleTabs(final Set<String> seenKeys)
+    private static Map<String, DatasetTable> tablesByKey(final DatasetModel model)
+    {
+        final Map<String, DatasetTable> tables = new LinkedHashMap<>();
+        for (final DatasetTable table : model.getTables())
+        {
+            tables.putIfAbsent(table.getKey(), table);
+        }
+        return tables;
+    }
+
+    private void applyExpectedRename(final Set<String> tableKeys)
+    {
+        final boolean renameApplies = expectedRenameNewKey != null && tableKeys.contains(expectedRenameNewKey)
+                && tabsByKey.containsKey(expectedRenameOldKey);
+        if (renameApplies)
+        {
+            final CTabItem item = tabsByKey.remove(expectedRenameOldKey);
+            tabsByKey.put(expectedRenameNewKey, item);
+            final DatasetGrid grid = gridsByKey.remove(expectedRenameOldKey);
+            grid.tableRenamed(expectedRenameNewKey);
+            gridsByKey.put(expectedRenameNewKey, grid);
+        }
+    }
+
+    private void disposeStaleTabs(final Set<String> tableKeys)
     {
         final Iterator<Map.Entry<String, CTabItem>> iterator = tabsByKey.entrySet().iterator();
         while (iterator.hasNext())
         {
             final Map.Entry<String, CTabItem> entry = iterator.next();
-            if (!seenKeys.contains(entry.getKey()))
+            if (!tableKeys.contains(entry.getKey()))
             {
                 entry.getValue().getControl().dispose();
                 entry.getValue().dispose();
@@ -229,34 +240,82 @@ final class TableTabs
         }
     }
 
-    private void selectFirstTabIfNoneSelected()
+    private CTabItem placeTab(final String key, final int index)
     {
-        if (tabFolder.getSelection() == null && tabFolder.getItemCount() > 0)
+        CTabItem item = tabsByKey.get(key);
+        if (item == null)
         {
-            tabFolder.setSelection(0);
+            item = createTab(key, index);
         }
+        else if (tabFolder.indexOf(item) != index)
+        {
+            item = moveTab(item, index);
+            tabsByKey.put(key, item);
+        }
+        return item;
     }
 
-    private String resolveRenamedKey(final String currentKey)
+    private CTabItem createTab(final String key, final int index)
     {
-        if (currentKey.equals(expectedRenameNewKey) && tabsByKey.containsKey(expectedRenameOldKey))
-        {
-            tabsByKey.put(currentKey, tabsByKey.remove(expectedRenameOldKey));
-            final DatasetGrid grid = gridsByKey.remove(expectedRenameOldKey);
-            grid.tableRenamed(currentKey);
-            gridsByKey.put(currentKey, grid);
-        }
-        return currentKey;
+        final DatasetGrid grid = new DatasetGrid(tabFolder, context, key);
+        grid.selectCell(0, 0);
+        grid.addSelectionListener(selectionChanged);
+        gridsByKey.put(key, grid);
+        final CTabItem item = new CTabItem(tabFolder, SWT.NONE, index);
+        item.setControl(grid.getControl());
+        tabsByKey.put(key, item);
+        return item;
     }
 
+    // A tab folder cannot move a tab, so the tab is created again at its new index. The new tab shares the
+    // grid and takes over the selection before the old tab is disposed, so the folder never selects another
+    // tab in between and never hides the grid.
     private CTabItem moveTab(final CTabItem oldItem, final int index)
     {
-        final Control tabControl = oldItem.getControl();
-        oldItem.setControl(null);
-        oldItem.dispose();
         final CTabItem newItem = new CTabItem(tabFolder, SWT.NONE, index);
-        newItem.setControl(tabControl);
+        newItem.setControl(oldItem.getControl());
+        if (oldItem.equals(tabFolder.getSelection()))
+        {
+            tabFolder.setSelection(newItem);
+        }
+        oldItem.dispose();
         return newItem;
+    }
+
+    private void selectTab(final DatasetGrid previousGrid, final int previousIndex)
+    {
+        final CTabItem newTableTab = tabsByKey.get(expectedNewTableKey);
+        if (newTableTab != null)
+        {
+            tabFolder.setSelection(newTableTab);
+        }
+        else if (tabOf(previousGrid) == null)
+        {
+            selectTabNearIndex(previousIndex);
+        }
+    }
+
+    private CTabItem tabOf(final DatasetGrid grid)
+    {
+        CTabItem tab = null;
+        for (final Map.Entry<String, DatasetGrid> entry : gridsByKey.entrySet())
+        {
+            if (entry.getValue().equals(grid))
+            {
+                tab = tabsByKey.get(entry.getKey());
+                break;
+            }
+        }
+        return tab;
+    }
+
+    private void selectTabNearIndex(final int index)
+    {
+        final int lastIndex = tabFolder.getItemCount() - 1;
+        if (lastIndex >= 0)
+        {
+            tabFolder.setSelection(Math.max(0, Math.min(index, lastIndex)));
+        }
     }
 
     private void updateTab(final CTabItem item, final DatasetTable table, final DatasetModel model)

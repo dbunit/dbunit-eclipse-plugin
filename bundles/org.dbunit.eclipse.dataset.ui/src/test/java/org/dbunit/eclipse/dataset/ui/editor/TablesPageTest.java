@@ -197,6 +197,50 @@ class TablesPageTest
     }
 
     @Test
+    void testTablesPage_whenTheRenameOfTheSelectedTableIsUndone_selectsTheTableAgain() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><A ID=\"1\"/><B ID=\"1\"/><C ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final CTabFolder tabFolder = tablesPage.getTabFolder();
+            tabFolder.setSelection(1);
+
+            tablesPage.expectRename("B", "X");
+            editor.getDatasetDocument().renameTable("B", "X");
+            tablesPage.getGlobalActionHandler(ActionFactory.UNDO.getId()).run();
+            UiTestWorkspace.processEvents();
+
+            assertThat(tabFolder.getSelection().getText())
+                    .as("Undoing the rename of the selected table must select that table again.")
+                    .isEqualTo("B");
+        }
+    }
+
+    @Test
+    void testTablesPage_whenTheSourceMovesTheSelectedTableAheadOfTheOthers_keepsItSelected() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><A ID=\"1\"/><B ID=\"1\"/><C ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final CTabFolder tabFolder = editor.getTablesPage().getTabFolder();
+            tabFolder.setSelection(2);
+
+            sourceDocument(editor).set("<dataset><C ID=\"1\"/><A ID=\"1\"/><B ID=\"1\"/></dataset>");
+            UiTestWorkspace.processEvents();
+
+            assertThat(tabFolder.getSelection().getText())
+                    .as("Moving the selected table's rows ahead of the other tables on the Source page must "
+                            + "keep its tab selected.")
+                    .isEqualTo("C");
+        }
+    }
+
+    @Test
     void testTablesPage_whenXmlHasABlockingError_showsTheBannerAndIsNotEditable() throws Exception
     {
         try (UiTestWorkspace workspace = new UiTestWorkspace())

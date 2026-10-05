@@ -60,11 +60,14 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests {@link TableTabs}: the tabs that follow the tables of the model, keep the grid of a renamed table,
- * select the tab of a new table, describe each table in its tab, and select a cell of any table.
+ * select the tab of a new table, keep the selected table's tab selected when the tabs move, describe each
+ * table in its tab, and select a cell of any table.
  */
 class TableTabsTest
 {
     private static final String USERS_AND_ORDERS = "<dataset><USERS ID=\"1\"/><ORDERS ID=\"1\"/></dataset>";
+
+    private static final String A_B_C = "<dataset><A ID=\"1\"/><B ID=\"1\"/><C ID=\"1\"/></dataset>";
 
     private Shell shell;
 
@@ -177,6 +180,19 @@ class TableTabsTest
     }
 
     @Test
+    void testReconcile_whenTwoDifferentTablesShareAKey_showsTheFirst()
+    {
+        final DatasetTable oneRow = show("<dataset><USERS ID=\"1\"/></dataset>").getTables().get(0);
+        final DatasetTable twoRows = show("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>").getTables()
+                .get(0);
+
+        tabs.reconcile(new DatasetModel(List.of(oneRow, twoRows), List.of(), true));
+
+        assertThat(tabFolder.getItem(0).getToolTipText())
+                .as("The first table of a key must be the one shown.").isEqualTo("1 row, 1 column");
+    }
+
+    @Test
     void testReconcile_whenARenameIsExpected_keepsTheTabAndGridUnderTheNewKey()
     {
         tabs.reconcile(show("<dataset><USERS ID=\"1\"/></dataset>"));
@@ -234,6 +250,22 @@ class TableTabsTest
     }
 
     @Test
+    void testReconcile_whenAnExpectedRenameDidNotHappen_keepsTheTabAndGridOfTheOldName()
+    {
+        tabs.reconcile(show("<dataset><USERS ID=\"1\"/></dataset>"));
+        final CTabItem usersTab = tabFolder.getItem(0);
+        final Control usersGrid = usersTab.getControl();
+
+        tabs.expectRename("USERS", "CUSTOMERS");
+        tabs.reconcile(show("<dataset><USERS ID=\"1\"/><NOTES ID=\"1\"/></dataset>"));
+
+        assertThat(tabFolder.getItem(0)).as("A table that was not renamed must keep its tab.")
+                .isSameAs(usersTab);
+        assertThat(usersTab.getControl()).as("A table that was not renamed must keep its grid.")
+                .isSameAs(usersGrid);
+    }
+
+    @Test
     void testReconcile_whenANewTableIsExpected_selectsItsTab()
     {
         tabs.reconcile(show("<dataset><USERS ID=\"1\"/></dataset>"));
@@ -269,6 +301,147 @@ class TableTabsTest
 
         assertThat(tabFolder.getSelection().getText()).as("An expectation must last for one reconcile.")
                 .isEqualTo("USERS");
+    }
+
+    @Test
+    void testReconcile_whenTheSelectedTabMovesToTheFront_keepsItSelectedWithItsGrid()
+    {
+        tabs.reconcile(show(A_B_C));
+        tabFolder.setSelection(2);
+        final Control gridOfC = tabFolder.getItem(2).getControl();
+
+        tabs.reconcile(show("<dataset><C ID=\"1\"/><A ID=\"1\"/><B ID=\"1\"/></dataset>"));
+
+        assertThat(tabTexts()).as("The tabs must follow the order of the model.")
+                .containsExactly("C", "A", "B");
+        assertThat(tabFolder.getSelection().getText())
+                .as("The tab of the table that moved must stay selected.").isEqualTo("C");
+        assertThat(tabFolder.getSelection().getControl()).as("The moved tab must keep its grid.")
+                .isSameAs(gridOfC);
+        assertThat(gridOfC.getVisible()).as("The grid of the selected tab must be shown.").isTrue();
+    }
+
+    @Test
+    void testReconcile_whenTheSelectedTabMoves_neverHidesItsGrid()
+    {
+        tabs.reconcile(show(A_B_C));
+        tabFolder.setSelection(2);
+        final AtomicInteger hides = new AtomicInteger();
+        tabFolder.getItem(2).getControl().addListener(SWT.Hide, event -> hides.incrementAndGet());
+
+        tabs.reconcile(show("<dataset><C ID=\"1\"/><A ID=\"1\"/><B ID=\"1\"/></dataset>"));
+
+        assertThat(hides.get()).as("A grid that is hidden while its tab moves loses the keyboard focus.")
+                .isZero();
+    }
+
+    @Test
+    void testReconcile_whenAnotherTabMovesPastTheSelectedTab_keepsTheSelection()
+    {
+        tabs.reconcile(show(A_B_C));
+        tabFolder.setSelection(1);
+
+        tabs.reconcile(show("<dataset><A ID=\"1\"/><C ID=\"1\"/><B ID=\"1\"/></dataset>"));
+
+        assertThat(tabTexts()).as("The tabs must follow the order of the model.")
+                .containsExactly("A", "C", "B");
+        assertThat(tabFolder.getSelection().getText()).as("The selected tab must stay selected.")
+                .isEqualTo("B");
+    }
+
+    @Test
+    void testReconcile_whenATableIsInsertedBeforeTheSelectedTab_keepsTheSelection()
+    {
+        tabs.reconcile(show(USERS_AND_ORDERS));
+        tabFolder.setSelection(1);
+
+        tabs.reconcile(show("<dataset><ITEMS ID=\"1\"/><USERS ID=\"1\"/><ORDERS ID=\"1\"/></dataset>"));
+
+        assertThat(tabFolder.getSelection().getText()).as("The selected tab must stay selected.")
+                .isEqualTo("ORDERS");
+    }
+
+    @Test
+    void testReconcile_whenATableIsReplacedByAnotherAtTheSamePosition_keepsTheTabsAfterIt()
+    {
+        tabs.reconcile(show("<dataset><A ID=\"1\"/><X ID=\"1\"/><C ID=\"1\"/></dataset>"));
+        final CTabItem tabOfC = tabFolder.getItem(2);
+
+        tabs.reconcile(show(A_B_C));
+
+        assertThat(tabTexts()).as("The tabs must follow the order of the model.")
+                .containsExactly("A", "B", "C");
+        assertThat(tabFolder.getItem(2)).as("A table that did not move must keep its tab.")
+                .isSameAs(tabOfC);
+    }
+
+    @Test
+    void testReconcile_whenARenameIsUndoneForTheSelectedTable_selectsTheTabInItsPlaceAndKeepsTheOthers()
+    {
+        tabs.reconcile(show(A_B_C));
+        tabFolder.setSelection(1);
+        tabs.expectRename("B", "X");
+        tabs.reconcile(show("<dataset><A ID=\"1\"/><X ID=\"1\"/><C ID=\"1\"/></dataset>"));
+        final CTabItem tabOfC = tabFolder.getItem(2);
+        final Control gridOfC = tabOfC.getControl();
+
+        tabs.reconcile(show(A_B_C));
+
+        assertThat(tabFolder.getSelection().getText())
+                .as("The tab that takes the place of the selected tab must be selected.").isEqualTo("B");
+        assertThat(tabFolder.getItem(2)).as("The table after the renamed one must keep its tab.")
+                .isSameAs(tabOfC);
+        assertThat(tabFolder.getItem(2).getControl())
+                .as("The table after the renamed one must keep its grid.").isSameAs(gridOfC);
+    }
+
+    @Test
+    void testReconcile_whenTheSelectedTableIsRemoved_selectsTheTabThatTakesItsPlace()
+    {
+        tabs.reconcile(show(A_B_C));
+        tabFolder.setSelection(1);
+
+        tabs.reconcile(show("<dataset><A ID=\"1\"/><C ID=\"1\"/></dataset>"));
+
+        assertThat(tabFolder.getSelection().getText())
+                .as("The tab after the removed one takes its place and must be selected.").isEqualTo("C");
+    }
+
+    @Test
+    void testReconcile_whenTheSelectedFirstTableIsRemoved_selectsTheTabThatTakesItsPlace()
+    {
+        tabs.reconcile(show(A_B_C));
+        tabFolder.setSelection(0);
+
+        tabs.reconcile(show("<dataset><B ID=\"1\"/><C ID=\"1\"/></dataset>"));
+
+        assertThat(tabFolder.getSelection().getText())
+                .as("The tab that moves up into the place of the removed tab must be selected.")
+                .isEqualTo("B");
+    }
+
+    @Test
+    void testReconcile_whenTheSelectedLastTableIsRemoved_selectsTheNewLastTab()
+    {
+        tabs.reconcile(show(A_B_C));
+        tabFolder.setSelection(2);
+
+        tabs.reconcile(show("<dataset><A ID=\"1\"/><B ID=\"1\"/></dataset>"));
+
+        assertThat(tabFolder.getSelection().getText())
+                .as("The new last tab must be selected when the last tab was selected and removed.")
+                .isEqualTo("B");
+    }
+
+    @Test
+    void testReconcile_whenFewerTablesReplaceTheSelectedOneAndTheOthers_selectsTheLastTab()
+    {
+        tabs.reconcile(show("<dataset><A ID=\"1\"/><B ID=\"1\"/></dataset>"));
+        tabFolder.setSelection(1);
+
+        tabs.reconcile(show("<dataset><C ID=\"1\"/></dataset>"));
+
+        assertThat(tabFolder.getSelection().getText()).as("The only tab must be selected.").isEqualTo("C");
     }
 
     @Test
