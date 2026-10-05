@@ -424,7 +424,7 @@ class PendingColumnsTest
     }
 
     @Test
-    void testPrune_whenAColumnIsNowBackedByARealColumn_dropsIt()
+    void testPruneBackedColumns_whenAColumnIsNowBackedByARealColumn_dropsIt()
     {
         final PendingColumns pending = new PendingColumns(() ->
         {
@@ -433,27 +433,27 @@ class PendingColumnsTest
         final DatasetTable users = table("USERS", column("ID", false), column("extra", false),
                 column("LATER", true));
 
-        pending.prune(List.of(users));
+        pending.pruneBackedColumns(List.of(users));
 
         assertThat(pending.asMap()).as("Only a column that a real column backs must be dropped.")
                 .containsExactly(Map.entry("USERS", List.of("LATER")));
     }
 
     @Test
-    void testPrune_whenEveryPendingColumnIsBacked_dropsTheTablesEntry()
+    void testPruneBackedColumns_whenEveryPendingColumnIsBacked_dropsTheTablesEntry()
     {
         final PendingColumns pending = new PendingColumns(() ->
         {
         });
         pending.addTable("USERS", List.of("EXTRA"));
 
-        pending.prune(List.of(table("USERS", column("EXTRA", false))));
+        pending.pruneBackedColumns(List.of(table("USERS", column("EXTRA", false))));
 
         assertThat(pending.asMap()).as("A table without pending columns must have no entry.").isEmpty();
     }
 
     @Test
-    void testPrune_whenTheTableNoLongerExists_dropsItsEntry()
+    void testPruneBackedColumns_whenTheTableIsNotListed_keepsItsEntry()
     {
         final PendingColumns pending = new PendingColumns(() ->
         {
@@ -461,10 +461,39 @@ class PendingColumnsTest
         pending.addTable("USERS", List.of("EXTRA"));
         pending.addTable("ORDERS", List.of("TOTAL"));
 
-        pending.prune(List.of(table("ORDERS", column("TOTAL", true))));
+        pending.pruneBackedColumns(List.of(table("ORDERS", column("TOTAL", true))));
+
+        assertThat(pending.asMap()).as("A table that the build lacks may still exist, so it keeps its entry.")
+                .containsExactly(Map.entry("USERS", List.of("EXTRA")), Map.entry("ORDERS", List.of("TOTAL")));
+    }
+
+    @Test
+    void testPruneMissingTables_whenTheTableIsNotListed_dropsItsEntry()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        pending.addTable("USERS", List.of("EXTRA"));
+        pending.addTable("ORDERS", List.of("TOTAL"));
+
+        pending.pruneMissingTables(List.of(table("ORDERS", column("TOTAL", true))));
 
         assertThat(pending.asMap()).as("The entry of a table that is gone must not linger.")
                 .containsExactly(Map.entry("ORDERS", List.of("TOTAL")));
+    }
+
+    @Test
+    void testPruneMissingTables_whenAListedTableHasABackedColumn_leavesItsColumnsAlone()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        pending.addTable("USERS", List.of("EXTRA"));
+
+        pending.pruneMissingTables(List.of(table("USERS", column("EXTRA", false))));
+
+        assertThat(pending.asMap()).as("Dropping missing tables must not look at the columns of listed ones.")
+                .containsExactly(Map.entry("USERS", List.of("EXTRA")));
     }
 
     @Test

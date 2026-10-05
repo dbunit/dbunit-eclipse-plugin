@@ -1814,6 +1814,62 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testRefresh_whenTheTextIsNotWellFormedForAWhile_keepsThePendingColumnsOfTheTablesAfterTheError()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset><A x=\"1\"/><T ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        datasetDocument.addColumn("T", "C");
+
+        document.replace(document.get().indexOf("<A"), 0, "<");
+        datasetDocument.refresh();
+        assertThat(datasetDocument.getModel().isEditable())
+                .as("The stray character must stop the parse before the table.").isFalse();
+        document.replace(document.get().indexOf("<<A"), 1, "");
+        datasetDocument.refresh();
+
+        assertThat(datasetDocument.getModel().findTable("T").orElseThrow().getColumns())
+                .as("The pending column must survive a model that lacked its table for a moment.")
+                .containsExactly(new DatasetColumn("ID", false, true, false),
+                        new DatasetColumn("C", false, false, true));
+    }
+
+    @Test
+    void testRefresh_whenTheExternalDtdIsNotLoadedForAWhile_keepsThePendingColumnsOfATableOnlyItDeclares()
+    {
+        final IDocument document =
+                new Document("<!DOCTYPE dataset SYSTEM \"my.dtd\"><dataset></dataset>");
+        final AtomicBoolean failing = new AtomicBoolean();
+        final DtdSource source = (publicId, systemId) ->
+        {
+            if (failing.get())
+            {
+                throw new IllegalStateException("The DTD source is broken.");
+            }
+            return Optional.of(
+                    "<!ELEMENT dataset (USERS*)><!ELEMENT USERS EMPTY><!ATTLIST USERS ID CDATA #REQUIRED>");
+        };
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, source,
+                FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+        datasetDocument.addColumn("USERS", "NOTES");
+
+        failing.set(true);
+        datasetDocument.reloadDtd();
+        assertThat(datasetDocument.getModel().findTable("USERS"))
+                .as("Without the DTD the model must not list the table that only the DTD declares.")
+                .isEmpty();
+        failing.set(false);
+        datasetDocument.reloadDtd();
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                .as("The pending column must survive the DTD being unreadable for a moment.")
+                .containsExactly(new DatasetColumn("ID", true, false, false),
+                        new DatasetColumn("NOTES", false, false, true));
+    }
+
+    @Test
     void testRenameColumn_whenColumnHasMatchingAttributes_renamesEveryOccurrenceCaseInsensitively()
             throws Exception
     {

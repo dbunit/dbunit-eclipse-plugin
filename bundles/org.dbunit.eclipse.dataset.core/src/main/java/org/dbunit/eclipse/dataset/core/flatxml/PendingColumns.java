@@ -235,16 +235,14 @@ final class PendingColumns
     }
 
     /**
-     * Drops each table's pending columns that a fresh build now finds backed by data or the DTD, and
-     * drops a table's whole entry once the table itself no longer exists in the model, so a pending
-     * column never lingers once it is no longer needed.
+     * Drops each table's pending columns that a fresh build now finds backed by data or the DTD, and a
+     * table's whole entry once none is left, so a pending column never lingers once it is no longer
+     * needed. A table that the build lacks keeps its entry.
      */
-    void prune(final List<DatasetTable> tables)
+    void pruneBackedColumns(final List<DatasetTable> tables)
     {
-        final Set<String> tableKeys = new HashSet<>();
         for (final DatasetTable table : tables)
         {
-            tableKeys.add(table.getKey());
             final List<String> pending = pendingColumns.get(table.getKey());
             if (pending == null)
             {
@@ -255,6 +253,20 @@ final class PendingColumns
             {
                 pendingColumns.remove(table.getKey());
             }
+        }
+    }
+
+    /**
+     * Drops the entry of each table that a fresh build lacks. Call it only for a build that lists every
+     * table of the document: one from text that is not well-formed, or without the external DTD that
+     * declares some tables, lacks tables that exist, and their pending columns would be lost for good.
+     */
+    void pruneMissingTables(final List<DatasetTable> tables)
+    {
+        final Set<String> tableKeys = new HashSet<>();
+        for (final DatasetTable table : tables)
+        {
+            tableKeys.add(table.getKey());
         }
         pendingColumns.keySet().removeIf(key -> !tableKeys.contains(key));
     }

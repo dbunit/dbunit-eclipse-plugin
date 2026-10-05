@@ -520,16 +520,31 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         final DtdResolution dtdResolution = dtdResolver.resolve(parse.doctype());
         final FlatXmlModelBuilder.Result built = FlatXmlModelBuilder.build(text, parse,
                 dtdResolution.declarations(), options, pendingColumns.asMap());
-        pendingColumns.prune(built.model().getTables());
+        final List<DatasetTable> tables = built.model().getTables();
+        pendingColumns.pruneBackedColumns(tables);
+        if (listsEveryTable(parse, dtdResolution))
+        {
+            pendingColumns.pruneMissingTables(tables);
+        }
         pendingColumns.record(modificationStamp);
-        final List<DatasetProblem> problems = FlatXmlValidator.validate(parse, built.index(),
-                built.model().getTables(), dtdResolution.state(), dtdResolution.declarations(), options);
+        final List<DatasetProblem> problems = FlatXmlValidator.validate(parse, built.index(), tables,
+                dtdResolution.state(), dtdResolution.declarations(), options);
         final DatasetModel oldModel = model;
-        model = new DatasetModel(built.model().getTables(), problems, built.model().isEditable());
+        model = new DatasetModel(tables, problems, built.model().isEditable());
         index = built.index();
         layout = new FlatXmlTextLayout(text, TextUtilities.getDefaultLineDelimiter(document));
         stale = false;
         notifyListeners(new DatasetModelChangeEvent(oldModel, model, origin));
+    }
+
+    /**
+     * Returns whether the model of a refresh lists every table of the document: the text must have been
+     * parsed to its end, and the external DTD, which can declare tables that have no element, must have
+     * been loaded when the DOCTYPE names one.
+     */
+    private static boolean listsEveryTable(final FlatXmlParseResult parse, final DtdResolution dtdResolution)
+    {
+        return parse.wellFormed() && dtdResolution.state() != DtdState.NOT_LOADED;
     }
 
     private void notifyListeners(final DatasetModelChangeEvent event)
