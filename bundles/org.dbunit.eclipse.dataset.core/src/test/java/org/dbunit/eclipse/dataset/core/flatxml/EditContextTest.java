@@ -45,7 +45,8 @@ class EditContextTest
 
     private static EditContext contextWith(final Supplier<Charset> charset, final List<IStatus> statuses)
     {
-        return new EditContext(() -> "text", PARSED.index(), PARSED.layout(), charset, statuses::add);
+        return new EditContext(() -> "text", PARSED.index(), PARSED.layout(), charset,
+                FlatXmlOptions.DBUNIT_DEFAULTS, statuses::add);
     }
 
     @Test
@@ -53,7 +54,7 @@ class EditContextTest
     {
         final AtomicInteger reads = new AtomicInteger();
         final EditContext context = new EditContext(() -> "text" + reads.incrementAndGet(), PARSED.index(),
-                PARSED.layout(), () -> StandardCharsets.UTF_8, status ->
+                PARSED.layout(), () -> StandardCharsets.UTF_8, FlatXmlOptions.DBUNIT_DEFAULTS, status ->
                 {
                     // Nothing is logged here.
                 });
@@ -133,5 +134,35 @@ class EditContextTest
 
         assertThat(context.encoder()).as("An encoder keeps state, so it must not be shared.")
                 .isNotSameAs(context.encoder());
+    }
+
+    @Test
+    void testFirstElementDefinesColumns_whenThereIsNoDoctypeAndColumnSensingIsOff_isTrue()
+    {
+        final EditContext context = ParsedDataset.of("<dataset><T ID=\"1\"/></dataset>").editContext();
+
+        assertThat(context.firstElementDefinesColumns())
+                .as("dbUnit takes the columns from the first element, so the rule applies.").isTrue();
+    }
+
+    @Test
+    void testFirstElementDefinesColumns_whenColumnSensingIsOn_isFalse()
+    {
+        final ParsedDataset parsed = ParsedDataset.of("<dataset><T ID=\"1\"/></dataset>",
+                new FlatXmlOptions(false, true), "\n");
+
+        assertThat(parsed.editContext().firstElementDefinesColumns())
+                .as("With column sensing, dbUnit adds the columns of every element.").isFalse();
+    }
+
+    @Test
+    void testFirstElementDefinesColumns_whenTheDocumentHasADoctype_isFalse()
+    {
+        final ParsedDataset parsed = ParsedDataset.withDtd(
+                "<!DOCTYPE dataset SYSTEM \"my.dtd\"><dataset><T ID=\"1\"/></dataset>",
+                "<!ELEMENT dataset (T*)><!ATTLIST T ID CDATA #REQUIRED>");
+
+        assertThat(parsed.editContext().firstElementDefinesColumns())
+                .as("With a DTD, dbUnit takes the columns from the DTD.").isFalse();
     }
 }

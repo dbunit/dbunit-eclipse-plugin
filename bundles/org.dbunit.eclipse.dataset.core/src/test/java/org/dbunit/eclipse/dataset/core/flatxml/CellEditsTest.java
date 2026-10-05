@@ -199,6 +199,76 @@ class CellEditsTest
     }
 
     @Test
+    void testPlan_whenTheFirstRowLosesAColumnThatAnotherRowHas_throwsDatasetEditException()
+    {
+        final ParsedDataset parsed = ParsedDataset.of(TEXT);
+
+        assertThatThrownBy(() -> plan(parsed, new CellChange(0, "NAME", null)))
+                .as("dbUnit takes the columns from the first row, so it would ignore Alice's name.")
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage(NLS.bind(Messages.Edit_firstRowWouldLoseColumn,
+                        new Object[] { "NAME", "USERS" }));
+    }
+
+    @Test
+    void testPlan_whenTheChangesTakeAColumnOffEveryRow_isAllowed() throws Exception
+    {
+        final String result = result(ParsedDataset.of(TEXT), new CellChange(0, "NAME", null),
+                new CellChange(1, "NAME", null));
+
+        assertThat(result).as("Nothing is lost when no row keeps a value for the column.")
+                .isEqualTo("<dataset>\n  <USERS ID=\"1\" EMAIL=\"b@x.org\"/>\n  <USERS ID=\"2\"/>\n"
+                        + "</dataset>\n");
+    }
+
+    @Test
+    void testPlan_whenTheChangesGiveAnotherRowTheValueTheFirstRowLoses_throwsDatasetEditException()
+    {
+        final ParsedDataset parsed = ParsedDataset.of(TEXT);
+
+        assertThatThrownBy(() -> plan(parsed, new CellChange(0, "EMAIL", null),
+                new CellChange(1, "EMAIL", "a@x.org")))
+                .as("The second row would keep an email that dbUnit ignores.")
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage(NLS.bind(Messages.Edit_firstRowWouldLoseColumn,
+                        new Object[] { "EMAIL", "USERS" }));
+    }
+
+    @Test
+    void testPlan_whenTheDocumentHasADtd_allowsTheFirstRowToLoseAColumn() throws Exception
+    {
+        final String text = "<!DOCTYPE dataset SYSTEM \"my.dtd\"><dataset>\n"
+                + "  <USERS ID=\"1\" NAME=\"Bob\"/>\n  <USERS ID=\"2\" NAME=\"Alice\"/>\n</dataset>\n";
+        final ParsedDataset parsed = ParsedDataset.withDtd(text,
+                "<!ELEMENT dataset (USERS*)><!ATTLIST USERS ID CDATA #IMPLIED NAME CDATA #IMPLIED>");
+
+        assertThat(result(parsed, new CellChange(0, "NAME", null)))
+                .as("With a DTD, dbUnit takes the columns from the DTD, not from the first row.")
+                .isEqualTo(text.replace("<USERS ID=\"1\" NAME=\"Bob\"/>", "<USERS ID=\"1\"/>"));
+    }
+
+    @Test
+    void testPlan_whenColumnSensingIsOn_allowsTheFirstRowToLoseAColumn() throws Exception
+    {
+        final ParsedDataset parsed = ParsedDataset.of(TEXT, new FlatXmlOptions(false, true), "\n");
+
+        assertThat(result(parsed, new CellChange(0, "NAME", null)))
+                .as("With column sensing, dbUnit adds the columns of every row.")
+                .isEqualTo(TEXT.replace("<USERS ID=\"1\" NAME=\"Bob\"", "<USERS ID=\"1\""));
+    }
+
+    @Test
+    void testPlan_whenAnEmptyElementComesBeforeTheFirstRow_allowsTheFirstRowToLoseAColumn() throws Exception
+    {
+        final String text = "<dataset>\n  <USERS/>\n  <USERS ID=\"1\" NAME=\"Bob\"/>\n"
+                + "  <USERS ID=\"2\" NAME=\"Alice\"/>\n</dataset>\n";
+
+        assertThat(result(ParsedDataset.of(text), new CellChange(0, "NAME", null)))
+                .as("The empty element is the first element, so dbUnit has no columns to keep.")
+                .isEqualTo(text.replace("<USERS ID=\"1\" NAME=\"Bob\"/>", "<USERS ID=\"1\"/>"));
+    }
+
+    @Test
     void testPlan_whenARowHasTwoAttributesForTheColumnThatDifferOnlyInCase_throwsDatasetEditException()
     {
         final ParsedDataset parsed =

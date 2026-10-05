@@ -103,6 +103,27 @@ final class FlatXmlIndex
     }
 
     /**
+     * Returns a table's first element, whether it is a row or a marker.
+     *
+     * @param tableKey The key of the table.
+     * @return The element of the table that comes first in the document, or null when the table has none.
+     */
+    FlatXmlElement getFirstElement(final String tableKey)
+    {
+        final List<FlatXmlElement> rows = getRowElements(tableKey);
+        final List<FlatXmlElement> markers = getMarkerElements(tableKey);
+        if (rows.isEmpty())
+        {
+            return markers.isEmpty() ? null : markers.get(0);
+        }
+        if (markers.isEmpty() || rows.get(0).offset() < markers.get(0).offset())
+        {
+            return rows.get(0);
+        }
+        return markers.get(0);
+    }
+
+    /**
      * Returns a table's row and marker elements together, in document order, so callers can find the
      * table's first element regardless of whether it is a row or a marker.
      */

@@ -22,6 +22,7 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.nio.charset.CharsetEncoder;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -67,6 +68,7 @@ final class CellEdits
             changesByRow.computeIfAbsent(change.rowIndex(), unused -> new LinkedHashMap<>())
                     .put(columnKey, change.value());
         }
+        requireFirstElementColumnsKept(tableKey, table, changesByRow);
 
         final List<FlatXmlElement> rowElements = context.index().getRowElements(tableKey);
         final CharsetEncoder encoder = context.encoder();
@@ -111,6 +113,60 @@ final class CellEdits
                         NLS.bind(Messages.Edit_noSuchColumn, change.columnName(), table.getName()));
             }
         }
+    }
+
+    /**
+     * Refuses changes that take a column off the first row while another row keeps a value for it, because
+     * dbUnit takes a table's columns from its first row and would then ignore those values.
+     */
+    private void requireFirstElementColumnsKept(final String tableKey, final DatasetTable table,
+            final Map<Integer, Map<String, String>> changesByRow)
+    {
+        final Map<String, String> firstRowChanges = changesByRow.get(0);
+        if (firstRowChanges == null)
+        {
+            return;
+        }
+        final FirstElementColumns firstElement = new FirstElementColumns(context, tableKey, table);
+        if (firstElement.isEmpty())
+        {
+            return;
+        }
+        final Set<Integer> prospectiveColumns = new HashSet<>(firstElement.columnIndexes());
+        for (final Map.Entry<String, String> change : firstRowChanges.entrySet())
+        {
+            final int columnIndex = table.getColumnIndex(change.getKey());
+            if (change.getValue() == null)
+            {
+                prospectiveColumns.remove(columnIndex);
+            }
+            else
+            {
+                prospectiveColumns.add(columnIndex);
+            }
+        }
+        firstElement.requireKept(prospectiveColumns,
+                columnIndex -> hasValueInOtherRow(table, changesByRow, columnIndex));
+    }
+
+    /**
+     * Returns whether a row after the first will have a value for a column once the changes are applied.
+     */
+    private static boolean hasValueInOtherRow(final DatasetTable table,
+            final Map<Integer, Map<String, String>> changesByRow, final int columnIndex)
+    {
+        final String columnKey = table.getColumns().get(columnIndex).name().toUpperCase(Locale.ENGLISH);
+        for (int rowIndex = 1; rowIndex < table.getRows().size(); rowIndex++)
+        {
+            final Map<String, String> rowChanges = changesByRow.getOrDefault(rowIndex, Map.of());
+            final String value = rowChanges.containsKey(columnKey) ? rowChanges.get(columnKey)
+                    : table.getRows().get(rowIndex).getValue(columnIndex);
+            if (value != null)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void requireRowNotEmptied(final DatasetTable table, final int rowIndex,

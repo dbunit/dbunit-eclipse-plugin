@@ -20,10 +20,6 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
 import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
@@ -34,7 +30,7 @@ import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
  *
  * @since 1.0.0
  */
-public final class InsertRowAboveAction extends GridAction
+public final class InsertRowAboveAction extends InsertRowAction
 {
     /**
      * Creates the action.
@@ -49,27 +45,8 @@ public final class InsertRowAboveAction extends GridAction
     }
 
     @Override
-    protected void runOnGrid(final DatasetGridContext context)
+    int insertionIndex(final GridSelection selection)
     {
-        final GridSelection selection = context.getSelection();
-        final int rowIndex = Math.max(selection.anchorRowIndex(), 0);
-        final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);
-        final List<String> blankRow = new ArrayList<>(Collections.nCopies(selection.columnCount(), null));
-        if (!blankRow.isEmpty())
-        {
-            blankRow.set(0, "");
-        }
-        final boolean applied = context.executeEdit(() -> context.getDatasetDocument()
-                .insertRows(selection.tableKey(), rowIndex, List.of(blankRow)));
-        if (applied)
-        {
-            context.selectRegion(columnIndex, rowIndex, 1, 1);
-        }
-    }
-
-    @Override
-    protected boolean isEnabledFor(final GridSelection selection)
-    {
-        return selection.tableKey() != null && selection.columnCount() > 0;
+        return Math.max(selection.anchorRowIndex(), 0);
     }
 }

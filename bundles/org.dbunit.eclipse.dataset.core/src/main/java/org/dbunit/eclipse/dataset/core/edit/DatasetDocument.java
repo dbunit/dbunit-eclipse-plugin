@@ -96,6 +96,18 @@ public interface DatasetDocument
     void insertRows(String tableKey, int rowIndex, List<List<String>> rows);
 
     /**
+     * Inserts a blank row into a table: a row with an empty string in the table's first column and NULL in
+     * the other columns. When the blank row becomes the first row of a table whose columns dbUnit takes from
+     * its first row, which is so in a dataset without a DTD when column sensing is off, the blank row also
+     * has an empty string in every column that the old first row has a value for, because dbUnit would
+     * otherwise ignore the values of those columns in the other rows.
+     *
+     * @param tableKey The key of the table.
+     * @param rowIndex The index to insert before; equal to the row count to append.
+     */
+    void insertBlankRow(String tableKey, int rowIndex);
+
+    /**
      * Changes cells of existing rows and appends rows after a table's last row, as pasting a block that
      * reaches past the last row does. Unlike a batch of {@link #setCells} and {@link #insertRows}, it
      * rebuilds the model only once.

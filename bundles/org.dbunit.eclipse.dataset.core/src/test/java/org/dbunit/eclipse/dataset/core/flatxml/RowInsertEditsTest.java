@@ -244,4 +244,135 @@ class RowInsertEditsTest
                 .isInstanceOf(DatasetEditException.class)
                 .hasMessage(NLS.bind(Messages.Edit_newRowWouldBeEmpty, "USERS"));
     }
+
+    @Test
+    void testPlan_whenTheNewFirstRowLacksAColumnOfTheOldFirstRow_throwsDatasetEditException()
+    {
+        final ParsedDataset parsed = ParsedDataset.of(TEXT);
+
+        assertThatThrownBy(() -> plan(parsed, "USERS", 0, List.of(row("3", null))))
+                .as("dbUnit would take only ID from the new first row and ignore every NAME.")
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage(NLS.bind(Messages.Edit_firstRowWouldLoseColumn,
+                        new Object[] { "NAME", "USERS" }));
+    }
+
+    @Test
+    void testPlan_whenSeveralRowsAreInsertedAtTheTopAndTheFirstOfThemLacksAColumn_throwsDatasetEditException()
+    {
+        final ParsedDataset parsed = ParsedDataset.of(TEXT);
+
+        assertThatThrownBy(() -> plan(parsed, "USERS", 0, List.of(row("3", null), row("4", "Dan"))))
+                .as("The first of the new rows becomes the first row, whatever the others have.")
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage(NLS.bind(Messages.Edit_firstRowWouldLoseColumn,
+                        new Object[] { "NAME", "USERS" }));
+    }
+
+    @Test
+    void testPlan_whenOnlyALaterNewRowLacksAColumn_isAllowed() throws Exception
+    {
+        final String result =
+                result(ParsedDataset.of(TEXT), "USERS", 0, List.of(row("3", "Carl"), row("4", null)));
+
+        assertThat(result).as("A row after the first may lack a column.")
+                .isEqualTo(beforeBob("  <USERS ID=\"3\" NAME=\"Carl\"/>\n  <USERS ID=\"4\"/>\n"));
+    }
+
+    @Test
+    void testPlan_whenTheNewFirstRowHasAnEmptyStringForTheColumn_isAllowed() throws Exception
+    {
+        final String result = result(ParsedDataset.of(TEXT), "USERS", 0, List.of(row("3", "")));
+
+        assertThat(result).as("An empty string is a value, so dbUnit keeps the column.")
+                .isEqualTo(beforeBob("  <USERS ID=\"3\" NAME=\"\"/>\n"));
+    }
+
+    @Test
+    void testPlan_whenTheNewFirstRowLacksAColumnAndTheDocumentHasADtd_isAllowed() throws Exception
+    {
+        final String text = "<!DOCTYPE dataset SYSTEM \"my.dtd\">" + TEXT;
+        final ParsedDataset parsed = ParsedDataset.withDtd(text,
+                "<!ELEMENT dataset (USERS*, ORDERS*)><!ELEMENT USERS EMPTY><!ELEMENT ORDERS EMPTY>"
+                        + "<!ATTLIST USERS ID CDATA #IMPLIED NAME CDATA #IMPLIED>"
+                        + "<!ATTLIST ORDERS ID CDATA #IMPLIED>");
+
+        assertThat(result(parsed, "USERS", 0, List.of(row("3", null))))
+                .as("With a DTD, dbUnit takes the columns from the DTD, not from the first row.")
+                .isEqualTo(text.replace("  <USERS ID=\"1\"", "  <USERS ID=\"3\"/>\n  <USERS ID=\"1\""));
+    }
+
+    @Test
+    void testPlan_whenTheNewFirstRowLacksAColumnAndColumnSensingIsOn_isAllowed() throws Exception
+    {
+        final ParsedDataset parsed = ParsedDataset.of(TEXT, new FlatXmlOptions(false, true), "\n");
+
+        assertThat(result(parsed, "USERS", 0, List.of(row("3", null))))
+                .as("With column sensing, dbUnit adds the columns of every row.")
+                .isEqualTo(beforeBob("  <USERS ID=\"3\"/>\n"));
+    }
+
+    @Test
+    void testPlan_whenAnEmptyElementComesBeforeTheFirstRow_allowsANewFirstRowThatLacksAColumn()
+            throws Exception
+    {
+        final String text = "<dataset>\n  <USERS/>\n  <USERS ID=\"1\" NAME=\"Bob\"/>\n</dataset>\n";
+
+        assertThat(result(ParsedDataset.of(text), "USERS", 0, List.of(row("3", null))))
+                .as("The empty element stays the first element, so dbUnit has no columns to keep.")
+                .isEqualTo(text.replace("  <USERS ID=\"1\"", "  <USERS ID=\"3\"/>\n  <USERS ID=\"1\""));
+    }
+
+    private static List<String> blankRow(final ParsedDataset parsed, final int rowIndex)
+    {
+        final DatasetTable table = parsed.model().findTable("USERS").orElseThrow();
+        return new RowInsertEdits(parsed.editContext()).blankRow("USERS", table, rowIndex);
+    }
+
+    @Test
+    void testBlankRow_whenItBecomesTheFirstRow_hasAnEmptyStringForEveryColumnOfTheOldFirstRow()
+    {
+        assertThat(blankRow(ParsedDataset.of(TEXT), 0))
+                .as("dbUnit takes ID and NAME from the first row, so the blank row needs both.")
+                .containsExactly("", "");
+    }
+
+    @Test
+    void testBlankRow_whenItIsNotTheFirstRow_hasAnEmptyStringInTheFirstColumnOnly()
+    {
+        assertThat(blankRow(ParsedDataset.of(TEXT), 1))
+                .as("A row after the first needs only a value that makes it a row.")
+                .containsExactly("", null);
+    }
+
+    @Test
+    void testBlankRow_whenTheOldFirstRowHasFewerColumnsThanTheTable_hasOnlyTheColumnsOfTheOldFirstRow()
+    {
+        final ParsedDataset parsed = ParsedDataset
+                .of("<dataset>\n  <USERS ID=\"1\"/>\n  <USERS ID=\"2\" NAME=\"Alice\"/>\n</dataset>\n");
+
+        assertThat(blankRow(parsed, 0)).as("dbUnit takes only ID from the first row, so only ID is needed.")
+                .containsExactly("", null);
+    }
+
+    @Test
+    void testBlankRow_whenTheDocumentHasADtd_hasAnEmptyStringInTheFirstColumnOnly()
+    {
+        final ParsedDataset parsed = ParsedDataset.withDtd("<!DOCTYPE dataset SYSTEM \"my.dtd\">" + TEXT,
+                "<!ELEMENT dataset (USERS*, ORDERS*)><!ELEMENT USERS EMPTY><!ELEMENT ORDERS EMPTY>"
+                        + "<!ATTLIST USERS ID CDATA #IMPLIED NAME CDATA #IMPLIED>"
+                        + "<!ATTLIST ORDERS ID CDATA #IMPLIED>");
+
+        assertThat(blankRow(parsed, 0)).as("With a DTD, the first row does not decide the columns.")
+                .containsExactly("", null);
+    }
+
+    @Test
+    void testBlankRow_whenColumnSensingIsOn_hasAnEmptyStringInTheFirstColumnOnly()
+    {
+        final ParsedDataset parsed = ParsedDataset.of(TEXT, new FlatXmlOptions(false, true), "\n");
+
+        assertThat(blankRow(parsed, 0)).as("With column sensing, the first row does not decide the columns.")
+                .containsExactly("", null);
+    }
 }

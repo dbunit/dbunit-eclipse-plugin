@@ -47,6 +47,8 @@ final class EditContext
 
     private final Supplier<Charset> charset;
 
+    private final FlatXmlOptions options;
+
     private final Consumer<IStatus> log;
 
     /**
@@ -57,15 +59,17 @@ final class EditContext
      * @param layout The layout of the text that was parsed.
      * @param charset Returns the document's current charset; a null result or a thrown exception falls back
      *                to UTF-8.
+     * @param options The case-sensitivity and column-sensing options that the model was built with.
      * @param log Receives a warning status for each failure of the charset supplier.
      */
     EditContext(final Supplier<String> text, final FlatXmlIndex index, final FlatXmlTextLayout layout,
-            final Supplier<Charset> charset, final Consumer<IStatus> log)
+            final Supplier<Charset> charset, final FlatXmlOptions options, final Consumer<IStatus> log)
     {
         this.text = text;
         this.index = index;
         this.layout = layout;
         this.charset = charset;
+        this.options = options;
         this.log = log;
     }
 
@@ -97,6 +101,17 @@ final class EditContext
     FlatXmlTextLayout layout()
     {
         return layout;
+    }
+
+    /**
+     * Returns whether dbUnit takes the columns of a table from the attributes of the table's first element,
+     * which it does when the document has no DOCTYPE, so no DTD, and column sensing is off.
+     *
+     * @return True when an element's attribute that the table's first element lacks is ignored by dbUnit.
+     */
+    boolean firstElementDefinesColumns()
+    {
+        return index.getDoctype() == null && !options.columnSensing();
     }
 
     /**

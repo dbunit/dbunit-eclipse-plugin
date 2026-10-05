@@ -214,6 +214,21 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     }
 
     @Override
+    public void insertBlankRow(final String tableKey, final int rowIndex)
+    {
+        final DatasetTable table = editableTable(tableKey);
+        final RowInsertEdits rowInsertEdits = new RowInsertEdits(editContext());
+        final List<String> blankRow = rowInsertEdits.blankRow(tableKey, table, rowIndex);
+        final List<TextEdit> edits = rowInsertEdits.plan(tableKey, table, rowIndex, List.of(blankRow));
+        if (edits.isEmpty())
+        {
+            return;
+        }
+        applier.apply(document, edits);
+        refreshInternal(ChangeOrigin.EDIT);
+    }
+
+    @Override
     public void setCellsAndAppendRows(final String tableKey, final List<CellChange> changes,
             final List<List<String>> rows)
     {
@@ -236,7 +251,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
 
     private EditContext editContext()
     {
-        return new EditContext(document::get, index, layout, charset, log);
+        return new EditContext(document::get, index, layout, charset, options, log);
     }
 
     private TableEdits tableEdits()

@@ -27,7 +27,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
-import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.edit.ChangeOrigin;
 import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
@@ -120,7 +119,21 @@ class GridActionsTest
     }
 
     @Test
-    void testInsertRowAbove_withAnchorInTheFirstRow_getsTheEmptyStringInItsFirstColumn()
+    void testInsertRowBelow_withAnchorInTheFirstRow_showsNoStatusMessage()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.anchorColumnIndex = 0;
+        context.anchorRowIndex = 0;
+
+        new InsertRowBelowAction(context).run();
+
+        assertThat(context.statusMessage).as("A row after the first row needs no explanation.").isNull();
+    }
+
+    @Test
+    void testInsertRowAbove_withAnchorInTheFirstRowWithoutDtd_getsEveryColumnOfTheOldFirstRow()
     {
         final FlatXmlDatasetDocument datasetDocument =
                 create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
@@ -133,9 +146,104 @@ class GridActionsTest
 
         assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows().get(0)
                 .getValues())
+                .as("The new first row needs every column of the old first row, or dbUnit would ignore "
+                        + "the names of the other rows.")
+                .containsExactly("", "");
+        assertThat(context.statusMessage)
+                .as("The user must be told why the new row has an empty string in every column.")
+                .isEqualTo("The new row is the table's first row now, so it has an empty string in each "
+                        + "column of the old first row: dbUnit takes a table's columns from its first row.");
+        assertThat(context.selectedRegion).as("The new row must be selected, in the anchor column.")
+                .isEqualTo(new Rectangle(0, 0, 1, 1));
+    }
+
+    @Test
+    void testInsertRowAbove_withAnchorInTheSecondRow_getsTheEmptyStringInItsFirstColumnOnly()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(
+                "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.anchorColumnIndex = 0;
+        context.anchorRowIndex = 1;
+
+        new InsertRowAboveAction(context).run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows().get(1)
+                .getValues())
                 .as("A blank row must get the empty string in its first column, not null, so the "
                         + "insert does not hit the all-null-row rejection.")
                 .containsExactly("", null);
+        assertThat(context.statusMessage).as("A row after the first row needs no explanation.").isNull();
+    }
+
+    @Test
+    void testInsertRowAbove_withAnchorInTheFirstRowOfATableWithADtd_getsTheEmptyStringInItsFirstColumnOnly()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n"
+                        + "<!ATTLIST USERS ID CDATA #IMPLIED NAME CDATA #IMPLIED>\n]>\n"
+                        + "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.anchorColumnIndex = 0;
+        context.anchorRowIndex = 0;
+
+        new InsertRowAboveAction(context).run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows().get(0)
+                .getValues())
+                .as("With a DTD, dbUnit takes the columns from the DTD, so the first column is enough.")
+                .containsExactly("", null);
+        assertThat(context.statusMessage).as("There is nothing to explain.").isNull();
+    }
+
+    @Test
+    void testSetNull_whenTheFirstRowWouldLoseAColumnThatAnotherRowHas_changesNothing()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(
+                "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0);
+        context.columnIndexes = List.of(1);
+        context.selectedCellPositions = List.of(new Point(1, 0));
+
+        new SetNullAction(context).run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows().get(0).getValue(1))
+                .as("dbUnit would ignore Bob's name, so the first row's name must stay.")
+                .isEqualTo("Alice");
+    }
+
+    @Test
+    void testDeleteRows_whenTheNextRowLacksAColumnThatAnotherRowHas_changesNothing()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\" EMAIL=\"a@x\"/>"
+                        + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carl\" EMAIL=\"c@x\"/>"
+                        + "</dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0);
+
+        new DeleteRowsAction(context).run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows())
+                .as("Bob would become the first row without an email, which dbUnit would ignore in Carl.")
+                .hasSize(3);
+    }
+
+    @Test
+    void testMoveRowsUp_whenTheRowMovedToTheTopLacksAColumnThatAnotherRowHas_changesNothing()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\" EMAIL=\"a@x\"/>"
+                        + "<USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(1);
+
+        new MoveRowsUpAction(context).run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows().get(0).getValue(1))
+                .as("Alice must stay the first row, because Bob lacks the email that she has.")
+                .isEqualTo("Alice");
     }
 
     @Test
@@ -915,24 +1023,24 @@ class GridActionsTest
         final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
                 + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carol\"/></dataset>");
         final TestContext context = new TestContext(datasetDocument, "USERS");
-        context.rowIndexes = List.of(0, 1);
+        context.rowIndexes = List.of(1, 2);
         context.columnIndexes = List.of(1);
-        context.selectedCellPositions = List.of(new Point(1, 0), new Point(1, 1));
+        context.selectedCellPositions = List.of(new Point(1, 1), new Point(1, 2));
         context.wholeRowsSelected = false;
         final CutAction action = new CutAction(context);
 
         action.run();
 
         assertThat(context.clipboardText).as("Cut must copy the selection before clearing it.")
-                .isEqualTo("Alice" + System.lineSeparator() + "Bob" + System.lineSeparator());
+                .isEqualTo("Bob" + System.lineSeparator() + "Carol" + System.lineSeparator());
         final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
-        assertThat(table.getRows().get(0).getValue(1)).as("Cut must set the selected cells to NULL.")
+        assertThat(table.getRows().get(1).getValue(1)).as("Cut must set the selected cells to NULL.")
                 .isNull();
-        assertThat(table.getRows().get(1).getValue(1)).isNull();
-        assertThat(table.getRows().get(2).getValue(1)).as("Cut must not touch an unselected row.")
-                .isEqualTo("Carol");
-        assertThat(table.getRows().get(0).getValue(0)).as("Cut must not touch an unselected column.")
-                .isEqualTo("1");
+        assertThat(table.getRows().get(2).getValue(1)).isNull();
+        assertThat(table.getRows().get(0).getValue(1)).as("Cut must not touch an unselected row.")
+                .isEqualTo("Alice");
+        assertThat(table.getRows().get(1).getValue(0)).as("Cut must not touch an unselected column.")
+                .isEqualTo("2");
     }
 
     @Test
@@ -962,19 +1070,19 @@ class GridActionsTest
         final FlatXmlDatasetDocument datasetDocument =
                 create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
         final TestContext context = new TestContext(datasetDocument, "USERS");
-        context.rowIndexes = List.of(0);
+        context.rowIndexes = List.of(1);
         context.columnIndexes = List.of(1);
-        context.selectedCellPositions = List.of(new Point(1, 0));
+        context.selectedCellPositions = List.of(new Point(1, 1));
         final DeleteAction action = new DeleteAction(context);
 
         action.run();
 
         final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
-        assertThat(table.getRows().get(0).getValue(1)).as("Delete must set the selected cells to NULL.")
+        assertThat(table.getRows().get(1).getValue(1)).as("Delete must set the selected cells to NULL.")
                 .isNull();
-        assertThat(table.getRows().get(0).getValue(0)).isEqualTo("1");
-        assertThat(table.getRows().get(1).getValue(1)).as("Delete must not touch an unselected row.")
-                .isEqualTo("Bob");
+        assertThat(table.getRows().get(1).getValue(0)).isEqualTo("2");
+        assertThat(table.getRows().get(0).getValue(1)).as("Delete must not touch an unselected row.")
+                .isEqualTo("Alice");
     }
 
     @Test
@@ -1227,9 +1335,8 @@ class GridActionsTest
     @Test
     void testFillDown_whenTheEditWouldEmptyARow_reportsItThroughExecuteMultiCellEditAndChangesNothing()
     {
-        final FlatXmlDatasetDocument datasetDocument = create(
-                "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS NAME=\"Bob\"/></dataset>");
-        datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", null)));
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\"/><USERS NAME=\"Bob\"/></dataset>");
         final TestContext context = new TestContext(datasetDocument, "USERS");
         context.rowIndexes = List.of(0, 1);
         context.columnIndexes = List.of(1);

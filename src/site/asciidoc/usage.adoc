@@ -112,6 +112,10 @@ A row cannot have every value NULL, because an element without attributes is not
 The editor rejects a change that would leave a row without values and suggests *Delete Rows* instead,
 and a new row starts with an empty string in its first column.
 
+Without a DTD, a cell of a table's first row cannot be NULL while another row has a value in its column,
+because dbUnit takes a table's columns from the first row and would then ignore that column in every other row
+(see <<rows-columns-tables>>).
+
 To enter a value with line breaks, use *Edit Cell in Dialog* (*Shift+F2*).
 Characters that XML does not allow, such as most control characters, are rejected.
 
@@ -181,6 +185,18 @@ a table that exists only in the DTD is rejected, since there is nothing in the f
 
 When the dataset has a DTD, dbUnit takes the tables and columns from the DTD, so update the DTD too
 (see <<dtd>>).
+
+Without a DTD, dbUnit takes a table's columns from the attributes of the table's first row,
+and ignores a column that only later rows have, unless your tests enable column sensing (see <<problems>>).
+So the editor keeps the columns of the first row on the first row.
+*Insert Row Above* the first row gives the new row an empty string in every column of the old first row,
+and the status line says so.
+The editor rejects a change that would take a column off the first row while another row has a value for it:
+setting a cell of the first row to NULL, deleting the first row, or moving a row to the top
+when the row that becomes the first row lacks the column.
+Give that row a value for the column first (an empty string is enough),
+declare the columns in a DTD, or, if your tests enable column sensing, select the column sensing
+<<preferences,preference>>, which lifts the rule.
 
 [[clipboard]]
 == Copy, Cut, and Paste
@@ -371,6 +387,7 @@ Validate as if the tests enable dbUnit column sensing::
 Select this when your tests load datasets with `FlatXmlDataSetBuilder.setColumnSensing(true)`.
 dbUnit then reads columns from all rows, not only from each table's first row,
 so the editor stops warning about columns missing from the first row,
+stops keeping the columns of the first row when you insert, delete, or move rows or set cells to NULL,
 and warns that columns missing from a DTD make dbUnit fail.
 
 Treat table names as case-sensitive, like dbUnit's caseSensitiveTableNames::

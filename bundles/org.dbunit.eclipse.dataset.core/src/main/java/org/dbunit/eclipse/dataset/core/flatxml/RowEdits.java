@@ -22,7 +22,9 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
@@ -104,6 +106,7 @@ final class RowEdits
     {
         final List<FlatXmlElement> rowElements = index.getRowElements(tableKey);
         final int[] sorted = sortedRowIndexes(table, rowElements, rowIndexes);
+        requireFirstElementColumnsKeptByDelete(tableKey, table, rowElements, sorted);
         final boolean deletingAllRows = sorted.length == rowElements.size();
         final boolean hasMarker = !index.getMarkerElements(tableKey).isEmpty();
         final boolean needsMarker = deletingAllRows && !hasMarker && !table.hasDefaultValues();
@@ -145,8 +148,105 @@ final class RowEdits
         requireRowBlock(table, rowElements.size(), firstRowIndex, rowCount);
         requireOneRowStep(delta);
         requireRoomToMove(table, rowElements.size(), firstRowIndex, rowCount, delta);
+        requireFirstElementColumnsKeptByMove(tableKey, table, firstRowIndex, rowCount, delta);
 
         return rowMoveEdits(rowElements, firstRowIndex, rowCount, delta);
+    }
+
+    /**
+     * Refuses to delete the first row of a table when the element that comes first afterwards lacks a column
+     * that dbUnit takes from the first row now, while a row that stays has a value for it, because dbUnit
+     * would then ignore those values.
+     */
+    private void requireFirstElementColumnsKeptByDelete(final String tableKey, final DatasetTable table,
+            final List<FlatXmlElement> rowElements, final int[] sortedRowIndexes)
+    {
+        if (sortedRowIndexes.length == 0 || sortedRowIndexes[0] != 0)
+        {
+            return;
+        }
+        final FirstElementColumns firstElement = new FirstElementColumns(context, tableKey, table);
+        if (firstElement.isEmpty())
+        {
+            return;
+        }
+        final Set<Integer> deletedRows = new HashSet<>();
+        for (final int rowIndex : sortedRowIndexes)
+        {
+            deletedRows.add(rowIndex);
+        }
+        final FlatXmlElement newFirst = firstElementAfterDeleting(tableKey, rowElements, deletedRows);
+        final Set<Integer> prospectiveColumns =
+                newFirst == null ? Set.of() : FirstElementColumns.columnIndexesOf(table, newFirst);
+        firstElement.requireKept(prospectiveColumns,
+                columnIndex -> remainingRowHasValue(table, deletedRows, columnIndex));
+    }
+
+    /**
+     * Returns the element of the table that comes first once the rows are deleted, or null when none does.
+     */
+    private FlatXmlElement firstElementAfterDeleting(final String tableKey,
+            final List<FlatXmlElement> rowElements, final Set<Integer> deletedRows)
+    {
+        final Set<Integer> deletedOffsets = new HashSet<>();
+        for (final int rowIndex : deletedRows)
+        {
+            deletedOffsets.add(rowElements.get(rowIndex).offset());
+        }
+        for (final FlatXmlElement element : index.getAllElementsInOrder(tableKey))
+        {
+            if (!deletedOffsets.contains(element.offset()))
+            {
+                return element;
+            }
+        }
+        return null;
+    }
+
+    private static boolean remainingRowHasValue(final DatasetTable table, final Set<Integer> deletedRows,
+            final int columnIndex)
+    {
+        for (int rowIndex = 0; rowIndex < table.getRows().size(); rowIndex++)
+        {
+            final boolean remains = !deletedRows.contains(rowIndex);
+            if (remains && table.getRows().get(rowIndex).getValue(columnIndex) != null)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Refuses a move that puts a row at the top of the table when it lacks a column that dbUnit takes from
+     * the first row now, because the old first row stays in the table with a value for that column, which
+     * dbUnit would then ignore.
+     */
+    private void requireFirstElementColumnsKeptByMove(final String tableKey, final DatasetTable table,
+            final int firstRowIndex, final int rowCount, final int delta)
+    {
+        final int rowAtTop = rowMovedToTop(firstRowIndex, rowCount, delta);
+        if (rowAtTop >= 0)
+        {
+            new FirstElementColumns(context, tableKey, table).requireKept(
+                    FirstElementColumns.columnIndexesWithValues(table.getRows().get(rowAtTop)),
+                    columnIndex -> true);
+        }
+    }
+
+    /**
+     * Returns the index of the row that a move puts at the top of the table, or -1 when the move leaves the
+     * first row where it is. Moving a block up passes the row above it, so the block's first row reaches the
+     * top when it starts at row 1; moving a block down passes the row below it, so that row reaches the top
+     * when the block starts at row 0.
+     */
+    private static int rowMovedToTop(final int firstRowIndex, final int rowCount, final int delta)
+    {
+        if (delta < 0)
+        {
+            return firstRowIndex == 1 ? firstRowIndex : -1;
+        }
+        return firstRowIndex == 0 ? rowCount : -1;
     }
 
     /**

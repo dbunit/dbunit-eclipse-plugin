@@ -415,6 +415,13 @@ public final class Messages extends NLS
     public static String SetNull_defaultValues;
 
     /**
+     * The status message after inserting a blank row that became the first row of a table whose columns
+     * dbUnit takes from its first row, so the blank row has an empty string in each column of the old first
+     * row.
+     */
+    public static String InsertRow_newFirstRow;
+
+    /**
      * The error for a cell value with a character XML does not allow; {0} is the character's code point.
      */
     public static String XmlCharacterValidator_invalidCharacter;

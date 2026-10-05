@@ -27,6 +27,8 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -38,8 +40,11 @@ import org.dbunit.dataset.xml.FlatXmlDataSetBuilder;
 import org.dbunit.eclipse.dataset.core.TestDatasets;
 import org.dbunit.eclipse.dataset.core.dtd.DtdDeclarations;
 import org.dbunit.eclipse.dataset.core.dtd.DtdReader;
+import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.eclipse.jface.text.Document;
+import org.eclipse.jface.text.IDocument;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -92,6 +97,45 @@ class FlatXmlDbUnitParityTest
         Files.writeString(crlfFile, crlfText, StandardCharsets.UTF_8);
 
         assertParity(crlfText, crlfFile.toFile(), true, true);
+    }
+
+    @Test
+    void testDbUnit_whenTheFirstRowLacksAColumnTheOtherRowsHave_ignoresTheColumnWithoutColumnSensing()
+            throws Exception
+    {
+        final Path file = tempDir.resolve("sparse-first-row.xml");
+        Files.writeString(file, "<dataset>\n    <T ID=\"\"/>\n    <T ID=\"1\" NAME=\"a\"/>\n</dataset>\n",
+                StandardCharsets.UTF_8);
+
+        final ITable withoutSensing =
+                new FlatXmlDataSetBuilder().setColumnSensing(false).build(file.toFile()).getTable("T");
+        final ITable withSensing =
+                new FlatXmlDataSetBuilder().setColumnSensing(true).build(file.toFile()).getTable("T");
+
+        assertThat(List.of(columnNames(withoutSensing), columnNames(withSensing)))
+                .as("Without column sensing dbUnit takes the columns from the first row, which is why the "
+                        + "editor keeps every column of the old first row on a new first row.")
+                .containsExactly(List.of("ID"), List.of("ID", "NAME"));
+    }
+
+    @Test
+    void testInsertBlankRow_aboveTheFirstRow_leavesDbUnitLoadingEveryColumn() throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n</dataset>\n");
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, DtdSource.NONE,
+                FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+
+        datasetDocument.insertBlankRow("USERS", 0);
+
+        final Path file = tempDir.resolve("blank-row.xml");
+        Files.writeString(file, document.get(), StandardCharsets.UTF_8);
+        assertParity(document.get(), file.toFile(), false, true);
+        final ITable dbUnitTable =
+                new FlatXmlDataSetBuilder().setColumnSensing(false).build(file.toFile()).getTable("USERS");
+        assertThat(dbUnitTable.getValue(1, "NAME"))
+                .as("dbUnit must still load the name of the old first row.").isEqualTo("Alice");
     }
 
     @Test
@@ -151,6 +195,16 @@ class FlatXmlDbUnitParityTest
                         .hasSize(dbUnitColumns.length);
             }
         }
+    }
+
+    private static List<String> columnNames(final ITable table) throws Exception
+    {
+        final List<String> names = new ArrayList<>();
+        for (final Column column : table.getTableMetaData().getColumns())
+        {
+            names.add(column.getColumnName());
+        }
+        return names;
     }
 
     private static String[] upperCase(final String[] names)

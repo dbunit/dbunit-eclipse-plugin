@@ -1107,6 +1107,111 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testInsertBlankRow_aboveTheFirstRowOfATableWithoutDtd_hasEveryColumnOfTheOldFirstRow()
+            throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.insertBlankRow("USERS", 0);
+
+            assertThat(document.get())
+                    .as("The blank row becomes the first row, so it needs every column dbUnit takes from "
+                            + "the old first row.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"\" NAME=\"\"/>\n"
+                            + "    <USERS ID=\"1\" NAME=\"Alice\"/>\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).as("One undo step must remove the blank row.").isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testInsertBlankRow_belowTheFirstRow_hasAnEmptyStringInTheFirstColumnOnly() throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.insertBlankRow("USERS", 1);
+
+            assertThat(document.get()).as("A row after the first needs only a value that makes it a row.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n    <USERS ID=\"\"/>\n"
+                            + "</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testInsertBlankRow_aboveTheFirstRowWhenTheDocumentHasADtd_hasAnEmptyStringInTheFirstColumnOnly()
+            throws Exception
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                + "<!ATTLIST USERS ID CDATA #IMPLIED NAME CDATA #IMPLIED>\n]>\n<dataset>\n"
+                + "    <USERS ID=\"1\" NAME=\"Alice\"/>\n</dataset>\n";
+        final IDocument document = new Document(text);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.insertBlankRow("USERS", 0);
+
+        assertThat(document.get()).as("With a DTD, the first row does not decide the columns.")
+                .isEqualTo(text.replace("    <USERS ID=\"1\"", "    <USERS ID=\"\"/>\n    <USERS ID=\"1\""));
+    }
+
+    @Test
+    void testInsertBlankRow_aboveTheFirstRowWhenColumnSensingIsOn_hasAnEmptyStringInTheFirstColumnOnly()
+    {
+        final String text = "<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n</dataset>\n";
+        final IDocument document = new Document(text);
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, DtdSource.NONE,
+                new FlatXmlOptions(false, true), () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+
+        datasetDocument.insertBlankRow("USERS", 0);
+
+        assertThat(document.get()).as("With column sensing, the first row does not decide the columns.")
+                .isEqualTo(text.replace("    <USERS ID=\"1\"", "    <USERS ID=\"\"/>\n    <USERS ID=\"1\""));
+    }
+
+    @Test
+    void testInsertBlankRow_whenTheTableHasNoColumns_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS/>\n</dataset>\n");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.insertBlankRow("USERS", 0))
+                .as("A row cannot be written without columns.").isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testSetCells_whenTheFirstRowWouldLoseAColumnThatAnotherRowHas_throwsAndChangesNothing()
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n"
+                + "    <USERS ID=\"2\" NAME=\"Bob\"/>\n</dataset>\n");
+        final String original = document.get();
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", null))))
+                .as("dbUnit would ignore Bob's name, so the edit must be refused.")
+                .isInstanceOf(DatasetEditException.class);
+        assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
     void testInsertRows_whenAllValuesAreNull_throwsAndChangesNothing()
     {
         final IDocument document =

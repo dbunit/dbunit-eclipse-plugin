@@ -46,6 +46,10 @@ class RowEditsTest
 
     private static final String ORDER = "  <ORDERS ID=\"10\"/>\n";
 
+    private static final String BOB_WITH_EMAIL = "  <USERS ID=\"1\" NAME=\"Bob\" EMAIL=\"b@x.org\"/>\n";
+
+    private static final String CARL_WITH_EMAIL = "  <USERS ID=\"3\" NAME=\"Carl\" EMAIL=\"c@x.org\"/>\n";
+
     private static final String TEXT = dataset(BOB, ALICE, CARL, ORDER);
 
     private static String dataset(final String... lines)
@@ -73,6 +77,17 @@ class RowEditsTest
     {
         final ParsedDataset parsed = ParsedDataset.of(text);
         return parsed.apply(rowEditsFor(parsed).deleteEdits("USERS", usersOf(parsed), rowIndexes));
+    }
+
+    private static String deleted(final ParsedDataset parsed, final int... rowIndexes) throws Exception
+    {
+        return parsed.apply(rowEditsFor(parsed).deleteEdits("USERS", usersOf(parsed), rowIndexes));
+    }
+
+    private static List<TextEdit> moveEditsOf(final ParsedDataset parsed, final int firstRowIndex,
+            final int rowCount, final int delta)
+    {
+        return rowEditsFor(parsed).moveEdits("USERS", usersOf(parsed), firstRowIndex, rowCount, delta);
     }
 
     private static String moved(final int firstRowIndex, final int rowCount, final int delta) throws Exception
@@ -215,6 +230,167 @@ class RowEditsTest
         assertThatThrownBy(() -> deleted(TEXT, -1)).as("Only rows of the table can be deleted.")
                 .isInstanceOf(DatasetEditException.class)
                 .hasMessage(NLS.bind(Messages.Edit_rowOutOfRange, -1, "USERS"));
+    }
+
+    @Test
+    void testDeleteEdits_whenTheNextRowLacksAColumnThatAnotherRowHas_throwsDatasetEditException()
+    {
+        final ParsedDataset parsed = ParsedDataset.of(dataset(BOB_WITH_EMAIL, ALICE, CARL_WITH_EMAIL));
+
+        assertThatThrownBy(() -> deleted(parsed, 0))
+                .as("Alice would become the first row without an EMAIL, which dbUnit would ignore in Carl.")
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage(NLS.bind(Messages.Edit_firstRowWouldLoseColumn,
+                        new Object[] { "EMAIL", "USERS" }));
+    }
+
+    @Test
+    void testDeleteEdits_whenNoRemainingRowHasTheColumnTheNextRowLacks_isAllowed() throws Exception
+    {
+        final ParsedDataset parsed = ParsedDataset.of(dataset(BOB_WITH_EMAIL, ALICE, CARL));
+
+        assertThat(deleted(parsed, 0)).as("Nothing is lost when no remaining row has an EMAIL.")
+                .isEqualTo(dataset(ALICE, CARL));
+    }
+
+    @Test
+    void testDeleteEdits_whenTheNextRowHasEveryColumnOfTheDeletedFirstRow_isAllowed() throws Exception
+    {
+        final ParsedDataset parsed = ParsedDataset.of(dataset(BOB, CARL_WITH_EMAIL));
+
+        assertThat(deleted(parsed, 0)).as("The new first row has more columns than the old one.")
+                .isEqualTo(dataset(CARL_WITH_EMAIL));
+    }
+
+    @Test
+    void testDeleteEdits_whenTheFirstTwoRowsGoAndTheThirdHasEveryColumn_isAllowed() throws Exception
+    {
+        final ParsedDataset parsed = ParsedDataset.of(dataset(BOB_WITH_EMAIL, ALICE, CARL_WITH_EMAIL));
+
+        assertThat(deleted(parsed, 0, 1)).as("The third row becomes the first row, and it has every column.")
+                .isEqualTo(dataset(CARL_WITH_EMAIL));
+    }
+
+    @Test
+    void testDeleteEdits_whenARowAfterTheFirstGoes_isAllowedWhateverItHas() throws Exception
+    {
+        final ParsedDataset parsed = ParsedDataset.of(dataset(BOB_WITH_EMAIL, ALICE, CARL_WITH_EMAIL));
+
+        assertThat(deleted(parsed, 1)).as("The first row stays, so dbUnit still takes its columns.")
+                .isEqualTo(dataset(BOB_WITH_EMAIL, CARL_WITH_EMAIL));
+    }
+
+    @Test
+    void testDeleteEdits_whenEveryRowGoesAndTheTableHasNoOtherRow_isAllowed() throws Exception
+    {
+        final ParsedDataset parsed = ParsedDataset.of(dataset(BOB_WITH_EMAIL, ALICE, CARL_WITH_EMAIL));
+
+        assertThat(deleted(parsed, 0, 1, 2)).as("No row stays, so no value is lost.")
+                .isEqualTo(dataset("  <USERS/>\n"));
+    }
+
+    @Test
+    void testDeleteEdits_whenTheDocumentHasADtd_allowsTheNextRowToLackAColumn() throws Exception
+    {
+        final String text =
+                "<!DOCTYPE dataset SYSTEM \"my.dtd\">" + dataset(BOB_WITH_EMAIL, ALICE, CARL_WITH_EMAIL);
+        final ParsedDataset parsed = ParsedDataset.withDtd(text,
+                "<!ELEMENT dataset (USERS*)><!ATTLIST USERS ID CDATA #IMPLIED NAME CDATA #IMPLIED"
+                        + " EMAIL CDATA #IMPLIED>");
+
+        assertThat(deleted(parsed, 0)).as("With a DTD, dbUnit takes the columns from the DTD.")
+                .isEqualTo("<!DOCTYPE dataset SYSTEM \"my.dtd\">" + dataset(ALICE, CARL_WITH_EMAIL));
+    }
+
+    @Test
+    void testDeleteEdits_whenColumnSensingIsOn_allowsTheNextRowToLackAColumn() throws Exception
+    {
+        final ParsedDataset parsed = ParsedDataset.of(dataset(BOB_WITH_EMAIL, ALICE, CARL_WITH_EMAIL),
+                new FlatXmlOptions(false, true), "\n");
+
+        assertThat(deleted(parsed, 0)).as("With column sensing, dbUnit adds the columns of every row.")
+                .isEqualTo(dataset(ALICE, CARL_WITH_EMAIL));
+    }
+
+    @Test
+    void testMoveEdits_whenARowThatLacksAColumnMovesToTheTop_throwsDatasetEditException()
+    {
+        final ParsedDataset parsed = ParsedDataset.of(dataset(BOB_WITH_EMAIL, ALICE));
+
+        assertThatThrownBy(() -> moveEditsOf(parsed, 1, 1, -1))
+                .as("Alice would become the first row without an EMAIL, which Bob still has.")
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage(NLS.bind(Messages.Edit_firstRowWouldLoseColumn,
+                        new Object[] { "EMAIL", "USERS" }));
+    }
+
+    @Test
+    void testMoveEdits_whenTheFirstRowMovesBelowARowThatLacksAColumn_throwsDatasetEditException()
+    {
+        final ParsedDataset parsed = ParsedDataset.of(dataset(BOB_WITH_EMAIL, ALICE));
+
+        assertThatThrownBy(() -> moveEditsOf(parsed, 0, 1, 1))
+                .as("Alice would become the first row without an EMAIL, which Bob still has.")
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage(NLS.bind(Messages.Edit_firstRowWouldLoseColumn,
+                        new Object[] { "EMAIL", "USERS" }));
+    }
+
+    @Test
+    void testMoveEdits_whenABlockMovesUpToTheTopAndItsFirstRowLacksAColumn_throwsDatasetEditException()
+    {
+        final ParsedDataset parsed = ParsedDataset.of(dataset(BOB_WITH_EMAIL, ALICE, CARL_WITH_EMAIL));
+
+        assertThatThrownBy(() -> moveEditsOf(parsed, 1, 2, -1))
+                .as("The block's first row, Alice, would become the first row.")
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage(NLS.bind(Messages.Edit_firstRowWouldLoseColumn,
+                        new Object[] { "EMAIL", "USERS" }));
+    }
+
+    @Test
+    void testMoveEdits_whenABlockMovesDownFromTheTopAndTheRowBelowItLacksAColumn_throwsDatasetEditException()
+    {
+        final ParsedDataset parsed = ParsedDataset.of(dataset(BOB_WITH_EMAIL, CARL_WITH_EMAIL, ALICE));
+
+        assertThatThrownBy(() -> moveEditsOf(parsed, 0, 2, 1))
+                .as("The row below the block, Alice, would become the first row.")
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage(NLS.bind(Messages.Edit_firstRowWouldLoseColumn,
+                        new Object[] { "EMAIL", "USERS" }));
+    }
+
+    @Test
+    void testMoveEdits_whenTheRowMovedToTheTopHasEveryColumn_isAllowed() throws Exception
+    {
+        final ParsedDataset parsed = ParsedDataset.of(dataset(ALICE, BOB_WITH_EMAIL));
+
+        assertThat(parsed.apply(moveEditsOf(parsed, 1, 1, -1)))
+                .as("Bob has every column of Alice, so dbUnit keeps loading them all.")
+                .isEqualTo(dataset(BOB_WITH_EMAIL, ALICE));
+    }
+
+    @Test
+    void testMoveEdits_whenTheMoveDoesNotReachTheTop_isAllowedWhateverTheRowsHave() throws Exception
+    {
+        final ParsedDataset parsed = ParsedDataset.of(dataset(BOB_WITH_EMAIL, ALICE, CARL_WITH_EMAIL));
+
+        assertThat(parsed.apply(moveEditsOf(parsed, 2, 1, -1)))
+                .as("The first row stays, so dbUnit still takes its columns.")
+                .isEqualTo(dataset(BOB_WITH_EMAIL, CARL_WITH_EMAIL, ALICE));
+    }
+
+    @Test
+    void testMoveEdits_whenTheDocumentHasADtd_allowsARowThatLacksAColumnToMoveToTheTop() throws Exception
+    {
+        final String text = "<!DOCTYPE dataset SYSTEM \"my.dtd\">" + dataset(BOB_WITH_EMAIL, ALICE);
+        final ParsedDataset parsed = ParsedDataset.withDtd(text,
+                "<!ELEMENT dataset (USERS*)><!ATTLIST USERS ID CDATA #IMPLIED NAME CDATA #IMPLIED"
+                        + " EMAIL CDATA #IMPLIED>");
+
+        assertThat(parsed.apply(moveEditsOf(parsed, 1, 1, -1)))
+                .as("With a DTD, dbUnit takes the columns from the DTD.")
+                .isEqualTo("<!DOCTYPE dataset SYSTEM \"my.dtd\">" + dataset(ALICE, BOB_WITH_EMAIL));
     }
 
     @Test

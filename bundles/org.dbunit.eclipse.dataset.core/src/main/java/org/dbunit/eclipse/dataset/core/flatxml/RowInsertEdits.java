@@ -22,6 +22,7 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.nio.charset.CharsetEncoder;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.Messages;
@@ -72,6 +73,7 @@ final class RowInsertEdits
         {
             return List.of();
         }
+        requireFirstElementColumnsKept(tableKey, table, rowIndex, rows.get(0));
 
         final CharsetEncoder encoder = context.encoder();
         final List<String> rowTexts = new ArrayList<>();
@@ -82,6 +84,49 @@ final class RowInsertEdits
 
         final TextEdit edit = insertEdit(tableKey, rowElements, rowIndex, rowTexts);
         return List.of(edit);
+    }
+
+    /**
+     * Returns the values of a blank row to insert before the row at an index: an empty string in the first
+     * column, so that the element has an attribute, and, when the blank row becomes the first row, an empty
+     * string for every column that dbUnit takes from the first row now. dbUnit takes a table's columns from
+     * its first row, so it would ignore the values of any other column in the other rows.
+     *
+     * @param tableKey The key of the table.
+     * @param table The table.
+     * @param rowIndex The index to insert before.
+     * @return The values, aligned with the table's columns; all but the first are null unless the blank row
+     *         becomes the first row.
+     */
+    List<String> blankRow(final String tableKey, final DatasetTable table, final int rowIndex)
+    {
+        final List<String> values = new ArrayList<>(Collections.nCopies(table.getColumns().size(), null));
+        if (!values.isEmpty())
+        {
+            values.set(0, "");
+        }
+        if (rowIndex == 0)
+        {
+            for (final int columnIndex : new FirstElementColumns(context, tableKey, table).columnIndexes())
+            {
+                values.set(columnIndex, "");
+            }
+        }
+        return values;
+    }
+
+    /**
+     * Refuses a new first row that lacks a column that dbUnit takes from the first row now, because the old
+     * first row stays in the table with a value for that column, which dbUnit would then ignore.
+     */
+    private void requireFirstElementColumnsKept(final String tableKey, final DatasetTable table,
+            final int rowIndex, final List<String> newFirstRow)
+    {
+        if (rowIndex == 0)
+        {
+            new FirstElementColumns(context, tableKey, table).requireKept(
+                    FirstElementColumns.columnIndexesWithValues(newFirstRow), columnIndex -> true);
+        }
     }
 
     private static void requireInsertPosition(final DatasetTable table, final int rowCount,

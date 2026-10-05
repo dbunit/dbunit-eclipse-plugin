@@ -114,6 +114,12 @@ public final class Messages extends NLS
     public static String Edit_rowWouldBeEmpty;
 
     /**
+     * An edit would take a column off the first row of a table while other rows have values for it, so
+     * dbUnit would ignore them; {0} is the column, {1} the table.
+     */
+    public static String Edit_firstRowWouldLoseColumn;
+
+    /**
      * A cell cannot be changed while its row has two attributes for the column; {0} is the column, {1} the
      * row index, {2} the table.
      */
