@@ -35,8 +35,9 @@ import org.eclipse.osgi.util.NLS;
 
 /**
  * Reads the {@code ELEMENT} and {@code ATTLIST} declarations of a DTD, serving both external DTD files
- * and DOCTYPE internal subsets. DTD text is not edited, so, unlike {@code FlatXmlParser}, this reader
- * does not need to track offsets for rewriting.
+ * and DOCTYPE internal subsets. DTD text is edited only to rename an element, so, unlike
+ * {@code FlatXmlParser}, this reader does not track the offsets of every declaration, only those of the
+ * element names (see {@link #locateElementNames}).
  *
  * @since 1.0.0
  */
@@ -54,8 +55,27 @@ public final class DtdReader
      */
     public static DtdDeclarations read(final String dtdText)
     {
-        final DtdLexer lexer = new DtdLexer(dtdText);
-        return new Scanner(lexer).scan();
+        final Scanner scanner = new Scanner(new DtdLexer(dtdText));
+        scanner.scan();
+        return scanner.declarations();
+    }
+
+    /**
+     * Finds where a DTD writes the names of its elements, so that a caller who edits the DTD text can
+     * rename an element everywhere the DTD names it. The names are the one of each {@code ELEMENT}
+     * declaration, the one of each {@code ATTLIST} declaration, and those in the content model of the
+     * {@code dataset} element, which is how a DTD lists the tables of a dataset. The name of the
+     * {@code dataset} element itself is not among them. A name in a comment, in a default value, or
+     * behind a parameter entity reference is not found.
+     *
+     * @param dtdText The DTD text: an external DTD file's content, or a DOCTYPE's internal subset.
+     * @return The names, in the order the text writes them.
+     */
+    public static List<DtdElementName> locateElementNames(final String dtdText)
+    {
+        final Scanner scanner = new Scanner(new DtdLexer(dtdText));
+        scanner.scan();
+        return scanner.elementNames();
     }
 
     /**
@@ -71,6 +91,8 @@ public final class DtdReader
 
         private final List<DatasetProblem> problems = new ArrayList<>();
 
+        private final List<DtdElementName> elementNames = new ArrayList<>();
+
         private boolean contentModelDeclared;
 
         private boolean contentModelAny;
@@ -82,7 +104,7 @@ public final class DtdReader
             this.lexer = lexer;
         }
 
-        private DtdDeclarations scan()
+        private void scan()
         {
             while (true)
             {
@@ -108,8 +130,17 @@ public final class DtdReader
                     skipUnexpectedContent();
                 }
             }
+        }
+
+        private DtdDeclarations declarations()
+        {
             return new DtdDeclarations(contentModelDeclared, contentModelAny, contentModelNames, elements,
                     attributeDefaults, problems);
+        }
+
+        private List<DtdElementName> elementNames()
+        {
+            return List.copyOf(elementNames);
         }
 
         private void scanMarkupDeclaration()
@@ -157,8 +188,10 @@ public final class DtdReader
         {
             lexer.advance("<!ELEMENT".length());
             lexer.skipWhitespace();
+            final int nameOffset = lexer.position();
             final String name = lexer.scanName();
             lexer.skipWhitespace();
+            final int contentSpecOffset = lexer.position();
             final String contentSpec = scanContentSpec();
             lexer.skipWhitespace();
             lexer.skipCharacter('>');
@@ -166,12 +199,15 @@ public final class DtdReader
             {
                 contentModelDeclared = true;
                 contentModelAny = "ANY".equals(contentSpec);
-                contentModelNames =
-                        contentModelAny ? List.of() : extractContentModelNames(contentSpec);
+                final List<DtdElementName> contentModel = contentModelAny ? List.of()
+                        : extractContentModelNames(contentSpec, contentSpecOffset);
+                contentModelNames = contentModel.stream().map(DtdElementName::name).toList();
+                elementNames.addAll(contentModel);
             }
             else if (!name.isEmpty())
             {
                 elements.computeIfAbsent(name, key -> new ArrayList<>());
+                elementNames.add(new DtdElementName(name, nameOffset));
             }
         }
 
@@ -184,11 +220,13 @@ public final class DtdReader
         {
             lexer.advance("<!ATTLIST".length());
             lexer.skipWhitespace();
+            final int elementNameOffset = lexer.position();
             final String elementName = lexer.scanName();
             final boolean collectsColumns = !elementName.isEmpty() && !"dataset".equals(elementName);
             if (collectsColumns)
             {
                 elements.computeIfAbsent(elementName, key -> new ArrayList<>());
+                elementNames.add(new DtdElementName(elementName, elementNameOffset));
             }
             while (true)
             {
@@ -324,23 +362,24 @@ public final class DtdReader
             addInfoProblem(Messages.Dtd_parameterEntityReferencesIgnored, start, end - start);
         }
 
-        private static List<String> extractContentModelNames(final String contentSpec)
+        private static List<DtdElementName> extractContentModelNames(final String contentSpec,
+                final int contentSpecOffset)
         {
-            final List<String> names = new ArrayList<>();
+            final List<DtdElementName> names = new ArrayList<>();
             final StringBuilder token = new StringBuilder();
             for (int i = 0; i < contentSpec.length(); i++)
             {
                 final char ch = contentSpec.charAt(i);
                 if (isStructuralChar(ch) || Character.isWhitespace(ch))
                 {
-                    addToken(names, token);
+                    addToken(names, token, contentSpecOffset + i);
                 }
                 else
                 {
                     token.append(ch);
                 }
             }
-            addToken(names, token);
+            addToken(names, token, contentSpecOffset + contentSpec.length());
             return names;
         }
 
@@ -349,14 +388,19 @@ public final class DtdReader
             return ch == '(' || ch == ')' || ch == '*' || ch == '?' || ch == '+' || ch == ',' || ch == '|';
         }
 
-        private static void addToken(final List<String> names, final StringBuilder token)
+        /**
+         * Adds the token that ends at an offset to the names, unless it is {@code #PCDATA}, and empties the
+         * token.
+         */
+        private static void addToken(final List<DtdElementName> names, final StringBuilder token,
+                final int tokenEnd)
         {
             if (token.length() > 0)
             {
                 final String value = token.toString();
                 if (!"#PCDATA".equals(value))
                 {
-                    names.add(value);
+                    names.add(new DtdElementName(value, tokenEnd - value.length()));
                 }
                 token.setLength(0);
             }

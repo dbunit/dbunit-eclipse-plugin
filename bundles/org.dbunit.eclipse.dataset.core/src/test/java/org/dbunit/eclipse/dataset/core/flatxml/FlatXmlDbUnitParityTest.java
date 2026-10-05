@@ -139,6 +139,36 @@ class FlatXmlDbUnitParityTest
     }
 
     @Test
+    void testRenameTable_whenTheInternalSubsetDeclaresTheTable_leavesDbUnitLoadingTheRenamedTable()
+            throws Exception
+    {
+        final File file = renameInFixture("dtd-defaults-internal.xml", "USERS", "ACCOUNTS");
+
+        assertParity(Files.readString(file.toPath(), StandardCharsets.UTF_8), file, false, false);
+        final IDataSet dbUnitDataSet = new FlatXmlDataSetBuilder().setColumnSensing(false).build(file);
+        assertThat(dbUnitDataSet.getTableNames())
+                .as("dbUnit must find the renamed table, which its DTD still declares.")
+                .containsExactly("ACCOUNTS", "ORDERS", "AUDIT");
+        assertThat(dbUnitDataSet.getTable("ACCOUNTS").getValue(0, "STATUS"))
+                .as("dbUnit must still apply the default that the renamed table's ATTLIST declares.")
+                .isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void testRenameTable_whenOnlyTheLetterCaseChanges_leavesDbUnitApplyingTheDtdDefaults() throws Exception
+    {
+        final File file = renameInFixture("dtd-defaults-internal.xml", "USERS", "Users");
+
+        assertParity(Files.readString(file.toPath(), StandardCharsets.UTF_8), file, false, false);
+        final ITable dbUnitTable =
+                new FlatXmlDataSetBuilder().setColumnSensing(false).build(file).getTable("Users");
+        assertThat(dbUnitTable.getValue(0, "STATUS")).as(
+                "dbUnit gives a DTD's defaults only to elements spelled like the DTD's element, so the "
+                        + "DTD must have taken the new spelling too.")
+                .isEqualTo("ACTIVE");
+    }
+
+    @Test
     void testBuild_whenInternalSubsetIsLoadedWithColumnSensing_dbUnitThrowsNoSuchColumnException()
     {
         assertThatThrownBy(() -> new FlatXmlDataSetBuilder().setColumnSensing(true)
@@ -146,6 +176,25 @@ class FlatXmlDbUnitParityTest
                         "An attribute the DTD does not declare, loaded with column sensing, must fail, "
                                 + "the case the validator reports as an ERROR.")
                 .isInstanceOf(NoSuchColumnException.class);
+    }
+
+    /**
+     * Renames a table of a fixture through a dataset document and saves the resulting text to a file, so
+     * that dbUnit can load what the editor wrote.
+     */
+    private File renameInFixture(final String fixtureName, final String tableKey, final String newTableName)
+            throws Exception
+    {
+        final IDocument document = new Document(TestDatasets.read(fixtureName));
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, DtdSource.NONE,
+                FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+
+        datasetDocument.renameTable(tableKey, newTableName);
+
+        final Path file = tempDir.resolve("renamed-table.xml");
+        Files.writeString(file, document.get(), StandardCharsets.UTF_8);
+        return file.toFile();
     }
 
     private void assertParity(final String text, final File file, final boolean sensing,

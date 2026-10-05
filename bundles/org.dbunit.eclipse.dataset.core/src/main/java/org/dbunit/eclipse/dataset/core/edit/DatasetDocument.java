@@ -188,7 +188,9 @@ public interface DatasetDocument
     void addTable(String tableName, List<String> columnNames);
 
     /**
-     * Renames a table.
+     * Renames a table. The elements of the table take the new name, and so do the declarations of the table
+     * in the internal subset of the document's DOCTYPE, which dbUnit reads the tables from. A DTD file that
+     * the DOCTYPE names is not changed.
      *
      * @param tableKey The key of the table.
      * @param newTableName The new name of the table.

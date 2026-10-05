@@ -52,6 +52,15 @@ class TableEditsTest
 
     private static final String TEXT = "<dataset>\n" + USERS_ROWS + ORDER + "</dataset>\n";
 
+    private static final String INTERNAL_SUBSET_START = "<!DOCTYPE dataset [\n"
+            + "<!ELEMENT dataset (USERS*, ORDERS*)>\n";
+
+    private static final String USERS_DECLARATIONS = "<!ELEMENT USERS EMPTY>\n"
+            + "<!ATTLIST USERS ID CDATA #REQUIRED NAME CDATA \"USERS\">\n";
+
+    private static final String ORDERS_DECLARATIONS = "<!ELEMENT ORDERS EMPTY>\n"
+            + "<!ATTLIST ORDERS ID CDATA #REQUIRED>\n]>\n";
+
     private static TableEdits tableEditsFor(final ParsedDataset parsed,
             final UnaryOperator<String> tableKeyOf)
     {
@@ -249,6 +258,108 @@ class TableEditsTest
                 .as("A table without an element has no name in the text to change.")
                 .isInstanceOf(DatasetEditException.class)
                 .hasMessage(NLS.bind(Messages.Edit_renameTableIsDeclaredOnly, "PETS"));
+    }
+
+    @Test
+    void testRenameEdits_whenTheInternalSubsetDeclaresTheTable_renamesItsDeclarationsAndContentModelName()
+            throws Exception
+    {
+        final ParsedDataset parsed =
+                ParsedDataset.of(INTERNAL_SUBSET_START + USERS_DECLARATIONS + ORDERS_DECLARATIONS + TEXT);
+
+        final List<TextEdit> edits = rename(parsed, INSENSITIVE, "USERS", "PEOPLE");
+
+        assertThat(parsed.apply(edits))
+                .as("The ELEMENT and ATTLIST names and the content model name must follow the elements, "
+                        + "and the default value that only spells the old name must stay.")
+                .isEqualTo("<!DOCTYPE dataset [\n<!ELEMENT dataset (PEOPLE*, ORDERS*)>\n"
+                        + "<!ELEMENT PEOPLE EMPTY>\n"
+                        + "<!ATTLIST PEOPLE ID CDATA #REQUIRED NAME CDATA \"USERS\">\n" + ORDERS_DECLARATIONS
+                        + TEXT.replace("USERS", "PEOPLE"));
+    }
+
+    @Test
+    void testRenameEdits_whenOnlyTheLetterCaseChangesAndTheInternalSubsetDeclaresTheTable_renamesIt()
+            throws Exception
+    {
+        final ParsedDataset parsed =
+                ParsedDataset.of(INTERNAL_SUBSET_START + USERS_DECLARATIONS + ORDERS_DECLARATIONS + TEXT);
+
+        final List<TextEdit> edits = rename(parsed, INSENSITIVE, "USERS", "Users");
+
+        assertThat(parsed.apply(edits))
+                .as("dbUnit gives a DTD's defaults only to elements spelled like the DTD's element, so a "
+                        + "new spelling must reach the DTD too.")
+                .isEqualTo("<!DOCTYPE dataset [\n<!ELEMENT dataset (Users*, ORDERS*)>\n"
+                        + "<!ELEMENT Users EMPTY>\n<!ATTLIST Users ID CDATA #REQUIRED NAME CDATA \"USERS\">\n"
+                        + ORDERS_DECLARATIONS + TEXT.replace("USERS", "Users"));
+    }
+
+    @Test
+    void testRenameEdits_whenTheSubsetSpellsTheTableInAnotherCase_renamesItIfNamesAreCaseInsensitive()
+            throws Exception
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ELEMENT dataset (Users*)>\n<!ELEMENT Users EMPTY>\n"
+                + "<!ATTLIST Users ID CDATA #REQUIRED>\n]>\n<dataset>\n  <USERS ID=\"1\"/>\n</dataset>\n";
+        final ParsedDataset parsed = ParsedDataset.of(text);
+
+        final List<TextEdit> edits = rename(parsed, INSENSITIVE, "USERS", "PEOPLE");
+
+        assertThat(parsed.apply(edits)).as("USERS and Users are one table, so the DTD's spelling is renamed.")
+                .isEqualTo(text.replace("USERS", "PEOPLE").replace("Users", "PEOPLE"));
+    }
+
+    @Test
+    void testRenameEdits_whenTablesDifferInCaseAndNamesAreCaseSensitive_renamesOnlyTheExactName()
+            throws Exception
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ELEMENT dataset (users*, USERS*)>\n"
+                + "<!ELEMENT users EMPTY>\n<!ATTLIST users ID CDATA #REQUIRED>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n"
+                + "<dataset>\n  <users ID=\"1\"/>\n  <USERS ID=\"2\"/>\n</dataset>\n";
+        final ParsedDataset parsed = ParsedDataset.of(text, new FlatXmlOptions(true, false), "\n");
+
+        final List<TextEdit> edits = rename(parsed, SENSITIVE, "USERS", "PEOPLE");
+
+        assertThat(parsed.apply(edits)).as("Only the table with exactly that name takes the new name.")
+                .isEqualTo("<!DOCTYPE dataset [\n<!ELEMENT dataset (users*, PEOPLE*)>\n"
+                        + "<!ELEMENT users EMPTY>\n<!ATTLIST users ID CDATA #REQUIRED>\n"
+                        + "<!ELEMENT PEOPLE EMPTY>\n<!ATTLIST PEOPLE ID CDATA #REQUIRED>\n]>\n"
+                        + "<dataset>\n  <users ID=\"1\"/>\n  <PEOPLE ID=\"2\"/>\n</dataset>\n");
+    }
+
+    @Test
+    void testRenameEdits_whenTheInternalSubsetHasACommentAndATableWithALongerName_leavesThemAlone()
+            throws Exception
+    {
+        final String text = "<!DOCTYPE dataset [\n<!-- USERS: one row per account -->\n"
+                + "<!ELEMENT dataset (USERS*, USERS_AUDIT*)>\n<!ELEMENT USERS EMPTY>\n"
+                + "<!ELEMENT USERS_AUDIT EMPTY>\n]>\n"
+                + "<dataset>\n  <USERS ID=\"1\"/>\n  <USERS_AUDIT ID=\"2\"/>\n</dataset>\n";
+        final ParsedDataset parsed = ParsedDataset.of(text);
+
+        final List<TextEdit> edits = rename(parsed, INSENSITIVE, "USERS", "PEOPLE");
+
+        assertThat(parsed.apply(edits))
+                .as("The comment and the other table, whose name only starts like the renamed one, must "
+                        + "stay as they are.")
+                .isEqualTo("<!DOCTYPE dataset [\n<!-- USERS: one row per account -->\n"
+                        + "<!ELEMENT dataset (PEOPLE*, USERS_AUDIT*)>\n<!ELEMENT PEOPLE EMPTY>\n"
+                        + "<!ELEMENT USERS_AUDIT EMPTY>\n]>\n"
+                        + "<dataset>\n  <PEOPLE ID=\"1\"/>\n  <USERS_AUDIT ID=\"2\"/>\n</dataset>\n");
+    }
+
+    @Test
+    void testRenameEdits_whenTheDoctypeNamesAnExternalDtdOnly_changesNothingButTheElements() throws Exception
+    {
+        final String text = "<!DOCTYPE dataset SYSTEM \"USERS.dtd\">\n" + TEXT;
+        final ParsedDataset parsed = ParsedDataset.of(text);
+
+        final List<TextEdit> edits = rename(parsed, INSENSITIVE, "USERS", "PEOPLE");
+
+        assertThat(parsed.apply(edits))
+                .as("The editor does not change a DTD file, and the system identifier is no table name.")
+                .isEqualTo("<!DOCTYPE dataset SYSTEM \"USERS.dtd\">\n" + TEXT.replace("USERS", "PEOPLE"));
     }
 
     @Test

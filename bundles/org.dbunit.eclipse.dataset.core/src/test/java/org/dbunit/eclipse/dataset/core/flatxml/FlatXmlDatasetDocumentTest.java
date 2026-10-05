@@ -2338,6 +2338,37 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testRenameTable_whenTheInternalSubsetDeclaresTheTable_renamesTheDeclarationsInTheSameUndoStep()
+            throws Exception
+    {
+        final String original = "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*, ORDERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #REQUIRED STATUS CDATA \"ACTIVE\">\n"
+                + "<!ELEMENT ORDERS EMPTY>\n<!ATTLIST ORDERS ID CDATA #REQUIRED>\n]>\n"
+                + "<dataset>\n  <USERS ID=\"1\"/>\n  <ORDERS ID=\"10\"/>\n</dataset>\n";
+        final IDocument document = new Document(original);
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.renameTable("USERS", "ACCOUNTS");
+
+            assertThat(document.get()).as("The elements and the DTD must take the new name together.")
+                    .isEqualTo(original.replace("USERS", "ACCOUNTS"));
+            final DatasetModel model = datasetDocument.getModel();
+            assertThat(model.getTables())
+                    .as("The renamed table must replace the old one, and no table must be left that only "
+                            + "the DTD declares.")
+                    .extracting(DatasetTable::getName).containsExactly("ACCOUNTS", "ORDERS");
+            assertThat(model.getProblems())
+                    .as("The DTD must still declare every table of the dataset.").isEmpty();
+            undoManager.undo();
+            assertThat(document.get()).as("One undo must restore the elements and the DTD together.")
+                    .isEqualTo(original);
+        });
+    }
+
+    @Test
     void testRenameTable_whenNewNameIsInvalid_throwsAndChangesNothing()
     {
         final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");

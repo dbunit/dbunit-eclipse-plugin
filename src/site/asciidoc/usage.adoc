@@ -3,9 +3,9 @@
 The *dbUnit Dataset Editor* edits dbUnit dataset files like a spreadsheet.
 It has two pages that always show the same content:
 the *Tables* page, a grid with one sheet per table,
-and the *Source* page, the XML text.
-Every change on the Tables page is written into the XML text with the smallest possible edit,
-so comments, formatting, attribute order, and the DOCTYPE stay as they are,
+and the *Source* page, the text of the dataset.
+Every change on the Tables page is written into the text with the smallest possible edit,
+so comments, formatting, and the rest of the file stay as they are,
 and a version-control diff shows only what you changed.
 
 The plugin currently supports the dbUnit flat XML format; other dataset formats are planned.
@@ -179,12 +179,15 @@ Column names must each be a valid XML name and not repeat another, case-insensit
 rules *Add Column* applies.
 dbUnit treats such an element as an empty table, which operations such as `DELETE_ALL` and `CLEAN_INSERT` still process.
 *Rename Table* renames every element of the table.
+When the DOCTYPE has an internal subset that declares the table,
+the table is renamed there too, in its `ELEMENT` and `ATTLIST` declarations and in the content model of the
+`dataset` element, as part of the same undo step, so dbUnit still finds the table in the DTD.
 *Delete Table* removes every element of the table, after asking for confirmation.
-Renaming or deleting a table the DTD declares warns that the DTD must be updated too;
-a table that exists only in the DTD is rejected, since there is nothing in the file to change.
+Renaming or deleting a table that exists only in the DTD is rejected,
+since there is nothing in the file to change.
 
 When the dataset has a DTD, dbUnit takes the tables and columns from the DTD, so update the DTD too
-(see <<dtd>>).
+(see <<dtd>>); the editor changes a DTD only to rename a table in an internal subset.
 
 Without a DTD, dbUnit takes a table's columns from the attributes of the table's first row,
 and ignores a column that only later rows have, unless your tests enable column sensing (see <<problems>>).

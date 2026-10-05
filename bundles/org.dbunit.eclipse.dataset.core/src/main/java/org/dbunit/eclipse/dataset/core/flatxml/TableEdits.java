@@ -26,6 +26,8 @@ import java.util.Set;
 import java.util.function.UnaryOperator;
 
 import org.dbunit.eclipse.dataset.core.Messages;
+import org.dbunit.eclipse.dataset.core.dtd.DtdElementName;
+import org.dbunit.eclipse.dataset.core.dtd.DtdReader;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
@@ -38,9 +40,10 @@ import org.eclipse.text.edits.TextEdit;
 /**
  * Plans the text edits that add, rename, and delete tables, and checks the names of tables. A table is
  * nothing but the elements that share a name: adding one inserts an empty element, renaming one rewrites the
- * start tag and the end tag of each of its elements, and deleting one removes them. It plans against the
- * index and the layout of the {@link EditContext}, and checks names against the model that it is created
- * with, all of which are meant for one operation.
+ * start tag and the end tag of each of its elements and the names that the internal subset of the DOCTYPE
+ * gives the table, and deleting one removes the elements. It plans against the index and the layout of the
+ * {@link EditContext}, and checks names against the model that it is created with, all of which are meant for
+ * one operation.
  */
 final class TableEdits
 {
@@ -87,7 +90,11 @@ final class TableEdits
     }
 
     /**
-     * Plans renaming a table: the start tag and the end tag of each of its elements get the new name.
+     * Plans renaming a table: the start tag and the end tag of each of its elements get the new name. So
+     * does each name that the internal subset of the DOCTYPE gives the table, in its {@code ELEMENT} and
+     * {@code ATTLIST} declarations and in the content model of the {@code dataset} element, because dbUnit
+     * takes the tables from the DTD and fails to load a dataset whose elements the DTD does not declare. A
+     * DTD file that the DOCTYPE names is not changed.
      *
      * @param tableKey The key of the table.
      * @param table The table.
@@ -106,7 +113,9 @@ final class TableEdits
         requireUnusedTableName(newTableName, Set.of(tableKey));
 
         final List<FlatXmlElement> elements = index.getAllElementsInOrder(tableKey);
-        return tableNameEdits(elements, newTableName);
+        final List<TextEdit> edits = new ArrayList<>(tableNameEdits(elements, newTableName));
+        edits.addAll(internalSubsetNameEdits(tableKey, newTableName));
+        return edits;
     }
 
     /**
@@ -175,6 +184,29 @@ final class TableEdits
             if (!element.selfClosing())
             {
                 edits.add(new ReplaceEdit(element.endTagOffset() + 2, element.name().length(), tableName));
+            }
+        }
+        return edits;
+    }
+
+    /**
+     * Returns the edits that give a table its new name wherever the internal subset of the DOCTYPE names
+     * it. A name is the table's when it has the table's key, as it is for the elements of the document.
+     */
+    private List<TextEdit> internalSubsetNameEdits(final String tableKey, final String newTableName)
+    {
+        final FlatXmlDoctype doctype = index.getDoctype();
+        if (doctype == null || doctype.internalSubset() == null)
+        {
+            return List.of();
+        }
+        final List<TextEdit> edits = new ArrayList<>();
+        for (final DtdElementName elementName : DtdReader.locateElementNames(doctype.internalSubset()))
+        {
+            if (tableKeyOf.apply(elementName.name()).equals(tableKey))
+            {
+                final int offset = doctype.internalSubsetOffset() + elementName.offset();
+                edits.add(new ReplaceEdit(offset, elementName.name().length(), newTableName));
             }
         }
         return edits;

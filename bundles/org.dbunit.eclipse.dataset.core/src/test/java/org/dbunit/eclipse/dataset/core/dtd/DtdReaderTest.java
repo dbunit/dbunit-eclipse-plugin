@@ -447,4 +447,80 @@ class DtdReaderTest
                 .as("Relocating the problems must not lose the defaults.")
                 .isEqualTo(declarations.tables());
     }
+
+    @Test
+    void testLocateElementNames_whenTheDtdDeclaresTables_findsEachNameInTheOrderTheTextWritesIt()
+    {
+        final String dtd = "<!ELEMENT dataset (USERS*, ORDERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                + "<!ATTLIST USERS ID CDATA #REQUIRED>\n<!ELEMENT ORDERS EMPTY>";
+
+        final List<DtdElementName> names = DtdReader.locateElementNames(dtd);
+
+        assertThat(names).as("The content model lists the tables first, then each declaration names its "
+                + "element.")
+                .containsExactly(new DtdElementName("USERS", dtd.indexOf("USERS*")),
+                        new DtdElementName("ORDERS", dtd.indexOf("ORDERS*")),
+                        new DtdElementName("USERS", dtd.indexOf("USERS EMPTY")),
+                        new DtdElementName("USERS", dtd.indexOf("USERS ID")),
+                        new DtdElementName("ORDERS", dtd.indexOf("ORDERS EMPTY")));
+    }
+
+    @Test
+    void testLocateElementNames_whenSeveralAttlistsNameTheElement_findsEachOne()
+    {
+        final String dtd = "<!ATTLIST USERS ID CDATA #REQUIRED>\n<!ATTLIST USERS NAME CDATA #IMPLIED>";
+
+        assertThat(DtdReader.locateElementNames(dtd))
+                .as("Every ATTLIST declaration of the element writes its name.")
+                .containsExactly(new DtdElementName("USERS", dtd.indexOf("USERS ID")),
+                        new DtdElementName("USERS", dtd.indexOf("USERS NAME")));
+    }
+
+    @Test
+    void testLocateElementNames_whenTheContentModelIsNestedOrAChoice_findsEachNameWhereItIsWritten()
+    {
+        final String dtd = "<!ELEMENT dataset ((A|B)+, (C?, A))>";
+
+        assertThat(DtdReader.locateElementNames(dtd))
+                .as("A name that the model writes twice is found twice, and no structural character is "
+                        + "part of a name.")
+                .containsExactly(new DtdElementName("A", dtd.indexOf("A|")),
+                        new DtdElementName("B", dtd.indexOf("B)")),
+                        new DtdElementName("C", dtd.indexOf("C?")),
+                        new DtdElementName("A", dtd.indexOf("A)")));
+    }
+
+    @Test
+    void testLocateElementNames_whenTheContentModelHasPcdataAndNamesWithACommonPrefix_findsOnlyNames()
+    {
+        final String dtd = "<!ELEMENT dataset (#PCDATA | USERS | USERS_AUDIT)*>";
+
+        assertThat(DtdReader.locateElementNames(dtd))
+                .as("#PCDATA is no element name, and a name is found whole, not as the prefix of another.")
+                .containsExactly(new DtdElementName("USERS", dtd.indexOf("USERS |")),
+                        new DtdElementName("USERS_AUDIT", dtd.indexOf("USERS_AUDIT")));
+    }
+
+    @Test
+    void testLocateElementNames_whenOnlyTheDatasetElementIsDeclared_findsNoName()
+    {
+        final String dtd = "<!ELEMENT dataset ANY>\n<!ATTLIST dataset ID CDATA #IMPLIED>";
+
+        assertThat(DtdReader.locateElementNames(dtd))
+                .as("The dataset element is never a table, so its own name is not one to rename.")
+                .isEmpty();
+    }
+
+    @Test
+    void testLocateElementNames_whenANameIsInACommentAnEntityOrADefaultValue_isNotFound()
+    {
+        final String dtd = "<!-- <!ELEMENT USERS EMPTY> -->\n<!ENTITY % tables \"USERS\">\n"
+                + "<!ELEMENT ORDERS EMPTY>\n<!ATTLIST ORDERS KIND CDATA \"USERS\">";
+
+        assertThat(DtdReader.locateElementNames(dtd))
+                .as("Only the names that declarations give their elements are found, not text that "
+                        + "happens to spell one.")
+                .containsExactly(new DtdElementName("ORDERS", dtd.indexOf("ORDERS EMPTY")),
+                        new DtdElementName("ORDERS", dtd.indexOf("ORDERS KIND")));
+    }
 }
