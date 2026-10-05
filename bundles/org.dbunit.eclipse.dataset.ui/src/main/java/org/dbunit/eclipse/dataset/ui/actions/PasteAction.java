@@ -105,34 +105,17 @@ public final class PasteAction extends GridAction
         }
         final int anchorRowIndex = Math.max(0, selection.firstRowIndex());
         final int anchorColumnIndex = Math.max(0, selection.firstColumnIndex());
-        final int columnCount = table.getColumns().size();
-        final int pastedColumnCount = parsedRows.get(0).size();
-        final int ignoredColumnCount = Math.max(0, anchorColumnIndex + pastedColumnCount - columnCount);
-        final List<CellChange> changes = new ArrayList<>();
-        final List<List<String>> appendedRows = new ArrayList<>();
-        for (int sourceRowIndex = 0; sourceRowIndex < parsedRows.size(); sourceRowIndex++)
-        {
-            final int targetRowIndex = anchorRowIndex + sourceRowIndex;
-            final List<String> sourceRow = parsedRows.get(sourceRowIndex);
-            if (targetRowIndex < rowCount)
-            {
-                addExistingRowChanges(table, changes, targetRowIndex, anchorColumnIndex, columnCount,
-                        sourceRow);
-            }
-            else
-            {
-                appendedRows.add(buildAppendedRow(anchorColumnIndex, columnCount, sourceRow));
-            }
-        }
+        final PastePlan plan = PastePlan.of(table, anchorRowIndex, anchorColumnIndex, parsedRows);
         final boolean edited = context.executeMultiCellEdit(Messages.Action_paste,
-                () -> context.getDatasetDocument().setCellsAndAppendRows(selection.tableKey(), changes,
-                        appendedRows));
+                () -> context.getDatasetDocument().setCellsAndAppendRows(selection.tableKey(), plan.changes(),
+                        plan.appendedRows()));
         if (!edited)
         {
             return;
         }
-        context.selectRegion(anchorColumnIndex, anchorRowIndex, pastedColumnCount, parsedRows.size());
-        reportIgnoredColumns(context, ignoredColumnCount);
+        context.selectRegion(anchorColumnIndex, anchorRowIndex, plan.pastedColumnCount(),
+                plan.pastedRowCount());
+        reportIgnoredColumns(context, plan.ignoredColumnCount());
     }
 
     private static void reportIgnoredColumns(final DatasetGridContext context, final int ignoredColumnCount)
@@ -143,37 +126,6 @@ public final class PasteAction extends GridAction
                     ignoredColumnCount == 1 ? Messages.Paste_ignoredColumn : Messages.Paste_ignoredColumns;
             context.setStatusMessage(NLS.bind(message, ignoredColumnCount));
         }
-    }
-
-    private static void addExistingRowChanges(final DatasetTable table, final List<CellChange> changes,
-            final int targetRowIndex, final int anchorColumnIndex, final int columnCount,
-            final List<String> sourceRow)
-    {
-        for (int sourceColumnIndex = 0; sourceColumnIndex < sourceRow.size(); sourceColumnIndex++)
-        {
-            final int targetColumnIndex = anchorColumnIndex + sourceColumnIndex;
-            if (targetColumnIndex >= columnCount)
-            {
-                continue;
-            }
-            final String value = sourceRow.get(sourceColumnIndex);
-            changes.add(new CellChange(targetRowIndex, table.getColumns().get(targetColumnIndex).name(),
-                    value));
-        }
-    }
-
-    private static List<String> buildAppendedRow(final int anchorColumnIndex, final int columnCount,
-            final List<String> sourceRow)
-    {
-        final List<String> newRow = new ArrayList<>();
-        for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
-        {
-            final int sourceColumnIndex = columnIndex - anchorColumnIndex;
-            final String value = sourceColumnIndex >= 0 && sourceColumnIndex < sourceRow.size()
-                    ? sourceRow.get(sourceColumnIndex) : null;
-            newRow.add(value);
-        }
-        return newRow;
     }
 
     @Override
