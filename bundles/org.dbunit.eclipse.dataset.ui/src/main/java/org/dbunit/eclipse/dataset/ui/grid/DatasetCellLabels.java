@@ -32,6 +32,8 @@ final class DatasetCellLabels implements IConfigLabelAccumulator
 {
     static final String NULL_VALUE = "NULL_VALUE";
 
+    static final String DEFAULT_VALUE = "DEFAULT_VALUE";
+
     static final String EDIT_IN_DIALOG = "EDIT_IN_DIALOG";
 
     static final String MULTI_LINE_VALUE = "MULTI_LINE_VALUE";
@@ -59,6 +61,10 @@ final class DatasetCellLabels implements IConfigLabelAccumulator
         else if (isMultiLine(value.toString()))
         {
             configLabels.addLabel(MULTI_LINE_VALUE);
+        }
+        if (bodyDataProvider.isDefaultValue(columnPosition, rowPosition))
+        {
+            configLabels.addLabel(DEFAULT_VALUE);
         }
         if (columnPosition == editInDialogColumnPosition && rowPosition == editInDialogRowPosition)
         {

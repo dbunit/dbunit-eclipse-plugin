@@ -57,6 +57,10 @@ import org.junit.jupiter.api.Test;
  */
 class GridEditingTest
 {
+    private static final String DEFAULTS_DATASET = "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n"
+            + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #IMPLIED STATUS CDATA \"ACTIVE\">\n]>\n"
+            + "<dataset><USERS ID=\"1\"/><USERS STATUS=\"x\"/></dataset>";
+
     private Shell shell;
 
     private ModalDialogDriver dialogDriver;
@@ -104,6 +108,98 @@ class GridEditingTest
                 .isNull();
         assertThat(document.get()).as("An empty edit of a NULL cell must not change the document.")
                 .isEqualTo(originalText);
+    }
+
+    @Test
+    void testSetDataValue_whenCommittingTheDisplayedDefaultOfAnOmittedAttribute_leavesTheDocumentUnchanged()
+    {
+        final IDocument document = new Document(DEFAULTS_DATASET);
+        final TableBodyDataProvider provider =
+                new TableBodyDataProvider(new TestContext(create(document)), "USERS");
+
+        provider.setDataValue(1, 0, "ACTIVE");
+
+        assertThat(document.get())
+                .as("Committing the default that the cell displays must not write an attribute for it.")
+                .isEqualTo(DEFAULTS_DATASET);
+    }
+
+    @Test
+    void testSetDataValue_whenReplacingTheDisplayedDefault_writesTheAttribute()
+    {
+        final IDocument document = new Document(DEFAULTS_DATASET);
+        final TableBodyDataProvider provider =
+                new TableBodyDataProvider(new TestContext(create(document)), "USERS");
+
+        provider.setDataValue(1, 0, "INACTIVE");
+
+        assertThat(document.get()).as("A value other than the default must be written as an attribute.")
+                .isEqualTo(DEFAULTS_DATASET.replace("<USERS ID=\"1\"/>",
+                        "<USERS ID=\"1\" STATUS=\"INACTIVE\"/>"));
+    }
+
+    @Test
+    void testSetDataValue_whenClearingTheDisplayedDefault_storesTheEmptyString()
+    {
+        final IDocument document = new Document(DEFAULTS_DATASET);
+        final TableBodyDataProvider provider =
+                new TableBodyDataProvider(new TestContext(create(document)), "USERS");
+
+        provider.setDataValue(1, 0, "");
+
+        assertThat(document.get())
+                .as("Clearing a cell that shows a default must store the empty string, which overrides it.")
+                .isEqualTo(DEFAULTS_DATASET.replace("<USERS ID=\"1\"/>", "<USERS ID=\"1\" STATUS=\"\"/>"));
+    }
+
+    @Test
+    void testSetDataValue_whenCommittingTheEmptyDefaultOfAnOmittedAttribute_leavesTheDocumentUnchanged()
+    {
+        final String originalText = DEFAULTS_DATASET.replace("\"ACTIVE\"", "\"\"");
+        final IDocument document = new Document(originalText);
+        final TableBodyDataProvider provider =
+                new TableBodyDataProvider(new TestContext(create(document)), "USERS");
+
+        provider.setDataValue(1, 0, "");
+
+        assertThat(document.get())
+                .as("Committing an empty default that the cell displays must not write an attribute.")
+                .isEqualTo(originalText);
+    }
+
+    @Test
+    void testCommit_whenTheInPlaceEditorOfADefaultedCellIsUntouched_keepsTheAttributeOut()
+    {
+        final IDocument document = new Document(DEFAULTS_DATASET);
+        final NatTable natTable = openGrid(create(document), "USERS").getNatTable();
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 1, false, false));
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+        final ICellEditor cellEditor = natTable.getActiveCellEditor();
+
+        final Object editorValue = cellEditor.getEditorValue();
+        cellEditor.commit(MoveDirectionEnum.NONE);
+
+        assertThat(editorValue).as("The editor of a cell that shows a default must start with the default.")
+                .isEqualTo("ACTIVE");
+        assertThat(document.get())
+                .as("Committing the editor of a defaulted cell without typing must not write the default.")
+                .isEqualTo(DEFAULTS_DATASET);
+    }
+
+    @Test
+    void testEditCellInDialog_whenTheCellShowsADefaultAndTheDialogIsConfirmedUnchanged_keepsTheAttributeOut()
+    {
+        final IDocument document = new Document(DEFAULTS_DATASET);
+        final DatasetGrid grid = openGrid(create(document), "USERS");
+        grid.selectRegion(1, 0, 1, 1);
+        dialogDriver.confirmNextDialog();
+
+        grid.editCellInDialog();
+
+        assertThat(dialogDriver.hasConfirmed()).as("The dialog must open and be confirmed.").isTrue();
+        assertThat(document.get())
+                .as("Confirming the dialog of a defaulted cell without a change must not write the default.")
+                .isEqualTo(DEFAULTS_DATASET);
     }
 
     @Test

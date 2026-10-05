@@ -393,9 +393,26 @@ public final class Messages extends NLS
     public static String ColumnHeaderTooltip_declaredWithoutValues;
 
     /**
+     * The column header tooltip of a column that has a default value in the DTD; {0} is the default value.
+     */
+    public static String ColumnHeaderTooltip_defaultValue;
+
+    /**
      * The column header tooltip of a pending column.
      */
     public static String ColumnHeaderTooltip_pending;
+
+    /**
+     * The status message after setting cells of a column with a default value to NULL; {0} is the column's
+     * name and {1} its default value.
+     */
+    public static String SetNull_defaultValue;
+
+    /**
+     * The status message after setting cells of columns with default values to NULL; {0} lists the
+     * columns' names.
+     */
+    public static String SetNull_defaultValues;
 
     /**
      * The error for a cell value with a character XML does not allow; {0} is the character's code point.

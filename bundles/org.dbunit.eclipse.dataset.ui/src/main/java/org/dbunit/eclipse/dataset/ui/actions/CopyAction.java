@@ -36,8 +36,9 @@ import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Text;
 
 /**
- * Copies the bounding rectangle of the selection to the clipboard as tab-separated text; cells inside it
- * that are not selected copy as NULL.
+ * Copies the bounding rectangle of the selection to the clipboard as tab-separated text, each cell with the
+ * value dbUnit loads for it, so a cell without a value copies its column's DTD default; cells inside the
+ * rectangle that are not selected copy as NULL.
  *
  * @since 1.0.0
  */
@@ -81,7 +82,7 @@ public final class CopyAction extends GridAction
                     .lastColumnIndex(); columnIndex++)
             {
                 final boolean isSelected = selectedCells.contains(new Point(columnIndex, rowIndex));
-                line.add(isSelected ? table.getRows().get(rowIndex).getValue(columnIndex) : null);
+                line.add(isSelected ? table.getEffectiveValue(rowIndex, columnIndex) : null);
             }
             block.add(line);
         }

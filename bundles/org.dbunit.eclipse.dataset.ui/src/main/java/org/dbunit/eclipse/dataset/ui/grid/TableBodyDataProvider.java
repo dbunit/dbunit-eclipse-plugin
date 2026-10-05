@@ -21,6 +21,7 @@
 package org.dbunit.eclipse.dataset.ui.grid;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
@@ -57,16 +58,44 @@ final class TableBodyDataProvider implements IDataProvider
         return table().map(table -> table.getColumns().size()).orElse(0);
     }
 
+    /**
+     * Returns the value dbUnit loads for a cell, which is its column's default value when its row has no
+     * attribute for the column.
+     */
     @Override
     public Object getDataValue(final int columnIndex, final int rowIndex)
     {
         final Optional<DatasetTable> table = table();
-        if (table.isEmpty() || rowIndex < 0 || rowIndex >= table.get().getRows().size() || columnIndex < 0
-                || columnIndex >= table.get().getColumns().size())
+        if (table.isEmpty() || !isCell(table.get(), columnIndex, rowIndex))
         {
             return null;
         }
-        return table.get().getRows().get(rowIndex).getValue(columnIndex);
+        return table.get().getEffectiveValue(rowIndex, columnIndex);
+    }
+
+    /**
+     * Returns whether a cell shows its column's default value because its row has no attribute for the
+     * column.
+     *
+     * @param columnIndex The index of the cell's column.
+     * @param rowIndex The index of the cell's row.
+     * @return True when the cell's value is the DTD's default, not a value written in the row.
+     */
+    boolean isDefaultValue(final int columnIndex, final int rowIndex)
+    {
+        final Optional<DatasetTable> table = table();
+        if (table.isEmpty() || !isCell(table.get(), columnIndex, rowIndex))
+        {
+            return false;
+        }
+        final String value = table.get().getRows().get(rowIndex).getValue(columnIndex);
+        return value == null && table.get().getColumns().get(columnIndex).hasDefaultValue();
+    }
+
+    private static boolean isCell(final DatasetTable table, final int columnIndex, final int rowIndex)
+    {
+        return rowIndex >= 0 && rowIndex < table.getRows().size() && columnIndex >= 0
+                && columnIndex < table.getColumns().size();
     }
 
     @Override
@@ -79,6 +108,10 @@ final class TableBodyDataProvider implements IDataProvider
         }
         final Object currentValue = getDataValue(columnIndex, rowIndex);
         if (currentValue == null && "".equals(newValue))
+        {
+            return;
+        }
+        if (isDefaultValue(columnIndex, rowIndex) && Objects.equals(newValue, currentValue))
         {
             return;
         }

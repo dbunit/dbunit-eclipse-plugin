@@ -34,7 +34,8 @@ import org.eclipse.ui.ISharedImages;
 import org.eclipse.ui.PlatformUI;
 
 /**
- * Registers how a {@link DatasetGrid} styles NULL values, pending columns, and columns with problems.
+ * Registers how a {@link DatasetGrid} styles NULL values, default values, pending columns, and columns with
+ * problems.
  *
  * @since 1.0.0
  */
@@ -43,22 +44,27 @@ final class GridStyleConfiguration extends AbstractRegistryConfiguration
     @Override
     public void configureRegistry(final IConfigRegistry configRegistry)
     {
-        final Style nullValueStyle = new Style();
-        nullValueStyle.setAttributeValue(CellStyleAttributes.FONT,
-                JFaceResources.getFontRegistry().getItalic(JFaceResources.DEFAULT_FONT));
+        final Style nullValueStyle = italicStyle();
         nullValueStyle.setAttributeValue(CellStyleAttributes.FOREGROUND_COLOR,
                 JFaceResources.getColorRegistry().get(JFacePreferences.QUALIFIER_COLOR));
         registerForNormalAndSelect(configRegistry, nullValueStyle, DatasetCellLabels.NULL_VALUE);
 
-        final Style pendingColumnStyle = new Style();
-        pendingColumnStyle.setAttributeValue(CellStyleAttributes.FONT,
-                JFaceResources.getFontRegistry().getItalic(JFaceResources.DEFAULT_FONT));
-        registerForNormalAndSelect(configRegistry, pendingColumnStyle, ColumnHeaderLabels.PENDING_COLUMN);
+        registerForNormalAndSelect(configRegistry, italicStyle(), DatasetCellLabels.DEFAULT_VALUE);
+
+        registerForNormalAndSelect(configRegistry, italicStyle(), ColumnHeaderLabels.PENDING_COLUMN);
 
         registerProblemPainter(configRegistry, ColumnHeaderLabels.COLUMN_WARNING,
                 ISharedImages.IMG_OBJS_WARN_TSK);
         registerProblemPainter(configRegistry, ColumnHeaderLabels.COLUMN_ERROR,
                 ISharedImages.IMG_OBJS_ERROR_TSK);
+    }
+
+    private static Style italicStyle()
+    {
+        final Style style = new Style();
+        style.setAttributeValue(CellStyleAttributes.FONT,
+                JFaceResources.getFontRegistry().getItalic(JFaceResources.DEFAULT_FONT));
+        return style;
     }
 
     private static void registerForNormalAndSelect(final IConfigRegistry configRegistry, final Style style,

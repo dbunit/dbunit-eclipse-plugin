@@ -30,11 +30,12 @@ import org.eclipse.jface.window.DefaultToolTip;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
 import org.eclipse.nebula.widgets.nattable.layer.LabelStack;
+import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.widgets.Event;
 
 /**
- * Shows a column header's problems and why a column has no values, when it is declared in the DTD without
- * values or pending, as a tooltip.
+ * Shows a column header's problems, its DTD default value, and why it has no values, when it is declared in
+ * the DTD without values or pending, as a tooltip.
  *
  * @since 1.0.0
  */
@@ -72,8 +73,8 @@ final class ColumnHeaderTooltip extends DefaultToolTip
      * Returns the tooltip text for a column header, by column index.
      *
      * @param columnIndex The column's index.
-     * @return The tooltip text, or null when the column has no problems, is not declared in the DTD
-     *         without values, and is not pending.
+     * @return The tooltip text, or null when the column has no problems and no default value, is not
+     *         declared in the DTD without values, and is not pending.
      */
     String textForColumn(final int columnIndex)
     {
@@ -83,7 +84,17 @@ final class ColumnHeaderTooltip extends DefaultToolTip
             return null;
         }
         final List<String> lines = problemMessages(column);
-        if (column.declared() && !column.hasValues())
+        addColumnNotes(lines, column);
+        return lines.isEmpty() ? null : String.join("\n", lines);
+    }
+
+    private static void addColumnNotes(final List<String> lines, final DatasetColumn column)
+    {
+        if (column.hasDefaultValue())
+        {
+            lines.add(NLS.bind(Messages.ColumnHeaderTooltip_defaultValue, column.defaultValue()));
+        }
+        else if (column.declared() && !column.hasValues())
         {
             lines.add(Messages.ColumnHeaderTooltip_declaredWithoutValues);
         }
@@ -91,7 +102,6 @@ final class ColumnHeaderTooltip extends DefaultToolTip
         {
             lines.add(Messages.ColumnHeaderTooltip_pending);
         }
-        return lines.isEmpty() ? null : String.join("\n", lines);
     }
 
     private List<String> problemMessages(final DatasetColumn column)

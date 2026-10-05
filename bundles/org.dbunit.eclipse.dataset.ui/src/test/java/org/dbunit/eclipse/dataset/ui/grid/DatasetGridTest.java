@@ -61,6 +61,12 @@ import org.junit.jupiter.api.Test;
  */
 class DatasetGridTest
 {
+    private static final String DEFAULTS_DOCTYPE = "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n"
+            + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #IMPLIED STATUS CDATA \"ACTIVE\">\n]>\n";
+
+    private static final String DEFAULTS_DATASET =
+            DEFAULTS_DOCTYPE + "<dataset><USERS ID=\"1\"/><USERS STATUS=\"x\"/></dataset>";
+
     private Shell shell;
 
     @BeforeEach
@@ -167,6 +173,78 @@ class DatasetGridTest
         assertThat(texts).as("The corner must be blank, the headers must show row numbers and column names, "
                 + "and a NULL body cell must show the NULL display text.")
                 .containsExactly("", "2", "ID", "(null)");
+    }
+
+    @Test
+    void testBodyDataProvider_whenARowOmitsAnAttributeTheDtdDefaults_returnsTheDefaultAsTheCellValue()
+    {
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(create(DEFAULTS_DATASET)), "USERS");
+
+        final TableBodyDataProvider provider = grid.getBodyDataProvider();
+
+        assertThat(List.of(provider.getDataValue(1, 0), provider.getDataValue(1, 1)))
+                .as("A cell without an attribute must hold the column's default, and a cell with one its "
+                        + "own value.")
+                .containsExactly("ACTIVE", "x");
+        assertThat(provider.getDataValue(0, 1))
+                .as("A cell without an attribute and without a default is NULL.").isNull();
+    }
+
+    @Test
+    void testCellLabels_ofACellThatShowsADefault_getTheDefaultLabelAndNotTheNullLabel()
+    {
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(create(DEFAULTS_DATASET)), "USERS");
+
+        assertThat(grid.cellLabelsFor(1, 0).getLabels())
+                .as("A cell that shows its column's default must be labeled as a default.")
+                .containsExactly("DEFAULT_VALUE");
+        assertThat(grid.cellLabelsFor(1, 1).getLabels()).as("A cell with its own value must get no label.")
+                .isEmpty();
+        assertThat(grid.cellLabelsFor(0, 1).getLabels())
+                .as("A cell without a value and without a default must still be labeled NULL.")
+                .containsExactly("NULL_VALUE");
+    }
+
+    @Test
+    void testCellLabels_ofACellThatShowsAMultiLineDefault_getBothTheDefaultAndTheMultiLineLabel()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED NOTE CDATA \"a&#10;b\">\n]>\n"
+                        + "<dataset><USERS ID=\"1\"/></dataset>");
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(datasetDocument), "USERS");
+
+        assertThat(grid.cellLabelsFor(1, 0).getLabels())
+                .as("A multi-line default must still open in the dialog editor.")
+                .containsExactlyInAnyOrder("DEFAULT_VALUE", "MULTI_LINE_VALUE");
+    }
+
+    @Test
+    void testDisplayText_ofACellThatShowsADefault_isTheDefaultNotTheNullDisplayText()
+    {
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(create(DEFAULTS_DATASET)), "USERS");
+        shell.layout();
+        processEvents();
+
+        final List<String> texts = List.of(displayText(grid, 2, 1), displayText(grid, 2, 2),
+                displayText(grid, 1, 2));
+
+        assertThat(texts).as("A defaulted cell shows the default, a cell with a value its value, and a cell "
+                + "without either the NULL display text.").containsExactly("ACTIVE", "x", "(null)");
+    }
+
+    @Test
+    void testColumnHeaderTooltip_forAColumnWithADefault_showsTheDefaultInsteadOfNoValuesYet()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(DEFAULTS_DOCTYPE
+                + "<dataset><USERS ID=\"1\"/></dataset>");
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(datasetDocument), "USERS");
+
+        assertThat(grid.getColumnHeaderTooltip().textForColumn(1))
+                .as("A declared column whose cells all show the default must name the default, not claim "
+                        + "that it has no values.")
+                .isEqualTo("The DTD gives this column the default value \"ACTIVE\", which dbUnit loads for a "
+                        + "row without a value.");
     }
 
     @Test

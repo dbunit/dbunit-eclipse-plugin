@@ -21,10 +21,13 @@
 package org.dbunit.eclipse.dataset.ui.actions;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
+import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
 import org.dbunit.eclipse.dataset.ui.Messages;
@@ -34,7 +37,8 @@ import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.graphics.Point;
 
 /**
- * Sets every selected cell to NULL.
+ * Sets every selected cell to NULL, and tells the user when a cell cannot be NULL because the DTD gives its
+ * column a default value.
  *
  * @since 1.0.0
  */
@@ -70,12 +74,55 @@ public final class SetNullAction extends GridAction
         final DatasetTable table = context.getDatasetDocument().getModel().findTable(selection.tableKey())
                 .orElseThrow(() -> new DatasetEditException(
                         NLS.bind(Messages.Edit_noSuchTable, selection.tableKey())));
+        final List<Point> cells = context.getSelectedCellPositions();
         final List<CellChange> changes = new ArrayList<>();
-        for (final Point cell : context.getSelectedCellPositions())
+        for (final Point cell : cells)
         {
             changes.add(new CellChange(cell.y, table.getColumns().get(cell.x).name(), null));
         }
-        context.executeEdit(() -> context.getDatasetDocument().setCells(selection.tableKey(), changes));
+        final boolean edited = context
+                .executeEdit(() -> context.getDatasetDocument().setCells(selection.tableKey(), changes));
+        if (edited)
+        {
+            reportColumnsWithDefaultValues(context, table, cells);
+        }
+    }
+
+    /**
+     * Tells the user, on the status line, that a cell cannot be NULL where the DTD gives its column a default
+     * value, because dbUnit loads the default for a row without the attribute.
+     */
+    private static void reportColumnsWithDefaultValues(final DatasetGridContext context,
+            final DatasetTable table, final List<Point> cells)
+    {
+        final Set<DatasetColumn> defaultedColumns = new LinkedHashSet<>();
+        for (final Point cell : cells)
+        {
+            final DatasetColumn column = table.getColumns().get(cell.x);
+            if (column.hasDefaultValue())
+            {
+                defaultedColumns.add(column);
+            }
+        }
+        if (defaultedColumns.isEmpty())
+        {
+            return;
+        }
+        final DatasetColumn first = defaultedColumns.iterator().next();
+        final String message = defaultedColumns.size() == 1
+                ? NLS.bind(Messages.SetNull_defaultValue, first.name(), first.defaultValue())
+                : NLS.bind(Messages.SetNull_defaultValues, columnNames(defaultedColumns));
+        context.setStatusMessage(message);
+    }
+
+    private static String columnNames(final Set<DatasetColumn> columns)
+    {
+        final List<String> names = new ArrayList<>();
+        for (final DatasetColumn column : columns)
+        {
+            names.add(column.name());
+        }
+        return String.join(", ", names);
     }
 
     @Override

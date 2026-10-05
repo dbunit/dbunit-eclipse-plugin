@@ -98,7 +98,17 @@ Clearing the text of a cell with a value makes it an empty string.
 To make cells NULL, select them and press *Delete*, or use *Set to NULL*;
 *Set to Empty String* makes them empty strings.
 
-A row cannot have every value NULL, because an element without attributes is not a row in dbUnit.
+A column that the <<dtd,DTD>> gives a default value is different:
+dbUnit loads that default, not NULL, for a row without the attribute.
+The grid shows what dbUnit loads, so a cell without the attribute shows the default in italics,
+and the header tooltip of the column names it.
+Such a cell cannot be NULL.
+*Delete* and *Set to NULL* remove the attribute, so the cell shows the default again, and the status line says so.
+To override the default, write another value, or the empty string with *Set to Empty String*.
+Saving a cell that shows a default, without changing its text, does not write the attribute.
+
+A row cannot have every value NULL, because an element without attributes is not a row in dbUnit
+(unless the DTD gives a column a default value, see <<dtd>>).
 The editor rejects a change that would leave a row without values and suggests *Delete Rows* instead,
 and a new row starts with an empty string in its first column.
 
@@ -179,6 +189,7 @@ The clipboard holds cells as tab-separated text,
 so you can copy cells to and from spreadsheet applications such as Microsoft Excel and LibreOffice Calc.
 
 * *Copy* copies the rectangle around the selected cells; cells inside it that are not selected copy as empty.
+A cell that shows a DTD default copies the default.
 * *Cut* copies the cells and then makes them NULL.
 When whole rows are selected, *Cut* deletes the rows instead, so you can move rows by cutting and pasting them.
 * *Paste* starts at the top-left selected cell, or at column 0 of a table with no rows yet.

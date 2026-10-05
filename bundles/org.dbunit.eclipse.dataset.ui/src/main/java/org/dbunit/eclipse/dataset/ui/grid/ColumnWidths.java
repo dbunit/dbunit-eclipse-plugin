@@ -93,7 +93,7 @@ final class ColumnWidths
             final int rowLimit = Math.min(table.getRows().size(), SAMPLE_ROW_LIMIT);
             for (int row = 0; row < rowLimit; row++)
             {
-                final String value = table.getRows().get(row).getValue(columnIndex);
+                final String value = table.getEffectiveValue(row, columnIndex);
                 if (value != null)
                 {
                     width = Math.max(width, gc.textExtent(value).x + 12);
