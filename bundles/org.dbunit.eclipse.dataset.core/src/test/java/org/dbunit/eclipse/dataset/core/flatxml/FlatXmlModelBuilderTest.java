@@ -21,6 +21,7 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -161,6 +162,50 @@ class FlatXmlModelBuilderTest
         assertThat(model.getTables()).as(
                 "AUDIT_LOG is declared but outside the content model, so it must not appear at all.")
                 .extracting(DatasetTable::getName).containsExactly("USERS");
+    }
+
+    @Test
+    void testBuild_whenAnExternalDtdDeclaresATable_marksItDeclaredInTheExternalDtd()
+    {
+        final DatasetModel model = buildWithExternalDtd("<!DOCTYPE dataset SYSTEM \"x.dtd\" [\n"
+                + "<!ELEMENT dataset (USERS*, ORDERS*, PETS*)>\n<!ELEMENT USERS EMPTY>\n"
+                + "<!ATTLIST USERS ID CDATA #REQUIRED>\n<!ELEMENT ORDERS EMPTY>\n"
+                + "<!ATTLIST ORDERS ID CDATA #REQUIRED>\n]>\n"
+                + "<dataset><USERS ID=\"1\"/><ORDERS ID=\"2\"/></dataset>",
+                "<!ATTLIST USERS NAME CDATA #IMPLIED>\n<!ELEMENT PETS EMPTY>",
+                FlatXmlOptions.DBUNIT_DEFAULTS);
+
+        assertThat(model.getTables())
+                .as("The tables that the external DTD declares, with or without elements in the document, "
+                        + "must be marked, and the one that only the internal subset declares must not.")
+                .extracting(DatasetTable::getName, DatasetTable::isDeclaredInExternalDtd)
+                .containsExactly(tuple("USERS", true), tuple("ORDERS", false), tuple("PETS", true));
+    }
+
+    @Test
+    void testBuild_whenAnExternalDtdSpellsATableInAnotherCase_marksItIfNamesAreCaseInsensitive()
+    {
+        final String text = "<!DOCTYPE dataset SYSTEM \"x.dtd\" [\n<!ELEMENT dataset (USERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n]>\n<dataset><USERS ID=\"1\"/></dataset>";
+
+        final DatasetModel model = buildWithExternalDtd(text, "<!ATTLIST Users ID CDATA #IMPLIED>",
+                FlatXmlOptions.DBUNIT_DEFAULTS);
+
+        assertThat(model.findTable("USERS").orElseThrow().isDeclaredInExternalDtd())
+                .as("Users and USERS are one table, so the external declaration counts.").isTrue();
+    }
+
+    @Test
+    void testBuild_whenAnExternalDtdSpellsATableInAnotherCase_doesNotMarkItIfNamesAreCaseSensitive()
+    {
+        final String text = "<!DOCTYPE dataset SYSTEM \"x.dtd\" [\n<!ELEMENT dataset (USERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n]>\n<dataset><USERS ID=\"1\"/></dataset>";
+
+        final DatasetModel model = buildWithExternalDtd(text, "<!ATTLIST Users ID CDATA #IMPLIED>",
+                new FlatXmlOptions(true, false));
+
+        assertThat(model.findTable("USERS").orElseThrow().isDeclaredInExternalDtd())
+                .as("Users and USERS are two tables, so the external declaration is not USERS'.").isFalse();
     }
 
     @Test
@@ -370,6 +415,19 @@ class FlatXmlModelBuilderTest
         final FlatXmlParseResult parse = FlatXmlParser.parse(text);
         final DtdDeclarations dtd = DtdReader.read(parse.doctype().internalSubset());
         return FlatXmlModelBuilder.build(text, parse, dtd, options, pendingColumns).model();
+    }
+
+    /**
+     * Builds the model of a text whose DOCTYPE has an internal subset and names an external DTD, merging
+     * the declarations as the dataset document does.
+     */
+    private static DatasetModel buildWithExternalDtd(final String text, final String externalDtdText,
+            final FlatXmlOptions options)
+    {
+        final FlatXmlParseResult parse = FlatXmlParser.parse(text);
+        final DtdDeclarations internalSubset = DtdReader.read(parse.doctype().internalSubset());
+        final DtdDeclarations dtd = internalSubset.merge(DtdReader.read(externalDtdText));
+        return FlatXmlModelBuilder.build(text, parse, dtd, options, Map.of()).model();
     }
 
     private static FlatXmlModelBuilder.Result buildResultWithDoctype(final String text,

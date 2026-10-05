@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
 import org.dbunit.eclipse.dataset.core.edit.ChangeOrigin;
@@ -753,6 +754,61 @@ class GridActionsTest
         assertThat(RenameTableAction.nameDialogMessage(table))
                 .as("A declared-only table must warn that dbUnit reads tables from the DTD.")
                 .contains("dbUnit reads a flat XML dataset's tables from its DTD");
+    }
+
+    @Test
+    void testRenameTableNameDialogMessage_whenADtdFileDeclaresTheTable_warnsToRenameItThereToo()
+    {
+        final FlatXmlDatasetDocument datasetDocument = createWithDtdFile(
+                "<!DOCTYPE dataset SYSTEM \"my.dtd\"><dataset><USERS ID=\"1\"/></dataset>",
+                "<!ELEMENT dataset (USERS*)><!ELEMENT USERS EMPTY><!ATTLIST USERS ID CDATA #REQUIRED>");
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+
+        assertThat(RenameTableAction.nameDialogMessage(table))
+                .as("The editor does not change a DTD file, so the dialog must say that the file needs the "
+                        + "new name too.")
+                .contains("a DTD file declares this table", "rename the table there too");
+    }
+
+    @Test
+    void testRenameTableNameDialogMessage_whenOnlyTheInternalSubsetDeclaresTheTable_isJustThePrompt()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<!DOCTYPE dataset [\n"
+                + "<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset><USERS ID=\"1\"/></dataset>\n");
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+
+        assertThat(RenameTableAction.nameDialogMessage(table))
+                .as("The editor renames a table in the internal subset itself, so there is nothing to warn "
+                        + "about.")
+                .isEqualTo("Table name:");
+    }
+
+    @Test
+    void testRenameTable_whenTheInternalSubsetDeclaresTheTable_theDtdStillDeclaresTheRenamedTable()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<!DOCTYPE dataset [\n"
+                + "<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset>\n    <USERS ID=\"1\"/>\n</dataset>\n");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final RenameTableAction action = new RenameTableAction(context)
+        {
+            @Override
+            String openNameDialog(final Shell shell, final String currentName,
+                    final IInputValidator validator, final DatasetTable table)
+            {
+                return "Customers";
+            }
+        };
+
+        action.run();
+
+        assertThat(datasetDocument.getModel().getTables())
+                .as("The renamed table must replace the old one, with no table left that only the DTD "
+                        + "declares.")
+                .extracting(DatasetTable::getName).containsExactly("Customers");
+        assertThat(datasetDocument.getModel().getProblems())
+                .as("The DTD must declare the renamed table, so dbUnit can load the dataset.").isEmpty();
     }
 
     @Test
@@ -1648,6 +1704,15 @@ class GridActionsTest
     {
         final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, DtdSource.NONE,
                 FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+        return datasetDocument;
+    }
+
+    private static FlatXmlDatasetDocument createWithDtdFile(final String content, final String dtdText)
+    {
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(new Document(content),
+                (publicId, systemId) -> Optional.of(dtdText), FlatXmlOptions.DBUNIT_DEFAULTS,
+                () -> StandardCharsets.UTF_8);
         datasetDocument.refresh();
         return datasetDocument;
     }

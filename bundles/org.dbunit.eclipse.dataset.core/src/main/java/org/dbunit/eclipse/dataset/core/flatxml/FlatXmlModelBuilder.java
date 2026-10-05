@@ -62,6 +62,7 @@ final class FlatXmlModelBuilder
             final FlatXmlOptions options, final Map<String, List<String>> pendingColumns)
     {
         final Map<String, DtdTable> dtdTablesByKey = indexDtdTables(dtd, options);
+        final Set<String> externalTableKeys = externalTableKeys(dtd, options);
         final Map<String, TableGroup> groups =
                 groupElementsByTable(parse.elements(), options, dtdTablesByKey);
 
@@ -75,7 +76,8 @@ final class FlatXmlModelBuilder
                     pendingColumns.getOrDefault(key, List.of()));
             final RowsResult rowsResult = buildRows(group.rowElements, columns);
             tables.add(new DatasetTable(key, group.displayName,
-                    toDatasetColumns(columns, rowsResult.hasValues), rowsResult.rows, false));
+                    toDatasetColumns(columns, rowsResult.hasValues), rowsResult.rows, false,
+                    externalTableKeys.contains(key)));
         }
         addDtdOnlyTables(tables, dtd, options, groups, pendingColumns);
 
@@ -96,6 +98,23 @@ final class FlatXmlModelBuilder
             }
         }
         return byKey;
+    }
+
+    /**
+     * Returns the keys of the tables that an external DTD declares, which is none unless the declarations
+     * were merged with those of an external DTD.
+     */
+    private static Set<String> externalTableKeys(final DtdDeclarations dtd, final FlatXmlOptions options)
+    {
+        final Set<String> keys = new HashSet<>();
+        if (dtd != null)
+        {
+            for (final String name : dtd.externalElementNames())
+            {
+                keys.add(tableKey(name, options));
+            }
+        }
+        return keys;
     }
 
     private static Map<String, TableGroup> groupElementsByTable(final List<FlatXmlElement> elements,
@@ -206,6 +225,7 @@ final class FlatXmlModelBuilder
         {
             return;
         }
+        final Set<String> externalTableKeys = externalTableKeys(dtd, options);
         final Set<String> addedKeys = new HashSet<>();
         for (final DtdTable dtdTable : dtd.tables())
         {
@@ -217,7 +237,8 @@ final class FlatXmlModelBuilder
             final List<ColumnInfo> columns =
                     buildColumns(List.of(), dtdTable, pendingColumns.getOrDefault(key, List.of()));
             tables.add(new DatasetTable(key, dtdTable.name(),
-                    toDatasetColumns(columns, new boolean[columns.size()]), List.of(), true));
+                    toDatasetColumns(columns, new boolean[columns.size()]), List.of(), true,
+                    externalTableKeys.contains(key)));
         }
     }
 

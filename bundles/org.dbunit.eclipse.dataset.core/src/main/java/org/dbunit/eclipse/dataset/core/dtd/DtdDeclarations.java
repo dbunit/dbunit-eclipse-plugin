@@ -23,6 +23,7 @@ package org.dbunit.eclipse.dataset.core.dtd;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,8 +50,10 @@ public final class DtdDeclarations
 
     private final List<DatasetProblem> problems;
 
+    private final Set<String> externalElementNames;
+
     /**
-     * Creates DTD declarations.
+     * Creates DTD declarations that were not merged with those of an external DTD.
      *
      * @param contentModelDeclared True when the {@code dataset} element has an {@code ELEMENT}
      *                             declaration.
@@ -66,6 +69,32 @@ public final class DtdDeclarations
     DtdDeclarations(final boolean contentModelDeclared, final boolean contentModelAny,
             final List<String> contentModelNames, final Map<String, List<String>> declaredElements,
             final Map<String, Map<String, String>> attributeDefaults, final List<DatasetProblem> problems)
+    {
+        this(contentModelDeclared, contentModelAny, contentModelNames, declaredElements, attributeDefaults,
+                problems, Set.of());
+    }
+
+    /**
+     * Creates DTD declarations.
+     *
+     * @param contentModelDeclared True when the {@code dataset} element has an {@code ELEMENT}
+     *                             declaration.
+     * @param contentModelAny True when that content model is {@code ANY}; meaningless otherwise.
+     * @param contentModelNames The content model's names, in order; empty when contentModelAny is true
+     *                          or contentModelDeclared is false.
+     * @param declaredElements Each declared element's columns, in declaration order, keyed by element
+     *                         name in declaration order; copied defensively.
+     * @param attributeDefaults The default or {@code #FIXED} value of each declared column that has one,
+     *                          keyed by element name and then by column name; copied defensively.
+     * @param problems The problems found while reading, copied defensively.
+     * @param externalElementNames The names of the elements that an external DTD, which these declarations
+     *                             were merged with, declares or lists in its content model; copied
+     *                             defensively.
+     */
+    private DtdDeclarations(final boolean contentModelDeclared, final boolean contentModelAny,
+            final List<String> contentModelNames, final Map<String, List<String>> declaredElements,
+            final Map<String, Map<String, String>> attributeDefaults, final List<DatasetProblem> problems,
+            final Set<String> externalElementNames)
     {
         this.contentModelDeclared = contentModelDeclared;
         this.contentModelAny = contentModelAny;
@@ -83,6 +112,7 @@ public final class DtdDeclarations
         }
         this.attributeDefaults = defaultsCopy;
         this.problems = List.copyOf(problems);
+        this.externalElementNames = Set.copyOf(externalElementNames);
     }
 
     /**
@@ -93,6 +123,19 @@ public final class DtdDeclarations
     public List<DatasetProblem> getProblems()
     {
         return problems;
+    }
+
+    /**
+     * Returns the names of the elements that an external DTD declares, with an {@code ELEMENT} or
+     * {@code ATTLIST} declaration or by listing them in the content model of the {@code dataset} element.
+     * The editor does not change an external DTD, so these are the tables that it cannot rename in the DTD.
+     *
+     * @return An unmodifiable set of element names; empty when these declarations were not merged with
+     *         those of an external DTD.
+     */
+    public Set<String> externalElementNames()
+    {
+        return externalElementNames;
     }
 
     /**
@@ -113,7 +156,7 @@ public final class DtdDeclarations
                     problem.offset() + delta, problem.length()));
         }
         return new DtdDeclarations(contentModelDeclared, contentModelAny, contentModelNames,
-                declaredElements, attributeDefaults, relocated);
+                declaredElements, attributeDefaults, relocated, externalElementNames);
     }
 
     /**
@@ -134,7 +177,7 @@ public final class DtdDeclarations
                     problem.tableKey(), problem.columnName(), problem.rowIndex(), offset, length));
         }
         return new DtdDeclarations(contentModelDeclared, contentModelAny, contentModelNames,
-                declaredElements, attributeDefaults, relocated);
+                declaredElements, attributeDefaults, relocated, externalElementNames);
     }
 
     /**
@@ -202,7 +245,8 @@ public final class DtdDeclarations
      * @return The merged declarations: this content model when declared, otherwise later's; elements
      *         merged by name, appending later's columns after this's and skipping duplicates. A column
      *         declared in both keeps the default value of this one, as the first declaration of an
-     *         attribute is binding.
+     *         attribute is binding. The elements that the external DTD declares are the merged
+     *         declarations' {@link #externalElementNames()}.
      */
     public DtdDeclarations merge(final DtdDeclarations later)
     {
@@ -215,8 +259,21 @@ public final class DtdDeclarations
         addColumnsNotYetDeclared(mergedElements, mergedDefaults, later);
         final List<DatasetProblem> mergedProblems = new ArrayList<>(problems);
         mergedProblems.addAll(later.problems);
+        final Set<String> mergedExternalNames = new LinkedHashSet<>(externalElementNames);
+        mergedExternalNames.addAll(later.declaredElementNames());
         return new DtdDeclarations(mergedDeclared, mergedAny, mergedNames, mergedElements, mergedDefaults,
-                mergedProblems);
+                mergedProblems, mergedExternalNames);
+    }
+
+    /**
+     * Returns the names of the elements that these declarations declare with an {@code ELEMENT} or
+     * {@code ATTLIST} declaration or list in the content model of the {@code dataset} element.
+     */
+    private Set<String> declaredElementNames()
+    {
+        final Set<String> names = new LinkedHashSet<>(declaredElements.keySet());
+        names.addAll(contentModelNames);
+        return names;
     }
 
     /**

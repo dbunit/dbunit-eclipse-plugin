@@ -100,6 +100,26 @@ class DatasetTableTest
     }
 
     @Test
+    void testIsDeclaredInExternalDtd_whenGivenNoFlag_isFalse()
+    {
+        final DatasetTable table = new DatasetTable("USERS", "USERS", List.of(ID_COLUMN), List.of(), false);
+
+        assertThat(table.isDeclaredInExternalDtd())
+                .as("A table created without the flag must not claim an external DTD declares it.")
+                .isFalse();
+    }
+
+    @Test
+    void testIsDeclaredInExternalDtd_whenGivenTheFlag_returnsIt()
+    {
+        final DatasetTable table =
+                new DatasetTable("USERS", "USERS", List.of(ID_COLUMN), List.of(), false, true);
+
+        assertThat(table.isDeclaredInExternalDtd()).as("isDeclaredInExternalDtd must return the given flag.")
+                .isTrue();
+    }
+
+    @Test
     void testGetEffectiveValue_whenTheCellHasAValue_returnsTheValueNotTheDefault()
     {
         final DatasetTable table = tableWithDefaultStatus(List.of("1", "x"));

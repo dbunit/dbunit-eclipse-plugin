@@ -240,6 +240,40 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testRefresh_whenAnExternalDtdDeclaresTheTable_marksTheTableDeclaredInTheExternalDtd()
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset SYSTEM \"my.dtd\"><dataset><USERS ID=\"1\"/></dataset>");
+        final MutableDtdSource dtdSource = new MutableDtdSource(
+                "<!ELEMENT dataset (USERS*)><!ELEMENT USERS EMPTY><!ATTLIST USERS ID CDATA #REQUIRED>");
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, dtdSource,
+                FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+
+        datasetDocument.refresh();
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().isDeclaredInExternalDtd())
+                .as("The editor cannot rename the table in the DTD file, so the model must say that the "
+                        + "file declares it.")
+                .isTrue();
+    }
+
+    @Test
+    void testRefresh_whenOnlyTheInternalSubsetDeclaresTheTable_doesNotMarkItDeclaredInTheExternalDtd()
+    {
+        final IDocument document = new Document("<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n"
+                + "<dataset><USERS ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+
+        datasetDocument.refresh();
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().isDeclaredInExternalDtd())
+                .as("The editor renames a table in the internal subset itself, so no DTD file is "
+                        + "involved.")
+                .isFalse();
+    }
+
+    @Test
     void testRefresh_whenTheDtdSourceThrows_yieldsADtdNotLoadedProblem()
     {
         final IDocument document = new Document(

@@ -182,6 +182,8 @@ dbUnit treats such an element as an empty table, which operations such as `DELET
 When the DOCTYPE has an internal subset that declares the table,
 the table is renamed there too, in its `ELEMENT` and `ATTLIST` declarations and in the content model of the
 `dataset` element, as part of the same undo step, so dbUnit still finds the table in the DTD.
+The editor does not change a DTD file, so when one declares the table,
+the rename dialog warns that the file needs the new name too.
 *Delete Table* removes every element of the table, after asking for confirmation.
 Renaming or deleting a table that exists only in the DTD is rejected,
 since there is nothing in the file to change.

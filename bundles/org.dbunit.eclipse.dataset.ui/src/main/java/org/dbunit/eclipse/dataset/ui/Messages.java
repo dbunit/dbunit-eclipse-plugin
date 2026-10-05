@@ -291,6 +291,12 @@ public final class Messages extends NLS
     public static String TableDialog_nameWithDtdWarning;
 
     /**
+     * The prompt for the new name of a table that a DTD file declares, with the reason to rename it in the
+     * DTD file too.
+     */
+    public static String TableDialog_renameNameWithDtdWarning;
+
+    /**
      * The prompt for a new table's optional column names.
      */
     public static String TableDialog_columnNames;

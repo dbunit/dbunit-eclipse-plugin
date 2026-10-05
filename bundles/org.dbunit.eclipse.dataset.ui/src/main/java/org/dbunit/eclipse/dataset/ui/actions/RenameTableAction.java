@@ -105,14 +105,20 @@ public class RenameTableAction extends GridAction
 
     /**
      * Builds the dialog message, warning that dbUnit reads tables from the DTD when the table exists only
-     * there.
+     * there, and when a DTD file declares it, because the editor renames the table in the DOCTYPE's
+     * internal subset but does not change a DTD file.
      *
      * @param table The table being renamed.
      * @return The dialog message.
      */
     static String nameDialogMessage(final DatasetTable table)
     {
-        return table.isDeclaredOnly() ? Messages.TableDialog_nameWithDtdWarning : Messages.TableDialog_name;
+        if (table.isDeclaredOnly())
+        {
+            return Messages.TableDialog_nameWithDtdWarning;
+        }
+        return table.isDeclaredInExternalDtd() ? Messages.TableDialog_renameNameWithDtdWarning
+                : Messages.TableDialog_name;
     }
 
     @Override

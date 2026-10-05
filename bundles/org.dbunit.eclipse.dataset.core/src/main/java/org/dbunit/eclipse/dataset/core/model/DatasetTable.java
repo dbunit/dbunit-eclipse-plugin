@@ -40,8 +40,10 @@ public final class DatasetTable
 
     private final boolean declaredOnly;
 
+    private final boolean declaredInExternalDtd;
+
     /**
-     * Creates a dataset table.
+     * Creates a dataset table that no external DTD declares.
      *
      * @param key The identity of the table across refreshes: the upper-cased name (Locale.ENGLISH), or
      *            the exact name when table names are case-sensitive.
@@ -53,11 +55,29 @@ public final class DatasetTable
     public DatasetTable(final String key, final String name, final List<DatasetColumn> columns,
             final List<DatasetRow> rows, final boolean declaredOnly)
     {
+        this(key, name, columns, rows, declaredOnly, false);
+    }
+
+    /**
+     * Creates a dataset table.
+     *
+     * @param key The identity of the table across refreshes: the upper-cased name (Locale.ENGLISH), or
+     *            the exact name when table names are case-sensitive.
+     * @param name The spelling of the first element of the table, or of its DTD declaration.
+     * @param columns The columns of the table, copied defensively.
+     * @param rows The rows of the table, copied defensively.
+     * @param declaredOnly True when the table is declared in the DTD but has no element in the document.
+     * @param declaredInExternalDtd True when an external DTD declares the table.
+     */
+    public DatasetTable(final String key, final String name, final List<DatasetColumn> columns,
+            final List<DatasetRow> rows, final boolean declaredOnly, final boolean declaredInExternalDtd)
+    {
         this.key = key;
         this.name = name;
         this.columns = List.copyOf(columns);
         this.rows = List.copyOf(rows);
         this.declaredOnly = declaredOnly;
+        this.declaredInExternalDtd = declaredInExternalDtd;
     }
 
     /**
@@ -164,5 +184,17 @@ public final class DatasetTable
     public boolean isDeclaredOnly()
     {
         return declaredOnly;
+    }
+
+    /**
+     * Returns whether a DTD file that the dataset's DOCTYPE names declares the table. The editor does not
+     * change such a file, so a rename of the table leaves the declaration in it under the old name.
+     *
+     * @return True when the DTD file declares the table with an {@code ELEMENT} or {@code ATTLIST}
+     *         declaration or lists it in the content model of the {@code dataset} element.
+     */
+    public boolean isDeclaredInExternalDtd()
+    {
+        return declaredInExternalDtd;
     }
 }

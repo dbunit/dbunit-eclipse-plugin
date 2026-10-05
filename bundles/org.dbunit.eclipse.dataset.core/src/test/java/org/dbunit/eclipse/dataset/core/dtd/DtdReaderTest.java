@@ -427,6 +427,47 @@ class DtdReaderTest
     }
 
     @Test
+    void testExternalElementNames_whenTheDeclarationsWereNotMerged_isEmpty()
+    {
+        final DtdDeclarations declarations = DtdReader.read("<!ELEMENT dataset (USERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #REQUIRED>");
+
+        assertThat(declarations.externalElementNames())
+                .as("Declarations that no external DTD was merged into have no external element.")
+                .isEmpty();
+    }
+
+    @Test
+    void testMerge_whenTheExternalDtdDeclaresOrListsElements_namesThemAsExternal()
+    {
+        final DtdDeclarations internalSubset = DtdReader.read("<!ELEMENT dataset (USERS*, ORDERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST ORDERS ID CDATA #REQUIRED>");
+        final DtdDeclarations externalDtd = DtdReader.read("<!ELEMENT dataset (PETS*)>\n"
+                + "<!ATTLIST ORDERS NAME CDATA #IMPLIED>\n<!ELEMENT ITEMS EMPTY>");
+
+        final DtdDeclarations merged = internalSubset.merge(externalDtd);
+
+        assertThat(merged.externalElementNames())
+                .as("An element that the external DTD declares with ELEMENT or ATTLIST, or lists in its "
+                        + "content model, is external, and USERS, which only the internal subset "
+                        + "declares, is not.")
+                .containsExactlyInAnyOrder("ORDERS", "ITEMS", "PETS");
+    }
+
+    @Test
+    void testRelocatingProblems_whenTheDeclarationsWereMerged_keepsTheExternalElementNames()
+    {
+        final DtdDeclarations merged = DtdReader.read("<!ELEMENT dataset (USERS*)>")
+                .merge(DtdReader.read("<!ELEMENT USERS EMPTY>"));
+
+        assertThat(merged.withProblemsShiftedBy(10).externalElementNames())
+                .as("Shifting the problems must not lose the external elements.").containsExactly("USERS");
+        assertThat(merged.withProblemsAt(3, 4).externalElementNames())
+                .as("Relocating the problems must not lose the external elements.")
+                .containsExactly("USERS");
+    }
+
+    @Test
     void testWithProblemsShiftedBy_whenColumnsHaveDefaults_keepsTheDefaults()
     {
         final DtdDeclarations declarations = DtdReader
