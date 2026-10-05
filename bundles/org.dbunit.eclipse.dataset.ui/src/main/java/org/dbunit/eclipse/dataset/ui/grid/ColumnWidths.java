@@ -32,6 +32,11 @@ import org.eclipse.swt.graphics.GC;
 /**
  * Remembers each column's width by column key for the life of the editor, so a column keeps the width the
  * user gave it across model refreshes.
+ * <p>
+ * The widths are kept as the data layer stores them, unscaled. The layer displays them multiplied by the
+ * scaling factor of the display, so reading the displayed width back would apply the factor again at every
+ * refresh.
+ * </p>
  *
  * @since 1.0.0
  */
@@ -46,8 +51,8 @@ final class ColumnWidths
     private final Map<String, Integer> widthsByColumnKey = new HashMap<>();
 
     /**
-     * Records the current width of every column of a table, so it survives a structural refresh even when
-     * the table is about to be replaced.
+     * Records the current width of every column of a table that has been given one, so it survives a
+     * structural refresh even when the table is about to be replaced.
      */
     void remember(final DatasetTable table, final DataLayer bodyDataLayer)
     {
@@ -57,7 +62,11 @@ final class ColumnWidths
         }
         for (int index = 0; index < table.getColumns().size(); index++)
         {
-            widthsByColumnKey.put(columnKey(table, index), bodyDataLayer.getColumnWidthByPosition(index));
+            final int width = bodyDataLayer.getConfiguredColumnWidthByPosition(index);
+            if (width >= 0)
+            {
+                widthsByColumnKey.put(columnKey(table, index), width);
+            }
         }
     }
 

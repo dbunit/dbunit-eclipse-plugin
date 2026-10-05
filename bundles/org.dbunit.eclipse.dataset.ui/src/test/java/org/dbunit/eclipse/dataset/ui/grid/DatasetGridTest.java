@@ -42,9 +42,13 @@ import org.eclipse.nebula.widgets.nattable.coordinate.PositionCoordinate;
 import org.eclipse.nebula.widgets.nattable.data.convert.IDisplayConverter;
 import org.eclipse.nebula.widgets.nattable.edit.EditConfigAttributes;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
+import org.eclipse.nebula.widgets.nattable.layer.FixedScalingDpiConverter;
 import org.eclipse.nebula.widgets.nattable.layer.LabelStack;
 import org.eclipse.nebula.widgets.nattable.layer.cell.CellDisplayConversionUtils;
 import org.eclipse.nebula.widgets.nattable.layer.cell.ILayerCell;
+import org.eclipse.nebula.widgets.nattable.layer.command.ConfigureScalingCommand;
+import org.eclipse.nebula.widgets.nattable.resize.command.ColumnResizeCommand;
+import org.eclipse.nebula.widgets.nattable.selection.SelectionLayer;
 import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.FillLayout;
@@ -66,6 +70,10 @@ class DatasetGridTest
 
     private static final String DEFAULTS_DATASET =
             DEFAULTS_DOCTYPE + "<dataset><USERS ID=\"1\"/><USERS STATUS=\"x\"/></dataset>";
+
+    private static final int ENLARGED_DPI = 144;
+
+    private static final int USER_COLUMN_WIDTH = 300;
 
     private Shell shell;
 
@@ -389,6 +397,29 @@ class DatasetGridTest
         assertThat(List.of(anchor.columnPosition, anchor.rowPosition))
                 .as("The selected cell must stay the anchor after an insertion elsewhere.")
                 .isEqualTo(List.of(0, 1));
+    }
+
+    @Test
+    void testTableChanged_whenRowsAreInsertedAtAnEnlargedDisplay_keepsTheColumnWidths()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(datasetDocument), "USERS");
+        final SelectionLayer bodyLayer = grid.getSelectionLayer();
+        bodyLayer.doCommand(new ConfigureScalingCommand(new FixedScalingDpiConverter(ENLARGED_DPI)));
+        grid.tableChanged(datasetDocument.getModel().findTable("USERS").orElseThrow());
+        bodyLayer.doCommand(new ColumnResizeCommand(bodyLayer, 0, USER_COLUMN_WIDTH, true));
+        final int automaticWidth = bodyLayer.getColumnWidthByPosition(1);
+
+        datasetDocument.insertRows("USERS", 1, List.of(List.of("2", "Bob")));
+        grid.tableChanged(datasetDocument.getModel().findTable("USERS").orElseThrow());
+        datasetDocument.insertRows("USERS", 2, List.of(List.of("3", "Carol")));
+        grid.tableChanged(datasetDocument.getModel().findTable("USERS").orElseThrow());
+
+        assertThat(List.of(bodyLayer.getColumnWidthByPosition(0), bodyLayer.getColumnWidthByPosition(1)))
+                .as("Inserting two rows must keep the width the user gave the first column and the "
+                        + "automatic width of the second.")
+                .containsExactly(USER_COLUMN_WIDTH, automaticWidth);
     }
 
     @Test
