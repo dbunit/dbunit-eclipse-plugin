@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dataset SYSTEM "dtd/column-name-case.dtd">
+<dataset>
+    <USERS id="1" Name="Alice"/>
+    <USERS ID="2" name="Bob"/>
+</dataset>

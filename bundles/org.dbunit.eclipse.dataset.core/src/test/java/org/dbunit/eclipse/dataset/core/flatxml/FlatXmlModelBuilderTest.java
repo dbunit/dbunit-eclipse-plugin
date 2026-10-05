@@ -175,6 +175,35 @@ class FlatXmlModelBuilderTest
     }
 
     @Test
+    void testBuild_whenALaterRowSpellsAColumnInAnotherCase_fillsTheColumnFromIt()
+    {
+        final DatasetModel model = buildWithoutDtd("<dataset><USERS ID=\"1\"/><USERS id=\"2\"/></dataset>",
+                FlatXmlOptions.DBUNIT_DEFAULTS, Map.of());
+
+        final DatasetTable users = model.findTable("USERS").orElseThrow();
+        assertThat(users.getColumns()).as("Both spellings must be one column, named after the first.")
+                .extracting(DatasetColumn::name).containsExactly("ID");
+        assertThat(users.getRows()).as("The second row's id attribute must fill the ID column.")
+                .extracting(row -> row.getValue(0)).containsExactly("1", "2");
+    }
+
+    @Test
+    void testBuild_whenARowSpellsADtdColumnInAnotherCase_fillsTheDeclaredColumnFromIt()
+    {
+        final DatasetModel model = buildWithDoctype(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS EMPNO CDATA #REQUIRED>\n]>\n"
+                        + "<dataset><USERS empno=\"1\"/></dataset>",
+                FlatXmlOptions.DBUNIT_DEFAULTS, Map.of());
+
+        final DatasetTable users = model.findTable("USERS").orElseThrow();
+        assertThat(users.getColumns()).as("The lower-case attribute must not add a column.")
+                .extracting(DatasetColumn::name).containsExactly("EMPNO");
+        assertThat(users.getRows().get(0).getValue(0))
+                .as("The declared column must take the lower-case attribute's value.").isEqualTo("1");
+    }
+
+    @Test
     void testBuild_whenAPendingColumnHasNoData_isMarkedPending()
     {
         final DatasetModel model = buildWithoutDtd("<dataset><USERS ID=\"1\"/></dataset>",

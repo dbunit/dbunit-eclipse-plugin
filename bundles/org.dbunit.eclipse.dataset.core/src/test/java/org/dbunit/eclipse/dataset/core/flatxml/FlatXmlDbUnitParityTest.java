@@ -59,7 +59,7 @@ class FlatXmlDbUnitParityTest
     @ParameterizedTest
     @ValueSource(strings = { "flatXmlDataSetTest.xml", "flatXmlDataSetDuplicateTest.xml",
             "flatXmlDataSetDuplicateMultipleCaseTest.xml", "editor-sample.xml", "column-sensing.xml",
-            "special-characters.xml" })
+            "special-characters.xml", "column-name-case.xml" })
     void testBuild_whenFixtureHasNoDoctype_matchesDbUnitOnEveryColumn(final String fixtureName)
             throws Exception
     {
@@ -68,7 +68,7 @@ class FlatXmlDbUnitParityTest
 
     @ParameterizedTest
     @ValueSource(strings = { "flatXmlTableTest.xml", "flatXmlDataSetDtdDifferentCaseTest.xml",
-            "internal-subset.xml" })
+            "internal-subset.xml", "column-name-case-dtd.xml" })
     void testBuild_whenFixtureHasADoctype_matchesDbUnitOnDeclaredColumns(final String fixtureName)
             throws Exception
     {
