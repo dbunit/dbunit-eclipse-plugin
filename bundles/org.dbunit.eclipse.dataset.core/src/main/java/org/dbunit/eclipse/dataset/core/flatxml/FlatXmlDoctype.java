@@ -35,4 +35,16 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 record FlatXmlDoctype(String rootName, String publicId, String systemId, String internalSubset,
         int internalSubsetOffset, int offset, int endOffset)
 {
+    /**
+     * Tells whether the declaration can declare an entity: its DTD has an external subset, or its internal
+     * subset holds an {@code ENTITY} declaration. Without either, only the five predefined entities exist.
+     *
+     * @return True when an entity reference may name an entity that this declaration declares.
+     */
+    boolean mayDeclareEntities()
+    {
+        final boolean hasExternalSubset = systemId != null || publicId != null;
+        final boolean hasInternalEntity = internalSubset != null && internalSubset.contains("<!ENTITY");
+        return hasExternalSubset || hasInternalEntity;
+    }
 }

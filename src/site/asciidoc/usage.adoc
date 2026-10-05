@@ -294,7 +294,10 @@ Double-click a problem there to select its cell or column, or its text on the So
 |Problem |What to do
 
 |*The XML has an error*, such as a missing quote, a root element other than `dataset`,
-an element inside a row element, or an entity other than `&amp;`, `&lt;`, `&gt;`, `&quot;`, and `&apos;`.
+an element inside a row element, an entity other than `&amp;`, `&lt;`, `&gt;`, `&quot;`, and `&apos;`
+in an attribute value, an `&` in text that does not start a reference, `]]>` in text,
+a reference in text to an entity that no DTD can declare,
+or a character that XML 1.0 does not allow in text, a comment, or a processing instruction.
 The grid is read-only.
 |Fix the XML on the Source page; *Show in Source* on the banner takes you to the error.
 

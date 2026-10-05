@@ -40,6 +40,12 @@ import org.junit.jupiter.api.Test;
  */
 class XmlLexerTest
 {
+    private static final String CONTROL_CHARACTER = String.valueOf((char) 0x1);
+
+    private static final String LONE_SURROGATE = String.valueOf((char) 0xD800);
+
+    private static final String EMOJI = new String(Character.toChars(0x1F600));
+
     private record Scan(String token, String remainder)
     {
     }
@@ -372,6 +378,123 @@ class XmlLexerTest
 
         assertThat(problems).as("An unclosed CDATA section must be reported where it starts.")
                 .containsExactly(problemInFirstLine(Messages.Parser_unclosedCdata, 2));
+    }
+
+    @Test
+    void testSkipProcessingInstruction_whenItHoldsACharacterThatXmlDoesNotAllow_recordsABlockingProblemAtIt()
+    {
+        final String text = "<?target a" + CONTROL_CHARACTER + "b?>";
+
+        final List<DatasetProblem> problems =
+                problemsAfterFailure(text, 0, XmlLexer::skipProcessingInstruction);
+
+        assertThat(problems).as("A control character must be reported where it is.")
+                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "1"), 10));
+    }
+
+    @Test
+    void testSkipComment_whenItHoldsACharacterThatXmlDoesNotAllow_recordsABlockingProblemAtIt()
+    {
+        final String text = "<!-- a" + CONTROL_CHARACTER + "b -->";
+
+        final List<DatasetProblem> problems = problemsAfterFailure(text, 0, XmlLexer::skipComment);
+
+        assertThat(problems).as("A control character must be reported where it is.")
+                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "1"), 6));
+    }
+
+    @Test
+    void testSkipComment_whenItHoldsALoneSurrogate_recordsABlockingProblemAtIt()
+    {
+        final String text = "<!--" + LONE_SURROGATE + "-->";
+
+        final List<DatasetProblem> problems = problemsAfterFailure(text, 0, XmlLexer::skipComment);
+
+        assertThat(problems).as("A surrogate without its partner is no XML character.")
+                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "D800"), 4));
+    }
+
+    @Test
+    void testSkipComment_whenItHoldsASupplementaryCharacterAndAmpersands_stopsAfterTheClosingMarker()
+    {
+        final String remainder = remainderAfter("<!-- R&D " + EMOJI + " ]]> --> tail", XmlLexer::skipComment);
+
+        assertThat(remainder).as("Text that is no markup inside a comment must be skipped as it is.")
+                .isEqualTo(" tail");
+    }
+
+    @Test
+    void testSkipCData_whenItHoldsACharacterThatXmlDoesNotAllow_recordsABlockingProblemAtIt()
+    {
+        final String text = "<![CDATA[a" + CONTROL_CHARACTER + "b]]>";
+
+        final List<DatasetProblem> problems = problemsAfterFailure(text, 0, XmlLexer::skipCData);
+
+        assertThat(problems).as("A control character must be reported where it is.")
+                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "1"), 10));
+    }
+
+    @Test
+    void testSkipCData_whenItHoldsAmpersandsAndASupplementaryCharacter_stopsAfterTheClosingMarker()
+    {
+        final String remainder =
+                remainderAfter("<![CDATA[R&D &nbsp; " + EMOJI + "]]> tail", XmlLexer::skipCData);
+
+        assertThat(remainder).as("References inside a CDATA section are plain text.").isEqualTo(" tail");
+    }
+
+    @Test
+    void testSkipXmlCharacter_whenAnOrdinaryCharacterIsNext_movesOverIt()
+    {
+        final String remainder = remainderAfter("ab", XmlLexer::skipXmlCharacter);
+
+        assertThat(remainder).as("One character must be skipped.").isEqualTo("b");
+    }
+
+    @Test
+    void testSkipXmlCharacter_whenASurrogatePairIsNext_movesOverBothHalves()
+    {
+        final String remainder = remainderAfter(EMOJI + "b", XmlLexer::skipXmlCharacter);
+
+        assertThat(remainder).as("A surrogate pair is one character.").isEqualTo("b");
+    }
+
+    @Test
+    void testSkipXmlCharacter_whenTheCharacterIsALineFeedOrTab_movesOverIt()
+    {
+        final List<String> remainders = List.of(remainderAfter("\nb", XmlLexer::skipXmlCharacter),
+                remainderAfter("\tb", XmlLexer::skipXmlCharacter));
+
+        assertThat(remainders).as("Tab and line feed are XML characters.").containsExactly("b", "b");
+    }
+
+    @Test
+    void testSkipXmlCharacter_whenTheCharacterIsANoncharacterWithinTheXmlRange_movesOverIt()
+    {
+        final String remainder = remainderAfter((char) 0xFDD0 + "b", XmlLexer::skipXmlCharacter);
+
+        assertThat(remainder).as("XML 1.0 allows U+FDD0, as it allows every character up to U+FFFD.")
+                .isEqualTo("b");
+    }
+
+    @Test
+    void testSkipXmlCharacter_whenTheCharacterIsAControlCharacter_recordsABlockingProblemAtIt()
+    {
+        final List<DatasetProblem> problems =
+                problemsAfterFailure("a" + CONTROL_CHARACTER, 1, XmlLexer::skipXmlCharacter);
+
+        assertThat(problems).as("A control character is no XML character and must be reported.")
+                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "1"), 1));
+    }
+
+    @Test
+    void testSkipXmlCharacter_whenTheCharacterIsOutsideTheXmlRange_recordsABlockingProblemAtIt()
+    {
+        final List<DatasetProblem> problems =
+                problemsAfterFailure(String.valueOf((char) 0xFFFE), 0, XmlLexer::skipXmlCharacter);
+
+        assertThat(problems).as("U+FFFE is outside the XML range and must be reported.")
+                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "FFFE"), 0));
     }
 
     @Test

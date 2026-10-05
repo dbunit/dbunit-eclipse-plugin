@@ -398,6 +398,16 @@ public final class Messages extends NLS
     public static String Parser_unclosedCdata;
 
     /**
+     * Text contains ']]>', which is allowed only as the end of a CDATA section.
+     */
+    public static String Parser_cdataEndInText;
+
+    /**
+     * Text refers to an entity that no DTD declares; {0} is the entity's name.
+     */
+    public static String Parser_entityNotDeclared;
+
+    /**
      * A DTD's parameter entity declarations are ignored.
      */
     public static String Dtd_parameterEntityDeclarationsIgnored;

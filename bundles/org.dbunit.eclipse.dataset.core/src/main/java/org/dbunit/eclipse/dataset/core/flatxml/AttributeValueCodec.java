@@ -63,6 +63,17 @@ public final class AttributeValueCodec
     }
 
     /**
+     * Tells whether a name is one of the five entities that XML predefines, which need no declaration.
+     *
+     * @param name The entity name, without the ampersand and the semicolon.
+     * @return True for {@code lt}, {@code gt}, {@code amp}, {@code quot}, and {@code apos}.
+     */
+    static boolean isPredefinedEntity(final String name)
+    {
+        return PREDEFINED_ENTITIES.containsKey(name);
+    }
+
+    /**
      * Returns the index after the tab, line feed, or carriage return at an index, which is one further for a
      * carriage return followed by a line feed, because that pair is one line end.
      */
@@ -257,8 +268,18 @@ public final class AttributeValueCodec
         }
     }
 
-    private static int parseCharacterReference(final String digits, final int radix,
-            final int referenceOffset) throws AttributeValueException
+    /**
+     * Parses the digits of a character reference, which must name an XML 1.0 {@code Char}.
+     *
+     * @param digits The digits between {@code &#} or {@code &#x} and the semicolon.
+     * @param radix The radix of the digits, 10 or 16.
+     * @param referenceOffset The offset to report for a problem, which is that of the reference's
+     *                        ampersand.
+     * @return The code point that the reference names.
+     * @throws AttributeValueException When the digits are missing or invalid, or name no XML character.
+     */
+    static int parseCharacterReference(final String digits, final int radix, final int referenceOffset)
+            throws AttributeValueException
     {
         if (digits.isEmpty())
         {

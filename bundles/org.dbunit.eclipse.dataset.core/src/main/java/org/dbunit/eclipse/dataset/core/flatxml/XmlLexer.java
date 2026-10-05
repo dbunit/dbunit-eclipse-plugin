@@ -21,17 +21,19 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
+import org.eclipse.osgi.util.NLS;
 
 /**
  * A cursor over flat XML text with the character-level operations of the scanner: testing what comes next,
- * skipping whitespace, comments, processing instructions, and CDATA sections, and scanning names, quoted
- * literals, and quoted attribute values. Whenever the text is malformed, it records a blocking problem
- * through the scan's {@link ScanProblems} and throws the exception that stops the scan. Each instance holds
- * the position of a single scan.
+ * skipping whitespace, comments, processing instructions, and CDATA sections, whose characters must be XML
+ * 1.0 characters, and scanning names, quoted literals, and quoted attribute values. Whenever the text is
+ * malformed, it records a blocking problem through the scan's {@link ScanProblems} and throws the exception
+ * that stops the scan. Each instance holds the position of a single scan.
  */
 final class XmlLexer
 {
@@ -173,7 +175,7 @@ final class XmlLexer
         pos += 2; // "<?"
         while (pos < length && !matchesAt(pos, "?>"))
         {
-            pos++;
+            skipXmlCharacter();
         }
         if (pos >= length)
         {
@@ -189,7 +191,7 @@ final class XmlLexer
         pos += 4; // "<!--"
         while (pos < length && !matchesAt(pos, "-->"))
         {
-            pos++;
+            skipXmlCharacter();
         }
         if (pos >= length)
         {
@@ -205,7 +207,7 @@ final class XmlLexer
         pos += "<![CDATA[".length();
         while (pos < length && !matchesAt(pos, "]]>"))
         {
-            pos++;
+            skipXmlCharacter();
         }
         if (pos >= length)
         {
@@ -213,6 +215,22 @@ final class XmlLexer
                     Messages.Parser_unclosedCdata, start);
         }
         pos += 3;
+    }
+
+    /**
+     * Moves over the character at the position, which must not be the end of the text. A surrogate pair is
+     * one character. A character that XML 1.0 does not allow records a blocking problem at its offset.
+     */
+    void skipXmlCharacter()
+    {
+        final int codePoint = Character.codePointAt(text, pos);
+        if (!AttributeValueCodec.isXmlChar(codePoint))
+        {
+            final String hexadecimal = Integer.toHexString(codePoint).toUpperCase(Locale.ROOT);
+            throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
+                    NLS.bind(Messages.Codec_notXmlCharacter, hexadecimal), pos);
+        }
+        pos += Character.charCount(codePoint);
     }
 
     String scanName()

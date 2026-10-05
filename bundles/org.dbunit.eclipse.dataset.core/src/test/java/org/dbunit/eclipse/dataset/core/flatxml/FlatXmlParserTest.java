@@ -24,17 +24,46 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.dbunit.eclipse.dataset.core.TestDatasets;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * Tests {@link FlatXmlParser} against the scanning rules of the flat XML specification.
  */
 class FlatXmlParserTest
 {
+    private static final String CONTROL_CHARACTER = String.valueOf((char) 0x1);
+
+    private static final String EMOJI = new String(Character.toChars(0x1F600));
+
+    private static Stream<Arguments> textsWithAControlCharacter()
+    {
+        return Stream.of(
+                Arguments.of("body text", "<dataset>\n    a" + CONTROL_CHARACTER + "b\n</dataset>"),
+                Arguments.of("row text",
+                        "<dataset>\n    <USERS ID=\"1\">a" + CONTROL_CHARACTER + "b</USERS>\n</dataset>"),
+                Arguments.of("body comment", "<dataset>\n    <!--a" + CONTROL_CHARACTER + "b-->\n</dataset>"),
+                Arguments.of("row comment", "<dataset>\n    <USERS ID=\"1\"><!--a" + CONTROL_CHARACTER
+                        + "b--></USERS>\n</dataset>"),
+                Arguments.of("body processing instruction",
+                        "<dataset>\n    <?target a" + CONTROL_CHARACTER + "b?>\n</dataset>"),
+                Arguments.of("body CDATA section",
+                        "<dataset>\n    <![CDATA[a" + CONTROL_CHARACTER + "b]]>\n</dataset>"),
+                Arguments.of("prolog comment", "<!--a" + CONTROL_CHARACTER + "b-->\n<dataset/>"),
+                Arguments.of("prolog processing instruction",
+                        "<?target a" + CONTROL_CHARACTER + "b?>\n<dataset/>"),
+                Arguments.of("epilog comment", "<dataset/>\n<!--a" + CONTROL_CHARACTER + "b-->"),
+                Arguments.of("internal subset comment",
+                        "<!DOCTYPE dataset [\n<!--a" + CONTROL_CHARACTER + "b-->\n]>\n<dataset/>"));
+    }
+
     @Test
     void testParse_whenTextIsEmpty_reportsRootNotDataset()
     {
@@ -323,6 +352,105 @@ class FlatXmlParserTest
         final String text = TestDatasets.read("malformed/unknown-entity.xml");
 
         assertBlockingProblem(text, ProblemCode.UNSUPPORTED_ENTITY, text.indexOf('&'));
+    }
+
+    @Test
+    void testParse_whenBodyTextHasABareAmpersand_reportsNotWellFormedAtTheAmpersand()
+    {
+        final String text = TestDatasets.read("malformed/bare-ampersand-in-text.xml");
+
+        assertBlockingProblem(text, ProblemCode.NOT_WELL_FORMED, text.indexOf('&'));
+    }
+
+    @Test
+    void testParse_whenARowHoldsAnUndeclaredEntityInItsText_reportsNotWellFormedAtTheAmpersand()
+    {
+        final String text = TestDatasets.read("malformed/undeclared-entity-in-text.xml");
+
+        assertBlockingProblem(text, ProblemCode.NOT_WELL_FORMED, text.indexOf('&'));
+    }
+
+    @Test
+    void testParse_whenBodyTextHoldsACdataEnd_reportsNotWellFormedAtIt()
+    {
+        final String text = "<dataset>\n    a ]]> b\n    <USERS ID=\"1\"/>\n</dataset>";
+
+        assertBlockingProblem(text, ProblemCode.NOT_WELL_FORMED, text.indexOf("]]>"));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("textsWithAControlCharacter")
+    void testParse_whenAControlCharacterIsInTextOrMarkup_reportsNotWellFormedAtIt(final String place,
+            final String text)
+    {
+        assertBlockingProblem(text, ProblemCode.NOT_WELL_FORMED, text.indexOf(CONTROL_CHARACTER));
+    }
+
+    @Test
+    void testParse_whenTheDoctypeHasAnExternalSubset_acceptsAnEntityReferenceInText()
+    {
+        final String text = "<!DOCTYPE dataset SYSTEM \"dataset.dtd\">\n<dataset>\n    &nbsp;\n"
+                + "    <USERS ID=\"1\"/>\n</dataset>";
+
+        final FlatXmlParseResult result = FlatXmlParser.parse(text);
+
+        assertThat(result.wellFormed()).as("The external DTD may declare the entity.").isTrue();
+        assertThat(result.problems()).as("The text is still reported as ignored.")
+                .extracting(DatasetProblem::code).containsExactly(ProblemCode.TEXT_CONTENT_IGNORED);
+    }
+
+    @Test
+    void testParse_whenTheInternalSubsetDeclaresAnEntity_acceptsAnEntityReferenceInText()
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ENTITY nbsp \"&#160;\">\n]>\n<dataset>\n    &nbsp;\n"
+                + "    <USERS ID=\"1\"/>\n</dataset>";
+
+        final FlatXmlParseResult result = FlatXmlParser.parse(text);
+
+        assertThat(result.wellFormed()).as("The internal subset declares the entity.").isTrue();
+    }
+
+    @Test
+    void testParse_whenTheInternalSubsetDeclaresNoEntity_reportsAnEntityReferenceInText()
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ELEMENT dataset ANY>\n]>\n<dataset>\n    &nbsp;\n"
+                + "    <USERS ID=\"1\"/>\n</dataset>";
+
+        assertBlockingProblem(text, ProblemCode.NOT_WELL_FORMED, text.indexOf('&'));
+    }
+
+    @Test
+    void testParse_whenTheDoctypeDeclaresNothing_reportsAnEntityReferenceInText()
+    {
+        final String text = "<!DOCTYPE dataset>\n<dataset>\n    &nbsp;\n    <USERS ID=\"1\"/>\n</dataset>";
+
+        assertBlockingProblem(text, ProblemCode.NOT_WELL_FORMED, text.indexOf('&'));
+    }
+
+    @Test
+    void testParse_whenTheDoctypeHasAnExternalSubset_reportsABareAmpersandInText()
+    {
+        final String text = "<!DOCTYPE dataset SYSTEM \"dataset.dtd\">\n<dataset>\n    R&D\n"
+                + "    <USERS ID=\"1\"/>\n</dataset>";
+
+        assertBlockingProblem(text, ProblemCode.NOT_WELL_FORMED, text.indexOf('&'));
+    }
+
+    @Test
+    void testParse_whenTextAndMarkupHoldContentThatLooksOddButIsAllowed_staysWellFormed()
+    {
+        final String text = "<dataset>\n"
+                + "    &amp; &lt; &gt; &quot; &apos; &#65; &#x41; ]] > a > b\n"
+                + "    <!-- R&D ]]> " + EMOJI + " -->\n"
+                + "    <?target R&D ]]> " + EMOJI + "?>\n"
+                + "    <![CDATA[R&D &nbsp; ]]>\n"
+                + "    <USERS ID=\"a]]>b\">" + EMOJI + (char) 0x7F + (char) 0xFDD0 + "</USERS>\n"
+                + "</dataset>";
+
+        final FlatXmlParseResult result = FlatXmlParser.parse(text);
+
+        assertThat(result.wellFormed()).as("Everything in this text is allowed by XML 1.0.").isTrue();
+        assertThat(result.elements()).as("The row element must still be found.").hasSize(1);
     }
 
     @Test

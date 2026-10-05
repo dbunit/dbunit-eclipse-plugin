@@ -50,7 +50,8 @@ final class FlatXmlParser
         final ScanProblems problems = new ScanProblems(text);
         final XmlLexer lexer = new XmlLexer(text, problems);
         final DoctypeScanner doctypeScanner = new DoctypeScanner(lexer, problems);
-        return new Scanner(lexer, problems, doctypeScanner).scan();
+        final TextContentScanner textContentScanner = new TextContentScanner(lexer, problems);
+        return new Scanner(lexer, problems, doctypeScanner, textContentScanner).scan();
     }
 
     /**
@@ -64,6 +65,8 @@ final class FlatXmlParser
 
         private final DoctypeScanner doctypeScanner;
 
+        private final TextContentScanner textContentScanner;
+
         private final List<FlatXmlElement> elements = new ArrayList<>();
 
         /**
@@ -74,14 +77,21 @@ final class FlatXmlParser
 
         private FlatXmlDoctype doctype;
 
+        /**
+         * Whether text may refer to an entity that the DOCTYPE declares; false without a DOCTYPE, where only
+         * the predefined entities exist.
+         */
+        private boolean entitiesMayBeDeclared;
+
         private FlatXmlRoot root;
 
         private Scanner(final XmlLexer lexer, final ScanProblems problems,
-                final DoctypeScanner doctypeScanner)
+                final DoctypeScanner doctypeScanner, final TextContentScanner textContentScanner)
         {
             this.lexer = lexer;
             this.problems = problems;
             this.doctypeScanner = doctypeScanner;
+            this.textContentScanner = textContentScanner;
         }
 
         private FlatXmlParseResult scan()
@@ -144,6 +154,7 @@ final class FlatXmlParser
             else if (doctype == null && lexer.atText("<!DOCTYPE"))
             {
                 doctype = doctypeScanner.scan();
+                entitiesMayBeDeclared = doctype.mayDeclareEntities();
             }
             else
             {
@@ -339,8 +350,8 @@ final class FlatXmlParser
                 final int offset = lexer.position();
                 if (ch != '<')
                 {
-                    run.include(offset, !XmlLexer.isWhitespace(ch));
-                    lexer.advance(1);
+                    final boolean significant = textContentScanner.skip(entitiesMayBeDeclared);
+                    run.include(offset, significant);
                 }
                 else if (lexer.atText("</"))
                 {
