@@ -158,6 +158,7 @@ final class FlatXmlModelBuilder
             final String[] values = new String[columns.size()];
             for (final FlatXmlAttribute attribute : row.attributes())
             {
+                // Since dbUnit 2.7.0, an attribute matches its column without regard to letter case.
                 final Integer columnIndex = columnIndexByKey.get(columnKey(attribute.name()));
                 if (columnIndex != null)
                 {

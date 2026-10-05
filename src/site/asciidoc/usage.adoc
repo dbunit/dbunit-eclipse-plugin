@@ -226,6 +226,8 @@ When a dataset has a DOCTYPE, dbUnit reads its tables and columns from the DTD, 
 * A table's columns are the attributes of its `ATTLIST`, in declared order, followed by any other columns the rows use.
 * Tables the DTD lists but the file does not contain appear as tabs with their names in italics;
 their tooltip says _Declared in the DTD; no rows_.
+dbUnit 3.5.0 and later load such a table as an empty table, so operations such as `CLEAN_INSERT` clear it
+(see <<dbunit-versions>>).
 * The header tooltip of a declared column without values says _Declared in the DTD; no values yet_.
 
 The editor reads a DTD file whose system identifier is a path relative to the dataset file's
@@ -243,6 +245,7 @@ Parameter entities and conditional sections in a DTD are not supported and are i
 
 dbUnit silently ignores some content of a flat XML dataset, and fails to load some other content.
 The editor warns about both.
+It follows how dbUnit 3.5.0 and later read a dataset; <<dbunit-versions>> lists where earlier versions differ.
 It shows problems as icons on the sheet tabs and column headers, with the messages in the column header tooltips,
 and lists them all in the Problems section below the grid.
 Double-click a problem there to select its cell or column, or its text on the Source page.
@@ -302,6 +305,34 @@ dbUnit ignores text between elements.
 conditional sections in a DTD (information).
 |Nothing, unless the DTD declares tables or columns through them; the editor then does not know those
 tables and columns.
+|===
+
+[[dbunit-versions]]
+== dbUnit Versions
+
+The editor follows dbUnit 3.5.0 and later.
+Earlier releases read a flat XML dataset differently in these ways:
+
+[cols="1,4,4", options="header"]
+|===
+|Release |From this release on |Before this release
+
+|2.7.0
+|dbUnit matches an attribute to a column without regard to letter case,
+so a row can spell a column differently from the table's first row or the DTD.
+Of two attributes of one row that differ only in case, the last one wins.
+|dbUnit reads only the attribute spelled exactly like the column,
+so a row that spells the column differently loads NULL for it.
+Of two attributes of one row that differ only in case, the one spelled like the column wins.
+
+|2.7.0
+|With column sensing, a column that the DTD does not declare makes dbUnit fail to load the dataset.
+|dbUnit ignores the values of such a column, with or without column sensing.
+
+|3.5.0
+|A table that the DTD declares but the file has no element for becomes an empty table of the dataset,
+so operations such as `CLEAN_INSERT` clear it.
+|dbUnit leaves such a table out of the dataset, so those operations skip it.
 |===
 
 [[preferences]]
