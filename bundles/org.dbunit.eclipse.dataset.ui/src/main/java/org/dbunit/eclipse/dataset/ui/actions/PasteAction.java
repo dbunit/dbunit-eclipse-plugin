@@ -38,8 +38,9 @@ import org.eclipse.swt.widgets.Text;
  * Pastes tab-separated text from the clipboard at the selection's top-left cell, or at column 0, row 0 of
  * a table with no rows yet: a single value fills every selected cell; otherwise the block is pasted at the
  * anchor, with columns beyond the last column ignored and rows beyond the last row appended, all as one
- * undo step. An unquoted empty pasted field becomes NULL; a quoted empty field ({@code ""}) becomes the
- * empty string.
+ * undo step. A row to append that would have no value, such as a blank line, is skipped, and the status
+ * line says how many columns were ignored and how many rows were skipped. An unquoted empty pasted field
+ * becomes NULL; a quoted empty field ({@code ""}) becomes the empty string.
  *
  * @since 1.0.0
  */
@@ -106,26 +107,44 @@ public final class PasteAction extends GridAction
         final int anchorRowIndex = Math.max(0, selection.firstRowIndex());
         final int anchorColumnIndex = Math.max(0, selection.firstColumnIndex());
         final PastePlan plan = PastePlan.of(table, anchorRowIndex, anchorColumnIndex, parsedRows);
-        final boolean edited = context.executeMultiCellEdit(Messages.Action_paste,
-                () -> context.getDatasetDocument().setCellsAndAppendRows(selection.tableKey(), plan.changes(),
-                        plan.appendedRows()));
-        if (!edited)
+        if (plan.pastedRowCount() > 0)
         {
-            return;
+            final boolean edited = context.executeMultiCellEdit(Messages.Action_paste,
+                    () -> context.getDatasetDocument().setCellsAndAppendRows(selection.tableKey(),
+                            plan.changes(), plan.appendedRows()));
+            if (!edited)
+            {
+                return;
+            }
+            context.selectRegion(anchorColumnIndex, anchorRowIndex, plan.pastedColumnCount(),
+                    plan.pastedRowCount());
         }
-        context.selectRegion(anchorColumnIndex, anchorRowIndex, plan.pastedColumnCount(),
-                plan.pastedRowCount());
-        reportIgnoredColumns(context, plan.ignoredColumnCount());
+        reportLeftOut(context, plan);
     }
 
-    private static void reportIgnoredColumns(final DatasetGridContext context, final int ignoredColumnCount)
+    private static void reportLeftOut(final DatasetGridContext context, final PastePlan plan)
     {
-        if (ignoredColumnCount > 0)
+        final List<String> notes = new ArrayList<>();
+        if (plan.ignoredColumnCount() > 0)
         {
-            final String message =
-                    ignoredColumnCount == 1 ? Messages.Paste_ignoredColumn : Messages.Paste_ignoredColumns;
-            context.setStatusMessage(NLS.bind(message, ignoredColumnCount));
+            notes.add(countMessage(plan.ignoredColumnCount(), Messages.Paste_ignoredColumn,
+                    Messages.Paste_ignoredColumns));
         }
+        if (plan.skippedRowCount() > 0)
+        {
+            notes.add(countMessage(plan.skippedRowCount(), Messages.Paste_skippedRow,
+                    Messages.Paste_skippedRows));
+        }
+        if (!notes.isEmpty())
+        {
+            context.setStatusMessage(String.join(" ", notes));
+        }
+    }
+
+    private static String countMessage(final int count, final String singularMessage,
+            final String pluralMessage)
+    {
+        return NLS.bind(count == 1 ? singularMessage : pluralMessage, count);
     }
 
     @Override

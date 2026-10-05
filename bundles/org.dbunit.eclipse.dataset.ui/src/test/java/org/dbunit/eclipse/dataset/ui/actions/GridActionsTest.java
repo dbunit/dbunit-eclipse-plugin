@@ -1695,6 +1695,122 @@ class GridActionsTest
         }
     }
 
+    @Test
+    void testPaste_ofABlankLineBetweenRowsToAppend_skipsItAndAppendsTheOtherRows()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0);
+        context.columnIndexes = List.of(0, 1);
+        context.clipboardText = "10\tX\n\n30\tZ\n";
+        final PasteAction action = new PasteAction(context);
+
+        action.run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows()).extracting(row -> row.getValues())
+                .as("A pasted blank line cannot become a row, so the rows around it must be pasted without "
+                        + "it.")
+                .containsExactly(List.of("10", "X"), List.of("30", "Z"));
+        assertThat(context.selectedRegion).as("Paste must select the rows it wrote.")
+                .isEqualTo(new Rectangle(0, 0, 2, 2));
+        assertThat(context.statusMessage).as("Paste must say that it skipped a row.")
+                .isEqualTo("Skipped 1 pasted row without values, because a new row needs at least one "
+                        + "value.");
+    }
+
+    @Test
+    void testPaste_ofTextEndingInABlankLineIntoAnEmptyTable_appendsTheRowsAndSkipsTheBlankLine()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED NAME CDATA #IMPLIED>\n]>\n"
+                        + "<dataset>\n</dataset>\n");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.clipboardText = "1\tAlice\n2\tBob\n\n";
+        final PasteAction action = new PasteAction(context);
+
+        action.run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows()).extracting(row -> row.getValues())
+                .as("A trailing blank line must not fail the paste of the rows before it.")
+                .containsExactly(List.of("1", "Alice"), List.of("2", "Bob"));
+        assertThat(context.selectedRegion).as("Paste must select the rows it wrote, not the skipped one.")
+                .isEqualTo(new Rectangle(0, 0, 2, 2));
+        assertThat(context.statusMessage).as("Paste must say that it skipped a row.")
+                .isEqualTo("Skipped 1 pasted row without values, because a new row needs at least one "
+                        + "value.");
+    }
+
+    @Test
+    void testPaste_whenEveryRowToAppendHasNoValue_changesNothingAndSaysWhy()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED NAME CDATA #IMPLIED>\n]>\n"
+                        + "<dataset>\n</dataset>\n");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.clipboardText = "\n\n";
+        final PasteAction action = new PasteAction(context);
+
+        action.run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows()).as("Blank lines must not add rows.").isEmpty();
+        assertThat(context.multiCellEditTitles).as("A paste with nothing to write must not run an edit.")
+                .isEmpty();
+        assertThat(context.selectedRegion).as("A paste that wrote nothing must not select anything.")
+                .isNull();
+        assertThat(context.statusMessage).as("Paste must say why nothing was added.")
+                .isEqualTo("Skipped 2 pasted rows without values, because a new row needs at least one "
+                        + "value.");
+    }
+
+    @Test
+    void testPaste_whenOnlyValuesBeyondTheLastColumnWouldMakeUpARowToAppend_reportsBothOmissions()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0);
+        context.columnIndexes = List.of(1);
+        context.clipboardText = "A\tB\n\tD\n";
+        final PasteAction action = new PasteAction(context);
+
+        action.run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows()).extracting(row -> row.getValues())
+                .as("The value that fits must be pasted, and the row left without values must be skipped.")
+                .containsExactly(List.of("1", "A"));
+        assertThat(context.statusMessage).as("Paste must report the ignored column and the skipped row.")
+                .isEqualTo("Ignored 1 pasted column beyond the table's last column. Skipped 1 pasted row "
+                        + "without values, because a new row needs at least one value.");
+    }
+
+    @Test
+    void testPaste_ofACopiedNullCellOntoAnExistingCell_setsItToNull()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(
+                "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(1);
+        context.columnIndexes = List.of(1);
+        context.clipboardText = "\n";
+        final PasteAction action = new PasteAction(context);
+
+        action.run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows().get(1).getValues())
+                .as("A blank line is a NULL cell, which Copy writes for one, so Paste must set the target "
+                        + "cell to NULL.")
+                .containsExactly("2", null);
+        assertThat(context.statusMessage).as("Pasting onto an existing row skips nothing.").isNull();
+    }
+
     private static FlatXmlDatasetDocument create(final String content)
     {
         return create(new Document(content));

@@ -22,6 +22,7 @@ package org.dbunit.eclipse.dataset.ui.actions;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
@@ -29,18 +30,21 @@ import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 /**
  * Plans where the rows of pasted text go in a table: the new values of the cells of the existing rows, and
  * the rows to append after the last row. A pasted value in a column beyond the table's last column has no
- * cell to go to, so the plan leaves it out.
+ * cell to go to, so the plan leaves it out. A row to append that has no value, such as a blank line, cannot
+ * be a row of a flat XML dataset, so the plan skips it.
  *
  * @param changes The new values of the cells of the existing rows; a null value makes a cell NULL.
  * @param appendedRows The rows to append after the last row, each with one value for every column of the
- *                     table, in column order; a null value is a column the new row has no value for.
+ *                     table, in column order, and with at least one value that is not null; a null value is
+ *                     a column the new row has no value for.
  * @param pastedRowCount The number of rows of the pasted text that the paste writes, as changes to existing
  *                       rows or as appended rows.
  * @param pastedColumnCount The number of columns of the pasted text.
+ * @param skippedRowCount The number of rows to append that the plan skipped because they have no value.
  * @param ignoredColumnCount The number of pasted columns beyond the table's last column.
  */
 record PastePlan(List<CellChange> changes, List<List<String>> appendedRows, int pastedRowCount,
-        int pastedColumnCount, int ignoredColumnCount)
+        int pastedColumnCount, int skippedRowCount, int ignoredColumnCount)
 {
     /**
      * Creates a plan with its own unmodifiable copies of the changes and of the appended rows, so that
@@ -71,6 +75,7 @@ record PastePlan(List<CellChange> changes, List<List<String>> appendedRows, int 
         final int ignoredColumnCount = Math.max(0, anchorColumnIndex + pastedColumnCount - columnCount);
         final List<CellChange> changes = new ArrayList<>();
         final List<List<String>> appendedRows = new ArrayList<>();
+        int skippedRowCount = 0;
         for (int sourceRowIndex = 0; sourceRowIndex < parsedRows.size(); sourceRowIndex++)
         {
             final int targetRowIndex = anchorRowIndex + sourceRowIndex;
@@ -81,10 +86,20 @@ record PastePlan(List<CellChange> changes, List<List<String>> appendedRows, int 
             }
             else
             {
-                appendedRows.add(buildAppendedRow(anchorColumnIndex, columnCount, sourceRow));
+                final List<String> appendedRow = buildAppendedRow(anchorColumnIndex, columnCount, sourceRow);
+                if (hasValue(appendedRow))
+                {
+                    appendedRows.add(appendedRow);
+                }
+                else
+                {
+                    skippedRowCount++;
+                }
             }
         }
-        return new PastePlan(changes, appendedRows, parsedRows.size(), pastedColumnCount, ignoredColumnCount);
+        final int pastedRowCount = parsedRows.size() - skippedRowCount;
+        return new PastePlan(changes, appendedRows, pastedRowCount, pastedColumnCount, skippedRowCount,
+                ignoredColumnCount);
     }
 
     private static void addExistingRowChanges(final DatasetTable table, final List<CellChange> changes,
@@ -116,5 +131,10 @@ record PastePlan(List<CellChange> changes, List<List<String>> appendedRows, int 
             newRow.add(value);
         }
         return newRow;
+    }
+
+    private static boolean hasValue(final List<String> row)
+    {
+        return row.stream().anyMatch(Objects::nonNull);
     }
 }

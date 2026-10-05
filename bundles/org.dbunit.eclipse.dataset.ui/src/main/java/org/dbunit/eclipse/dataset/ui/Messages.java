@@ -332,6 +332,16 @@ public final class Messages extends NLS
     public static String Paste_ignoredColumns;
 
     /**
+     * The status message for one pasted row to append that has no value; {0} is 1.
+     */
+    public static String Paste_skippedRow;
+
+    /**
+     * The status message for pasted rows to append that have no value; {0} is their number.
+     */
+    public static String Paste_skippedRows;
+
+    /**
      * The Tables page banner's link to the problem's text on the Source page.
      */
     public static String ErrorBanner_showInSource;

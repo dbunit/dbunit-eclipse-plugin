@@ -217,6 +217,8 @@ When whole rows are selected, *Cut* deletes the rows instead, so you can move ro
 A single value pasted into several selected cells fills all of them.
 Values beyond the table's last column are ignored, and the status line says how many columns were;
 rows beyond the table's last row are added as new rows.
+A row to add that has no value, such as a blank line, is skipped, because a row needs at least one value;
+the status line says how many rows were.
 Empty fields become NULL.
 A paste is one undo step, and the pasted cells are selected afterwards.
 * *Fill Down* (*Ctrl+D*) copies the top selected value of each column into the selected cells below it.
