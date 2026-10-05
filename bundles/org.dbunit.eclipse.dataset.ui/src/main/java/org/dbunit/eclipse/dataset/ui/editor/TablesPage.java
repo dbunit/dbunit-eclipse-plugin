@@ -208,6 +208,15 @@ final class TablesPage implements DatasetGridContext
         tabs.commitActiveCellEditor();
     }
 
+    /**
+     * Closes an open cell editor without writing its value, so that the value cannot reach the document
+     * after a revert has replaced the text that the editor was opened on.
+     */
+    void cancelActiveCellEditor()
+    {
+        tabs.cancelActiveCellEditor();
+    }
+
     void activate()
     {
         active = true;

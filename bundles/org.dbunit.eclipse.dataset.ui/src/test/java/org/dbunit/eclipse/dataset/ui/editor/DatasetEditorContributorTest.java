@@ -27,6 +27,10 @@ import java.util.List;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.action.IAction;
+import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.CTabFolder;
+import org.eclipse.swt.custom.CTabItem;
+import org.eclipse.swt.widgets.Event;
 import org.eclipse.ui.IActionBars;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.actions.ActionFactory;
@@ -35,8 +39,8 @@ import org.eclipse.ui.texteditor.ITextEditorActionConstants;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests that {@link DatasetEditorContributor} installs the global Edit actions of the active dataset
- * editor's active page.
+ * Tests that {@link DatasetEditorContributor} installs the global Edit, Revert, and Print actions of the
+ * active dataset editor's active page.
  */
 class DatasetEditorContributorTest
 {
@@ -100,6 +104,116 @@ class DatasetEditorContributorTest
                     .isEqualTo(tablesPageActions(first))
                     .isNotEqualTo(tablesPageActions(second));
         }
+    }
+
+    @Test
+    void testSetActiveEditor_whenAnEditorOpensOnTheTablesPage_installsTheTextEditorsRevertAction()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", DATASET);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+
+            assertThat(installedAction(editor, ActionFactory.REVERT))
+                    .as("File > Revert must work on the Tables page too, which edits the same document.")
+                    .isNotNull()
+                    .isSameAs(editor.getSourceEditor().getAction(ITextEditorActionConstants.REVERT));
+        }
+    }
+
+    @Test
+    void testSetActiveEditor_whenAnEditorOpensOnTheTablesPage_installsNoPrintAction() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", DATASET);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+
+            assertThat(installedAction(editor, ActionFactory.PRINT))
+                    .as("The grid has nothing to print, so File > Print must stay disabled on the Tables page.")
+                    .isNull();
+        }
+    }
+
+    @Test
+    void testSetActivePage_toTheSourcePage_installsTheTextEditorsPrintAndRevertActions() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", DATASET);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final ITextEditor sourceEditor = editor.getSourceEditor();
+
+            editor.showOnSourcePage(0, 0);
+            UiTestWorkspace.processEvents();
+
+            assertThat(installedAction(editor, ActionFactory.PRINT))
+                    .as("The Source page must install the text editor's Print action.").isNotNull()
+                    .isSameAs(sourceEditor.getAction(ITextEditorActionConstants.PRINT));
+            assertThat(installedAction(editor, ActionFactory.REVERT))
+                    .as("The Source page must install the text editor's Revert action.").isNotNull()
+                    .isSameAs(sourceEditor.getAction(ITextEditorActionConstants.REVERT));
+        }
+    }
+
+    @Test
+    void testSetActivePage_backToTheTablesPage_removesThePrintActionAndKeepsTheRevertAction() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", DATASET);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            editor.showOnSourcePage(0, 0);
+            UiTestWorkspace.processEvents();
+
+            showTablesPage(editor);
+
+            assertThat(installedAction(editor, ActionFactory.PRINT))
+                    .as("Leaving the Source page must remove its Print action.").isNull();
+            assertThat(installedAction(editor, ActionFactory.REVERT))
+                    .as("The text editor's Revert action must stay installed on the Tables page.")
+                    .isNotNull()
+                    .isSameAs(editor.getSourceEditor().getAction(ITextEditorActionConstants.REVERT));
+        }
+    }
+
+    @Test
+    void testSetActiveEditor_withTwoDatasetEditorsOpen_installsTheActivatedEditorsRevertAction()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final FlatXmlDatasetEditor first =
+                    (FlatXmlDatasetEditor) workspace.open(workspace.createFile("first.xml", DATASET));
+            final FlatXmlDatasetEditor second =
+                    (FlatXmlDatasetEditor) workspace.open(workspace.createFile("second.xml", DATASET));
+
+            PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage().activate(first);
+            UiTestWorkspace.processEvents();
+
+            assertThat(installedAction(first, ActionFactory.REVERT))
+                    .as("Activating an editor must install its own Revert action, not that of the editor "
+                            + "that was active before.")
+                    .isSameAs(first.getSourceEditor().getAction(ITextEditorActionConstants.REVERT))
+                    .isNotSameAs(second.getSourceEditor().getAction(ITextEditorActionConstants.REVERT));
+        }
+    }
+
+    private static IAction installedAction(final FlatXmlDatasetEditor editor, final ActionFactory factory)
+    {
+        return editor.getEditorSite().getActionBars().getGlobalActionHandler(factory.getId());
+    }
+
+    private static void showTablesPage(final FlatXmlDatasetEditor editor)
+    {
+        final CTabFolder pages = (CTabFolder) editor.getTablesPage().getControl().getParent();
+        final CTabItem tablesTab = pages.getItem(0);
+        pages.setSelection(tablesTab);
+        final Event click = new Event();
+        click.item = tablesTab;
+        pages.notifyListeners(SWT.Selection, click);
+        UiTestWorkspace.processEvents();
     }
 
     private static List<IAction> installedActions(final FlatXmlDatasetEditor editor)

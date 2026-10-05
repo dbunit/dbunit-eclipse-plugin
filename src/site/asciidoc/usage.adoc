@@ -131,6 +131,12 @@ is written as a character reference, `&#x20AC;`.
 so you can undo a grid change on the Source page and the other way around.
 Every command is one undo step, however many cells it changes; so is a paste.
 
+[[revert]]
+=== Revert
+
+*File > Revert* works on both pages.
+It discards every change since the last save, including a value that you are still typing into a cell.
+
 [[rows-columns-tables]]
 == Rows, Columns, and Tables
 
@@ -247,6 +253,8 @@ Switching pages keeps your place:
 the value of the selected cell (or, for a NULL cell, the name of its element) is selected in the XML text,
 and when you switch back, the cell at the text cursor is selected.
 *Show in Source* (*F3*) switches to the Source page with the selected cell's value selected.
+
+*File > Print* prints the XML text; the Tables page has nothing to print.
 
 [[dtd]]
 == DTDs

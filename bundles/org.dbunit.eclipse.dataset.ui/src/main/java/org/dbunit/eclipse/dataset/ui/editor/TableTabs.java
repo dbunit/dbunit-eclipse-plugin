@@ -103,6 +103,18 @@ final class TableTabs
     }
 
     /**
+     * Closes an open cell editor without writing its value, so that the value cannot reach a document that
+     * is about to be replaced.
+     */
+    void cancelActiveCellEditor()
+    {
+        for (final DatasetGrid grid : gridsByKey.values())
+        {
+            grid.cancelActiveCellEditor();
+        }
+    }
+
+    /**
      * Repaints every grid, for example after the NULL display text changed.
      */
     void repaintGrids()

@@ -20,6 +20,8 @@
  */
 package org.dbunit.eclipse.dataset.ui.editor;
 
+import java.util.Set;
+
 import org.eclipse.jface.action.IAction;
 import org.eclipse.ui.IActionBars;
 import org.eclipse.ui.IEditorPart;
@@ -29,7 +31,8 @@ import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.ITextEditorActionConstants;
 
 /**
- * Routes the global Edit menu actions to whichever page of {@link FlatXmlDatasetEditor} is active.
+ * Routes the global Edit, Revert, and Print menu actions to whichever page of {@link FlatXmlDatasetEditor}
+ * is active.
  *
  * @since 1.0.0
  */
@@ -38,13 +41,20 @@ public final class DatasetEditorContributor extends MultiPageEditorActionBarCont
     private static final String[] GLOBAL_ACTION_IDS = { ActionFactory.UNDO.getId(),
             ActionFactory.REDO.getId(), ActionFactory.CUT.getId(), ActionFactory.COPY.getId(),
             ActionFactory.PASTE.getId(), ActionFactory.DELETE.getId(), ActionFactory.SELECT_ALL.getId(),
-            ActionFactory.FIND.getId() };
+            ActionFactory.FIND.getId(), ActionFactory.PRINT.getId(), ActionFactory.REVERT.getId() };
 
     private static final String[] TEXT_EDITOR_ACTION_IDS = { ITextEditorActionConstants.UNDO,
             ITextEditorActionConstants.REDO, ITextEditorActionConstants.CUT,
             ITextEditorActionConstants.COPY, ITextEditorActionConstants.PASTE,
             ITextEditorActionConstants.DELETE, ITextEditorActionConstants.SELECT_ALL,
-            ITextEditorActionConstants.FIND };
+            ITextEditorActionConstants.FIND, ITextEditorActionConstants.PRINT,
+            ITextEditorActionConstants.REVERT };
+
+    /**
+     * The global actions that stay the text editor's on the Tables page, because they act on the document
+     * that both pages share.
+     */
+    private static final Set<String> SHARED_DOCUMENT_ACTION_IDS = Set.of(ActionFactory.REVERT.getId());
 
     private FlatXmlDatasetEditor multiPageEditor;
 
@@ -63,9 +73,10 @@ public final class DatasetEditorContributor extends MultiPageEditorActionBarCont
 
     /**
      * Installs the global action handlers of the active dataset editor's active page: the text editor's
-     * actions for the Source page, and the Tables page's actions for the Tables page. The page comes from
-     * the active dataset editor rather than from the argument, because every open dataset editor reports
-     * its page changes to this contributor, which the editors share.
+     * actions for the Source page, and the Tables page's actions for the Tables page, which has no Find or
+     * Print action, and which reverts the document with the text editor's Revert action. The page comes
+     * from the active dataset editor rather than from the argument, because every open dataset editor
+     * reports its page changes to this contributor, which the editors share.
      *
      * @param activeEditor The nested editor of the page that became active, or null for the Tables page.
      */
@@ -84,13 +95,9 @@ public final class DatasetEditorContributor extends MultiPageEditorActionBarCont
         {
             final String globalActionId = GLOBAL_ACTION_IDS[index];
             final IAction action;
-            if (sourcePageActive)
+            if (sourcePageActive || SHARED_DOCUMENT_ACTION_IDS.contains(globalActionId))
             {
                 action = sourceEditor.getAction(TEXT_EDITOR_ACTION_IDS[index]);
-            }
-            else if (ActionFactory.FIND.getId().equals(globalActionId))
-            {
-                action = null;
             }
             else
             {

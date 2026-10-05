@@ -621,6 +621,25 @@ class TableTabsTest
                 .isEqualTo("<dataset><USERS ID=\"1\"/><USERS ID=\"20\"/></dataset>");
     }
 
+    @Test
+    void testCancelActiveCellEditor_whileACellIsBeingEdited_closesItsEditorWithoutWritingItsValue()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>";
+        tabs.reconcile(show(originalText));
+        shell.layout(true, true);
+        UiTestWorkspace.processEvents();
+        final NatTable natTable = (NatTable) tabFolder.getSelection().getControl();
+        natTable.doCommand(new SelectCellCommand(natTable, 1, 2, false, false));
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+        natTable.getActiveCellEditor().setEditorValue("20");
+
+        tabs.cancelActiveCellEditor();
+
+        assertThat(natTable.getActiveCellEditor()).as("The open editor must be closed.").isNull();
+        assertThat(document.get()).as("The value of a cancelled editor must not reach the document.")
+                .isEqualTo(originalText);
+    }
+
     private DatasetModel show(final String content)
     {
         document.set(content);

@@ -194,7 +194,7 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
     @Override
     protected void createPages()
     {
-        sourceEditor = new FlatXmlSourceEditor();
+        sourceEditor = new FlatXmlSourceEditor(this::cancelActiveCellEditor);
         final int sourcePageIndex;
         try
         {
@@ -376,6 +376,14 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         if (tablesPage != null)
         {
             tablesPage.commitActiveCellEditor();
+        }
+    }
+
+    private void cancelActiveCellEditor()
+    {
+        if (tablesPage != null)
+        {
+            tablesPage.cancelActiveCellEditor();
         }
     }
 

@@ -355,6 +355,37 @@ class GridEditingTest
     }
 
     @Test
+    void testCancelActiveCellEditor_whileACellIsBeingEdited_closesTheEditorWithoutWritingItsValue()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>";
+        final IDocument document = new Document(originalText);
+        final DatasetGrid grid = openGrid(create(document), "USERS");
+        final NatTable natTable = grid.getNatTable();
+        natTable.doCommand(new SelectCellCommand(natTable, 1, 2, false, false));
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+        natTable.getActiveCellEditor().setEditorValue("20");
+
+        grid.cancelActiveCellEditor();
+
+        assertThat(natTable.getActiveCellEditor()).as("No cell editor may stay open.").isNull();
+        assertThat(document.get()).as("The value of a cancelled editor must not reach the document.")
+                .isEqualTo(originalText);
+    }
+
+    @Test
+    void testCancelActiveCellEditor_whenNoCellIsBeingEdited_doesNothing()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\"/></dataset>";
+        final IDocument document = new Document(originalText);
+        final DatasetGrid grid = openGrid(create(document), "USERS");
+
+        grid.cancelActiveCellEditor();
+
+        assertThat(document.get()).as("Cancelling without an open editor must leave the document alone.")
+                .isEqualTo(originalText);
+    }
+
+    @Test
     void testEditCellInDialog_whenAnEmptyStringIsConfirmedUnchanged_keepsTheEmptyString()
     {
         final String originalText = "<dataset><USERS ID=\"1\" NAME=\"\"/></dataset>";

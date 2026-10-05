@@ -33,6 +33,7 @@ import org.eclipse.nebula.widgets.nattable.coordinate.PositionCoordinate;
 import org.eclipse.nebula.widgets.nattable.data.IDataProvider;
 import org.eclipse.nebula.widgets.nattable.edit.command.EditCellCommand;
 import org.eclipse.nebula.widgets.nattable.edit.config.DefaultEditConfiguration;
+import org.eclipse.nebula.widgets.nattable.edit.editor.ICellEditor;
 import org.eclipse.nebula.widgets.nattable.grid.data.DefaultCornerDataProvider;
 import org.eclipse.nebula.widgets.nattable.grid.data.DefaultRowHeaderDataProvider;
 import org.eclipse.nebula.widgets.nattable.grid.layer.ColumnHeaderLayer;
@@ -163,6 +164,18 @@ public final class DatasetGrid
     public boolean commitActiveCellEditor()
     {
         return natTable.commitAndCloseActiveCellEditor();
+    }
+
+    /**
+     * Closes an open cell editor, if there is one, without writing its value.
+     */
+    public void cancelActiveCellEditor()
+    {
+        final ICellEditor cellEditor = natTable.getActiveCellEditor();
+        if (cellEditor != null)
+        {
+            cellEditor.close();
+        }
     }
 
     NatTable getNatTable()

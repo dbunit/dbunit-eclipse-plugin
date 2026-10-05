@@ -33,8 +33,8 @@ import org.eclipse.ui.themes.IThemeManager;
 
 /**
  * The Source page of {@link FlatXmlDatasetEditor}: a text editor over the same document that colors the
- * XML syntax, with the one addition the multi-page editor needs to detect changes made outside the
- * workbench.
+ * XML syntax, with the two additions the multi-page editor needs: to detect changes made outside the
+ * workbench, and to let the Tables page drop a cell edit in progress before the document is reverted.
  *
  * @since 1.0.0
  */
@@ -42,11 +42,18 @@ public class FlatXmlSourceEditor extends TextEditor
 {
     private final XmlTokenColors tokenColors;
 
+    private final Runnable beforeRevert;
+
     /**
      * Creates the Source page editor, which colors the XML syntax with the current theme's colors.
+     *
+     * @param beforeRevert Runs before the editor reverts its document to the text of the last save, so that
+     *                     a cell edit in progress on the Tables page does not write its value into the
+     *                     reverted document.
      */
-    public FlatXmlSourceEditor()
+    public FlatXmlSourceEditor(final Runnable beforeRevert)
     {
+        this.beforeRevert = beforeRevert;
         final IThemeManager themeManager = PlatformUI.getWorkbench().getThemeManager();
         tokenColors = new XmlTokenColors(themeManager, this::redrawSyntaxColors);
         setSourceViewerConfiguration(new XmlSourceViewerConfiguration(getPreferenceStore(), tokenColors));
@@ -62,6 +69,17 @@ public class FlatXmlSourceEditor extends TextEditor
     public void checkExternalModification()
     {
         safelySanityCheckState(getEditorInput());
+    }
+
+    /**
+     * Runs the action that was given to the constructor, then reverts the document to the text of the last
+     * save.
+     */
+    @Override
+    protected void performRevert()
+    {
+        beforeRevert.run();
+        super.performRevert();
     }
 
     /**

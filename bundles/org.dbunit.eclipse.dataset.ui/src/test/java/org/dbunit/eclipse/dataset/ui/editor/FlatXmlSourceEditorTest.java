@@ -26,29 +26,37 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
+import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.ui.source.XmlDocumentSetupParticipant;
 import org.dbunit.eclipse.dataset.ui.source.XmlTokenColors;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IStorage;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.resource.ColorRegistry;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.jface.text.IDocumentExtension3;
+import org.eclipse.nebula.widgets.nattable.NatTable;
+import org.eclipse.nebula.widgets.nattable.edit.command.EditSelectionCommand;
 import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.RGB;
+import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IPersistableElement;
 import org.eclipse.ui.IStorageEditorInput;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.actions.ActionFactory;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests the syntax coloring of {@link FlatXmlSourceEditor}, the Source page of a real dataset editor.
+ * Tests {@link FlatXmlSourceEditor}, the Source page of a real dataset editor: its syntax coloring, and the
+ * revert that the dataset editor offers on both pages.
  */
 class FlatXmlSourceEditorTest
 {
@@ -59,6 +67,9 @@ class FlatXmlSourceEditorTest
                 <USERS ID="1"/>
             </dataset>
             """;
+
+    private static final String SAVED_USERS =
+            "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>";
 
     @Test
     void testOpen_whenFileIsAFlatXmlDataset_colorsEachXmlConstructWithItsThemeColor() throws Exception
@@ -137,6 +148,85 @@ class FlatXmlSourceEditorTest
             page.closeEditor(editor, false);
             UiTestWorkspace.processEvents();
         }
+    }
+
+    @Test
+    void testRevertAction_afterAGridEditOnTheTablesPage_restoresTheSavedText() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IAction revert = installedRevertAction(editor);
+
+            assertThat(revert).as("The Tables page must have a Revert action.").isNotNull();
+            assertThat(revert.isEnabled()).as("A document without changes has nothing to revert.").isFalse();
+
+            editor.getDatasetDocument().setCells("USERS", List.of(new CellChange(0, "NAME", "Carol")));
+            UiTestWorkspace.processEvents();
+
+            assertThat(revert.isEnabled()).as("A change made in the grid must enable Revert.").isTrue();
+
+            revert.run();
+            UiTestWorkspace.processEvents();
+
+            assertThat(documentText(editor)).as("Revert must restore the text of the last save.")
+                    .isEqualTo(SAVED_USERS);
+            assertThat(editor.isDirty()).as("A reverted editor must not be dirty.").isFalse();
+            assertThat(revert.isEnabled()).as("A reverted document has nothing left to revert.").isFalse();
+        }
+    }
+
+    @Test
+    void testRevertAction_whileTheTablesPageEditsACell_closesTheCellEditorWithoutWritingItsValue()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            editor.getDatasetDocument().setCells("USERS", List.of(new CellChange(0, "NAME", "Carol")));
+            giveTablesPageASize(editor);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final NatTable natTable = (NatTable) tablesPage.getTabFolder().getSelection().getControl();
+            tablesPage.selectRegion(1, 1, 1, 1);
+            natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+            natTable.getActiveCellEditor().setEditorValue("Zed");
+
+            installedRevertAction(editor).run();
+            UiTestWorkspace.processEvents();
+
+            assertThat(tablesPage.hasActiveCellEditor())
+                    .as("A revert must close the cell editor, or its value lands in the reverted document.")
+                    .isFalse();
+            natTable.commitAndCloseActiveCellEditor();
+            UiTestWorkspace.processEvents();
+            assertThat(documentText(editor)).as("The value of the closed cell editor must not be written.")
+                    .isEqualTo(SAVED_USERS);
+        }
+    }
+
+    /**
+     * Gives the grid a size, which an editor in the test workbench lacks while the intro hides its shell,
+     * so that NatTable can place the editor of a cell.
+     */
+    private static void giveTablesPageASize(final FlatXmlDatasetEditor editor)
+    {
+        final Composite page = (Composite) editor.getTablesPage().getControl();
+        page.setSize(800, 600);
+        page.layout(true, true);
+        UiTestWorkspace.processEvents();
+    }
+
+    private static IAction installedRevertAction(final FlatXmlDatasetEditor editor)
+    {
+        return editor.getEditorSite().getActionBars().getGlobalActionHandler(ActionFactory.REVERT.getId());
+    }
+
+    private static String documentText(final FlatXmlDatasetEditor editor)
+    {
+        final FlatXmlSourceEditor sourceEditor = editor.getSourceEditor();
+        return sourceEditor.getDocumentProvider().getDocument(sourceEditor.getEditorInput()).get();
     }
 
     private static StyledText sourceText(final FlatXmlDatasetEditor editor)
