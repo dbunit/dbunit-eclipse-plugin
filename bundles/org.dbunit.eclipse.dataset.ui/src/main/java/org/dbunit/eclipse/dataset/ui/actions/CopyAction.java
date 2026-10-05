@@ -36,9 +36,10 @@ import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Text;
 
 /**
- * Copies the bounding rectangle of the selection to the clipboard as tab-separated text, each cell with the
- * value dbUnit loads for it, so a cell without a value copies its column's DTD default; cells inside the
- * rectangle that are not selected copy as NULL.
+ * Copies the selected cells to the clipboard as tab-separated text, each cell with the value dbUnit loads
+ * for it, so a cell without a value copies its column's DTD default. Rows, columns, or cells that were
+ * selected separately copy next to each other, without the gaps between them, as in a spreadsheet; that
+ * takes the same selected columns in every selected row, and a selection without them is refused.
  *
  * @since 1.0.0
  */
@@ -62,10 +63,12 @@ public final class CopyAction extends GridAction
     }
 
     /**
-     * Copies the bounding rectangle of the active grid's selection to the clipboard, for reuse by
+     * Copies the selected cells of the active grid's selection to the clipboard, for reuse by
      * {@link CutAction}.
      *
      * @param context What this needs from the page that hosts the grid.
+     * @throws DatasetEditException When the selected rows do not all have the same selected columns; the
+     *                              clipboard is left as it was.
      */
     static void copySelectedCellsToClipboard(final DatasetGridContext context)
     {
@@ -75,19 +78,28 @@ public final class CopyAction extends GridAction
                         NLS.bind(Messages.Edit_noSuchTable, selection.tableKey())));
         final Set<Point> selectedCells = new HashSet<>(context.getSelectedCellPositions());
         final List<List<String>> block = new ArrayList<>();
-        for (int rowIndex = selection.firstRowIndex(); rowIndex <= selection.lastRowIndex(); rowIndex++)
+        for (final int rowIndex : selection.rowIndexes())
         {
-            final List<String> line = new ArrayList<>();
-            for (int columnIndex = selection.firstColumnIndex(); columnIndex <= selection
-                    .lastColumnIndex(); columnIndex++)
-            {
-                final boolean isSelected = selectedCells.contains(new Point(columnIndex, rowIndex));
-                line.add(isSelected ? table.getEffectiveValue(rowIndex, columnIndex) : null);
-            }
-            block.add(line);
+            block.add(copyRow(table, rowIndex, selection.columnIndexes(), selectedCells));
         }
         final String text = TabSeparatedValues.format(block, System.lineSeparator());
         context.writeClipboardText(text);
+    }
+
+    private static List<String> copyRow(final DatasetTable table, final int rowIndex,
+            final List<Integer> columnIndexes, final Set<Point> selectedCells)
+    {
+        final List<String> line = new ArrayList<>();
+        for (final int columnIndex : columnIndexes)
+        {
+            final boolean isSelected = selectedCells.contains(new Point(columnIndex, rowIndex));
+            if (!isSelected)
+            {
+                throw new DatasetEditException(Messages.Copy_selectionNotAligned);
+            }
+            line.add(table.getEffectiveValue(rowIndex, columnIndex));
+        }
+        return line;
     }
 
     @Override

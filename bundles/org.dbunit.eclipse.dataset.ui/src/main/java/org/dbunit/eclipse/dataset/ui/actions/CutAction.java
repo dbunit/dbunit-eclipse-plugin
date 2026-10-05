@@ -27,7 +27,8 @@ import org.eclipse.swt.widgets.Text;
 
 /**
  * Copies the selection, then sets it to NULL; when the selection consists of whole rows, deletes those
- * rows instead, since a row cannot be all NULL and cutting rows to move them is the common intent.
+ * rows instead, since a row cannot be all NULL and cutting rows to move them is the common intent. A
+ * selection that {@link CopyAction} refuses is refused here too, before anything changes.
  *
  * @since 1.0.0
  */

@@ -209,9 +209,13 @@ declare the columns in a DTD, or, if your tests enable column sensing, select th
 The clipboard holds cells as tab-separated text,
 so you can copy cells to and from spreadsheet applications such as Microsoft Excel and LibreOffice Calc.
 
-* *Copy* copies the rectangle around the selected cells; cells inside it that are not selected copy as empty.
+* *Copy* copies the selected cells.
+Rows, columns, or cells that you select separately with *Ctrl* copy next to each other, without the gaps between them,
+as they do in a spreadsheet.
+That needs the same selected columns in every selected row; for any other selection, *Copy* does nothing,
+and the status line says so.
 A cell that shows a DTD default copies the default.
-* *Cut* copies the cells and then makes them NULL.
+* *Cut* copies the cells in the same way and then makes them NULL.
 When whole rows are selected, *Cut* deletes the rows instead, so you can move rows by cutting and pasting them.
 * *Paste* starts at the top-left selected cell, or at column 0 of a table with no rows yet.
 A single value pasted into several selected cells fills all of them.

@@ -31,6 +31,8 @@ import org.eclipse.nebula.widgets.nattable.data.IDataProvider;
 import org.eclipse.nebula.widgets.nattable.layer.DataLayer;
 import org.eclipse.nebula.widgets.nattable.selection.SelectionLayer;
 import org.eclipse.nebula.widgets.nattable.selection.command.SelectAllCommand;
+import org.eclipse.nebula.widgets.nattable.selection.command.SelectCellCommand;
+import org.eclipse.nebula.widgets.nattable.selection.command.SelectRowsCommand;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -68,6 +70,40 @@ class GridSelectionTest
         assertThat(selection.lastColumnIndex()).as("The last selected column must be the last column index.")
                 .isEqualTo(columnCount - 1);
         assertThat(selection.wholeRowsSelected()).as("Select All must select every row in full.").isTrue();
+    }
+
+    @Test
+    void testCompute_ofCellsSelectedSeparately_listsEveryTouchedRowAndColumn()
+    {
+        final SelectionLayer selectionLayer =
+                new SelectionLayer(new DataLayer(new FixedSizeDataProvider(3, 3)));
+        selectionLayer.doCommand(new SelectCellCommand(selectionLayer, 0, 0, false, false));
+        selectionLayer.doCommand(new SelectCellCommand(selectionLayer, 1, 2, false, true));
+
+        final GridSelection selection = GridSelection.compute("USERS", 3, 3, selectionLayer);
+
+        assertThat(selection.rowIndexes()).as("Both rows with a selected cell, and not the row between them.")
+                .containsExactly(0, 2);
+        assertThat(selection.columnIndexes()).as("Both columns with a selected cell.")
+                .containsExactly(0, 1);
+        assertThat(selection.wholeRowsSelected()).as("Single cells are not whole rows.").isFalse();
+    }
+
+    @Test
+    void testCompute_ofNonAdjacentRowsSelectedInFull_listsOnlyThoseRowsAndEveryColumn()
+    {
+        final SelectionLayer selectionLayer =
+                new SelectionLayer(new DataLayer(new FixedSizeDataProvider(3, 2)));
+        selectionLayer.doCommand(new SelectRowsCommand(selectionLayer, 0, 0, false, false));
+        selectionLayer.doCommand(new SelectRowsCommand(selectionLayer, 0, 2, false, true));
+
+        final GridSelection selection = GridSelection.compute("USERS", 3, 2, selectionLayer);
+
+        assertThat(selection.rowIndexes()).as("The row between two rows selected with Ctrl is not selected.")
+                .containsExactly(0, 2);
+        assertThat(selection.columnIndexes()).as("A selected row has every column selected.")
+                .containsExactly(0, 1);
+        assertThat(selection.wholeRowsSelected()).as("Both rows are selected in full.").isTrue();
     }
 
     @Test

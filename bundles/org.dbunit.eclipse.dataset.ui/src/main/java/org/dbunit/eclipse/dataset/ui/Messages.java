@@ -342,6 +342,12 @@ public final class Messages extends NLS
     public static String Paste_skippedRows;
 
     /**
+     * The error for a selection that Copy and Cut cannot put on the clipboard, because its rows have
+     * different selected columns.
+     */
+    public static String Copy_selectionNotAligned;
+
+    /**
      * The Tables page banner's link to the problem's text on the Source page.
      */
     public static String ErrorBanner_showInSource;

@@ -978,7 +978,68 @@ class GridActionsTest
     }
 
     @Test
-    void testCopy_withANonRectangularSelection_copiesUnselectedCellsInTheRectangleAsEmpty()
+    void testCopy_ofNonAdjacentWholeRows_copiesOnlyTheSelectedRows()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carol\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0, 2);
+        context.columnIndexes = List.of(0, 1);
+        context.wholeRowsSelected = true;
+        context.selectedCellPositions =
+                List.of(new Point(0, 0), new Point(1, 0), new Point(0, 2), new Point(1, 2));
+        final CopyAction action = new CopyAction(context);
+
+        action.run();
+
+        assertThat(context.clipboardText)
+                .as("The row between two rows selected with Ctrl is not selected, so it must not be "
+                        + "copied as an empty row.")
+                .isEqualTo("1\tAlice" + System.lineSeparator() + "3\tCarol" + System.lineSeparator());
+        assertThat(context.statusErrorMessage).as("Rows that line up are copyable.").isNull();
+    }
+
+    @Test
+    void testCopy_ofNonAdjacentColumns_copiesOnlyTheSelectedColumns()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset>"
+                + "<USERS ID=\"1\" NAME=\"Alice\" CITY=\"Rome\"/><USERS ID=\"2\" NAME=\"Bob\" CITY=\"Paris\"/>"
+                + "</dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0, 1);
+        context.columnIndexes = List.of(0, 2);
+        context.selectedCellPositions =
+                List.of(new Point(0, 0), new Point(2, 0), new Point(0, 1), new Point(2, 1));
+        final CopyAction action = new CopyAction(context);
+
+        action.run();
+
+        assertThat(context.clipboardText)
+                .as("The column between two columns selected with Ctrl is not selected, so it must not be "
+                        + "copied as an empty column.")
+                .isEqualTo("1\tRome" + System.lineSeparator() + "2\tParis" + System.lineSeparator());
+    }
+
+    @Test
+    void testCopy_ofNonAdjacentCellsInOneColumn_copiesThemNextToEachOther()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carol\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0, 2);
+        context.columnIndexes = List.of(1);
+        context.selectedCellPositions = List.of(new Point(1, 0), new Point(1, 2));
+        final CopyAction action = new CopyAction(context);
+
+        action.run();
+
+        assertThat(context.clipboardText)
+                .as("Two cells of one column selected with Ctrl must copy as two adjacent cells.")
+                .isEqualTo("Alice" + System.lineSeparator() + "Carol" + System.lineSeparator());
+    }
+
+    @Test
+    void testCopy_whenTheSelectedRowsHaveDifferentSelectedColumns_refusesAndLeavesTheClipboardAlone()
     {
         final FlatXmlDatasetDocument datasetDocument =
                 create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
@@ -986,13 +1047,116 @@ class GridActionsTest
         context.rowIndexes = List.of(0, 1);
         context.columnIndexes = List.of(0, 1);
         context.selectedCellPositions = List.of(new Point(0, 0), new Point(1, 1));
+        context.clipboardText = "kept";
         final CopyAction action = new CopyAction(context);
 
         action.run();
 
         assertThat(context.clipboardText)
-                .as("A cell inside the bounding rectangle that is not selected must copy as empty.")
-                .isEqualTo("1\t" + System.lineSeparator() + "\tBob" + System.lineSeparator());
+                .as("A selection with no sensible rectangle must copy nothing, not a rectangle with empty "
+                        + "cells in the gaps, which pastes as NULL.")
+                .isEqualTo("kept");
+        assertThat(context.statusErrorMessage).as("Copy must say why it copied nothing.")
+                .isEqualTo("Cannot copy or cut this selection, because its rows have different selected "
+                        + "columns. Select the same columns in every selected row.");
+    }
+
+    @Test
+    void testCut_whenTheSelectedRowsHaveDifferentSelectedColumns_refusesAndChangesNothing()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0, 1);
+        context.columnIndexes = List.of(0, 1);
+        context.selectedCellPositions = List.of(new Point(0, 0), new Point(1, 1));
+        context.clipboardText = "kept";
+        final CutAction action = new CutAction(context);
+
+        action.run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows()).extracting(row -> row.getValues())
+                .as("Cut copies before it clears, so a selection that cannot be copied must clear "
+                        + "nothing.")
+                .containsExactly(List.of("1", "Alice"), List.of("2", "Bob"));
+        assertThat(context.clipboardText).as("Cut must leave the clipboard alone.").isEqualTo("kept");
+        assertThat(context.statusErrorMessage).as("Cut must say why it did nothing.")
+                .startsWith("Cannot copy or cut this selection");
+    }
+
+    @Test
+    void testCut_ofNonAdjacentWholeRows_copiesJustThoseRowsThenDeletesThem()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carol\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0, 2);
+        context.columnIndexes = List.of(0, 1);
+        context.wholeRowsSelected = true;
+        context.selectedCellPositions =
+                List.of(new Point(0, 0), new Point(1, 0), new Point(0, 2), new Point(1, 2));
+        final CutAction action = new CutAction(context);
+
+        action.run();
+
+        assertThat(context.clipboardText).as("Cut must copy the two rows without the row between them.")
+                .isEqualTo("1\tAlice" + System.lineSeparator() + "3\tCarol" + System.lineSeparator());
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows()).extracting(row -> row.getValues())
+                .as("Cut must delete the two selected rows and keep the row between them.")
+                .containsExactly(List.of("2", "Bob"));
+    }
+
+    @Test
+    void testCopyThenPaste_ofNonAdjacentRowsOntoTheLastRow_pastesThemOneAfterTheOther()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carol\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0, 2);
+        context.columnIndexes = List.of(0, 1);
+        context.wholeRowsSelected = true;
+        context.selectedCellPositions =
+                List.of(new Point(0, 0), new Point(1, 0), new Point(0, 2), new Point(1, 2));
+        new CopyAction(context).run();
+        context.rowIndexes = List.of(2);
+        context.columnIndexes = List.of(0);
+        context.wholeRowsSelected = false;
+        context.selectedCellPositions = List.of(new Point(0, 2));
+
+        new PasteAction(context).run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows()).extracting(row -> row.getValues())
+                .as("The first copied row must overwrite the last row and the second must be appended, "
+                        + "with no empty row between them.")
+                .containsExactly(List.of("1", "Alice"), List.of("2", "Bob"), List.of("1", "Alice"),
+                        List.of("3", "Carol"));
+        assertThat(context.statusErrorMessage).as("Nothing may be rejected.").isNull();
+    }
+
+    @Test
+    void testCopyThenPaste_ofNonAdjacentCellsOfOneColumn_writesNoNullBetweenTheTargets()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carol\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0, 2);
+        context.columnIndexes = List.of(0);
+        context.selectedCellPositions = List.of(new Point(0, 0), new Point(0, 2));
+        new CopyAction(context).run();
+        context.rowIndexes = List.of(0);
+        context.columnIndexes = List.of(1);
+        context.selectedCellPositions = List.of(new Point(1, 0));
+
+        new PasteAction(context).run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows()).extracting(row -> row.getValue(1))
+                .as("The two copied cells must go into the next two cells of the target column, and the "
+                        + "third cell must stay as it was.")
+                .containsExactly("1", "3", "Carol");
     }
 
     @Test
