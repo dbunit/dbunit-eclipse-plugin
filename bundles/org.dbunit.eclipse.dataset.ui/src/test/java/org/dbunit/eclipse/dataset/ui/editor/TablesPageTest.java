@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
@@ -406,6 +407,49 @@ class TablesPageTest
                     .as("Delete Rows must select the row that takes the place of the deleted ones.")
                     .isEqualTo(new GridSelection("USERS", 1, 2, 0, 0, List.of(0), List.of(0), 0, 0, 0, 0,
                             false));
+        }
+    }
+
+    @Test
+    void testDeleteHandler_withWholeRowsSelected_deletesTheRows() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\" NAME=\"A\"/>"
+                    + "<USERS ID=\"2\" NAME=\"B\"/><USERS ID=\"3\" NAME=\"C\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            tablesPage.selectRegion(0, 0, 2, 2);
+
+            assertThat(tablesPage.getSelection().wholeRowsSelected())
+                    .as("Selecting every column of two rows must select them in full.").isTrue();
+
+            tablesPage.getGlobalActionHandler(ActionFactory.DELETE.getId()).run();
+
+            assertThat(editor.getDatasetDocument().getModel().findTable("USERS").orElseThrow().getRows())
+                    .extracting(row -> row.getValues())
+                    .as("Delete with whole rows selected must delete the rows, not fail to make them NULL.")
+                    .containsExactly(List.of("3", "C"));
+        }
+    }
+
+    @Test
+    void testDeleteHandler_withACellSelected_makesTheCellNull() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\" NAME=\"A\"/><USERS ID=\"2\" NAME=\"B\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            tablesPage.selectRegion(1, 1, 1, 1);
+
+            tablesPage.getGlobalActionHandler(ActionFactory.DELETE.getId()).run();
+
+            assertThat(editor.getDatasetDocument().getModel().findTable("USERS").orElseThrow().getRows())
+                    .extracting(row -> row.getValues())
+                    .as("Delete with part of a row selected must only make the cell NULL.")
+                    .containsExactly(List.of("1", "A"), Arrays.asList("2", null));
         }
     }
 

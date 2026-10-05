@@ -47,6 +47,17 @@ public final class DeleteRowsAction extends GridAction
     @Override
     protected void runOnGrid(final DatasetGridContext context)
     {
+        deleteSelectedRows(context);
+    }
+
+    /**
+     * Deletes the rows the active grid has selected in one undoable change and selects the row left at their
+     * position, for reuse by {@link DeleteAction}.
+     *
+     * @param context What this needs from the page that hosts the grid.
+     */
+    static void deleteSelectedRows(final DatasetGridContext context)
+    {
         final GridSelection selection = context.getSelection();
         final int[] rowIndexes = selection.rowIndexes().stream().mapToInt(Integer::intValue).toArray();
         final int columnIndex = Math.max(selection.anchorColumnIndex(), 0);

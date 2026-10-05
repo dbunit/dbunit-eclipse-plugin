@@ -26,8 +26,9 @@ import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.swt.widgets.Text;
 
 /**
- * The global Delete action: sets the selected cells to NULL, or, while a cell editor is active, deletes
- * the editor's text selection or the character after the caret.
+ * The global Delete action: sets the selected cells to NULL; when the selection consists of whole rows,
+ * deletes those rows instead, as Delete Rows does, since a row cannot be all NULL. While a cell editor is
+ * active, it deletes the editor's text selection or the character after the caret.
  *
  * @since 1.0.0
  */
@@ -47,7 +48,15 @@ public final class DeleteAction extends GridAction
     @Override
     protected void runOnGrid(final DatasetGridContext context)
     {
-        SetNullAction.setSelectedCellsToNull(context);
+        final GridSelection selection = context.getSelection();
+        if (selection.wholeRowsSelected())
+        {
+            DeleteRowsAction.deleteSelectedRows(context);
+        }
+        else
+        {
+            SetNullAction.setSelectedCellsToNull(context);
+        }
     }
 
     @Override

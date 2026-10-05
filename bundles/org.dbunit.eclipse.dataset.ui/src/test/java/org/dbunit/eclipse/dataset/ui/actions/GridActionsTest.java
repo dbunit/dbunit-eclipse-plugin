@@ -1306,6 +1306,76 @@ class GridActionsTest
     }
 
     @Test
+    void testDelete_ofWholeRows_deletesThemInsteadOfSettingThemToNull()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carol\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0, 1);
+        context.columnIndexes = List.of(0, 1);
+        context.selectedCellPositions =
+                List.of(new Point(0, 0), new Point(1, 0), new Point(0, 1), new Point(1, 1));
+        context.wholeRowsSelected = true;
+        final DeleteAction action = new DeleteAction(context);
+
+        action.run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows()).extracting(row -> row.getValues())
+                .as("Delete must remove whole rows, because setting every cell of a row to NULL is "
+                        + "rejected.")
+                .containsExactly(List.of("3", "Carol"));
+        assertThat(context.statusErrorMessage).as("Nothing may be rejected.").isNull();
+    }
+
+    @Test
+    void testDelete_ofWholeRows_selectsTheRowThatTakesTheirPlaceInTheAnchorColumn()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carol\"/>"
+                + "<USERS ID=\"4\" NAME=\"Dave\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.anchorColumnIndex = 1;
+        context.anchorRowIndex = 1;
+        context.rowIndexes = List.of(1, 2);
+        context.columnIndexes = List.of(0, 1);
+        context.selectedCellPositions =
+                List.of(new Point(0, 1), new Point(1, 1), new Point(0, 2), new Point(1, 2));
+        context.wholeRowsSelected = true;
+
+        new DeleteAction(context).run();
+
+        assertThat(context.selectedRegion)
+                .as("Deleting rows with Delete must leave the grid as Delete Rows does: with the row "
+                        + "that took the first deleted row's place selected, so Delete can go on.")
+                .isEqualTo(new Rectangle(1, 1, 1, 1));
+    }
+
+    @Test
+    void testDelete_ofWholeRowsThatTheFirstRowRuleRefuses_reportsItThroughTheDeleteRowsDialog()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\" EMAIL=\"a@x\"/>"
+                        + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carl\" EMAIL=\"c@x\"/>"
+                        + "</dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0);
+        context.columnIndexes = List.of(0, 1, 2);
+        context.selectedCellPositions = List.of(new Point(0, 0), new Point(1, 0), new Point(2, 0));
+        context.wholeRowsSelected = true;
+
+        new DeleteAction(context).run();
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows())
+                .as("Bob would become the first row without an email, which dbUnit would ignore in Carl.")
+                .hasSize(3);
+        assertThat(context.multiCellEditTitles)
+                .as("Deleting whole rows is the Delete Rows command, so a refusal must be reported through "
+                        + "its modal dialog, not just the status line.")
+                .containsExactly("Delete Rows");
+    }
+
+    @Test
     void testCopy_ofACellThatShowsADefaultValue_copiesTheDefault()
     {
         final FlatXmlDatasetDocument datasetDocument = create(DEFAULTS_DATASET);

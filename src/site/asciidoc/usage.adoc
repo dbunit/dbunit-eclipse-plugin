@@ -111,6 +111,7 @@ A row cannot have every value NULL, because an element without attributes is not
 (unless the DTD gives a column a default value, see <<dtd>>).
 The editor rejects a change that would leave a row without values and suggests *Delete Rows* instead,
 and a new row starts with an empty string in its first column.
+*Delete* with whole rows selected deletes the rows, as *Delete Rows* does, instead of making their cells NULL.
 
 Without a DTD, a cell of a table's first row cannot be NULL while another row has a value in its column,
 because dbUnit takes a table's columns from the first row and would then ignore that column in every other row
@@ -423,7 +424,7 @@ Tables whose names differ only in case then become separate sheets.
 |F2 |Edit the selected cell |
 |Shift+F2 |Edit the selected cell in a dialog |
 |Any character |Start editing, replacing the value |Type
-|Delete |Make the selected cells NULL |Delete a character
+|Delete |Make the selected cells NULL, or delete the rows when whole rows are selected |Delete a character
 |Ctrl+C, Ctrl+X, Ctrl+V |Copy, cut, paste cells |Copy, cut, paste text
 |Ctrl+A |Select all cells |Select all text
 |Ctrl+D |Fill down |
