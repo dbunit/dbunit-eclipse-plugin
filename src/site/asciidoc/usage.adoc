@@ -159,6 +159,9 @@ Rows::
 The row commands act on every row that has a selected cell.
 *Duplicate Rows* inserts copies of the rows after the last of them.
 *Move Rows Up* and *Move Rows Down* move one block of adjacent rows past its neighbor.
+When *Delete Rows* takes every row of a table,
+the columns that only its rows gave it stay as _pending_ columns (see below), so that you can insert rows again;
+the columns that the DTD declares stay anyway.
 
 Columns::
 A flat XML file stores a column only as attributes of rows,

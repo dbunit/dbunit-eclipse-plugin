@@ -424,6 +424,80 @@ class PendingColumnsTest
     }
 
     @Test
+    void testKeepDataColumns_whenTheTableHasDataColumns_recordsThemInColumnOrder()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        final DatasetTable users = table("USERS", column("ID", false), column("NAME", false));
+
+        pending.keepDataColumns(users);
+
+        assertThat(pending.asMap())
+                .as("Every column that only the rows give the table must be kept, in column order.")
+                .containsExactly(Map.entry("USERS", List.of("ID", "NAME")));
+    }
+
+    @Test
+    void testKeepDataColumns_whenTheTableHasPendingColumns_recordsTheDataColumnsAheadOfThem()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        pending.addTable("USERS", List.of("LATER"));
+        final DatasetTable users = table("USERS", column("ID", false), column("LATER", true));
+
+        pending.keepDataColumns(users);
+
+        assertThat(pending.asMap())
+                .as("The columns must keep the order that the table showed: data columns, then pending ones.")
+                .containsExactly(Map.entry("USERS", List.of("ID", "LATER")));
+    }
+
+    @Test
+    void testKeepDataColumns_whenAColumnIsDeclaredInTheDtd_doesNotRecordIt()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        final DatasetTable users =
+                table("USERS", new DatasetColumn("ID", true, true, false), column("EXTRA", false));
+
+        pending.keepDataColumns(users);
+
+        assertThat(pending.asMap()).as("The DTD keeps a column that it declares, so it is not pending.")
+                .containsExactly(Map.entry("USERS", List.of("EXTRA")));
+    }
+
+    @Test
+    void testKeepDataColumns_whenOnlyDeclaredAndPendingColumnsExist_changesNothing()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        pending.addTable("USERS", List.of("LATER"));
+        final DatasetTable users =
+                table("USERS", new DatasetColumn("ID", true, false, false), column("LATER", true));
+
+        pending.keepDataColumns(users);
+
+        assertThat(pending.asMap()).as("There is no data column to keep, so the entry must stay as it is.")
+                .containsExactly(Map.entry("USERS", List.of("LATER")));
+    }
+
+    @Test
+    void testKeepDataColumns_whenNoColumnNeedsKeeping_recordsNoEntryForTheTable()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+
+        pending.keepDataColumns(table("USERS", new DatasetColumn("ID", true, false, false)));
+
+        assertThat(pending.asMap()).as("A table without data columns must not get an empty entry.").isEmpty();
+    }
+
+    @Test
     void testPruneBackedColumns_whenAColumnIsNowBackedByARealColumn_dropsIt()
     {
         final PendingColumns pending = new PendingColumns(() ->

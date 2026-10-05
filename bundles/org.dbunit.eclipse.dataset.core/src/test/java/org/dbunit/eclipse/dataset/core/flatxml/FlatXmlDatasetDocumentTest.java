@@ -1381,6 +1381,206 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testDeleteRows_whenDeletingAllRows_keepsTheColumnsAsPendingColumns()
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Bob\"/>\n"
+                + "    <USERS ID=\"2\" NAME=\"Alice\"/>\n</dataset>\n");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.deleteRows("USERS", new int[] { 0, 1 });
+
+        final DatasetTable users = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(users.getColumns())
+                .as("The text keeps a column only in the attributes of rows, so the table must keep the "
+                        + "columns of its deleted rows as pending columns.")
+                .containsExactly(new DatasetColumn("ID", false, false, true),
+                        new DatasetColumn("NAME", false, false, true));
+        assertThat(users.getRows()).as("No row may be left.").isEmpty();
+    }
+
+    @Test
+    void testDeleteRows_whenDeletingAllRowsOfATableThatHasAMarker_keepsTheColumnsAsPendingColumns()
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS/>\n"
+                + "    <USERS ID=\"1\" NAME=\"Bob\"/>\n    <USERS ID=\"2\" NAME=\"Alice\"/>\n</dataset>\n");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.deleteRows("USERS", new int[] { 0, 1 });
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                .as("A marker keeps the table, not its columns, so they must be pending columns too.")
+                .containsExactly(new DatasetColumn("ID", false, false, true),
+                        new DatasetColumn("NAME", false, false, true));
+    }
+
+    @Test
+    void testDeleteRows_whenDeletingAllRowsOfATableWithAPendingColumn_keepsTheColumnsInTheirOrder()
+    {
+        final IDocument document =
+                new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Bob\"/>\n</dataset>\n");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        datasetDocument.addColumn("USERS", "EXTRA");
+
+        datasetDocument.deleteRows("USERS", new int[] { 0 });
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                .as("The columns that the rows gave the table must come before the one that was pending, "
+                        + "as they did in the grid.")
+                .containsExactly(new DatasetColumn("ID", false, false, true),
+                        new DatasetColumn("NAME", false, false, true),
+                        new DatasetColumn("EXTRA", false, false, true));
+    }
+
+    @Test
+    void testDeleteRows_whenDeletingAllRowsOfATableTheDtdDeclares_keepsOnlyTheUndeclaredColumnsAsPending()
+    {
+        final IDocument document = new Document("<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #REQUIRED NAME CDATA #IMPLIED>\n]>\n"
+                + "<dataset>\n    <USERS ID=\"1\" NAME=\"Bob\" EXTRA=\"x\"/>\n</dataset>\n");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.deleteRows("USERS", new int[] { 0 });
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                .as("The DTD keeps the columns that it declares; the column that only the row used must "
+                        + "stay as a pending column.")
+                .containsExactly(new DatasetColumn("ID", true, false, false),
+                        new DatasetColumn("NAME", true, false, false),
+                        new DatasetColumn("EXTRA", false, false, true));
+    }
+
+    @Test
+    void testDeleteRows_whenDeletingAllRowsOfATableWithDefaultValues_keepsTheUndeclaredColumnsAsPending()
+    {
+        final IDocument document = new Document("<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #REQUIRED STATUS CDATA \"ACTIVE\">\n]>\n"
+                + "<dataset>\n    <USERS ID=\"1\" EXTRA=\"x\"/>\n</dataset>\n");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.deleteRows("USERS", new int[] { 0 });
+
+        final DatasetTable users = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(users.isDeclaredOnly()).as("The DTD alone keeps the table, with no empty element.")
+                .isTrue();
+        assertThat(users.getColumns()).as("The column that only the row used must stay as a pending column.")
+                .containsExactly(new DatasetColumn("ID", true, false, false),
+                        new DatasetColumn("STATUS", true, false, false, "ACTIVE"),
+                        new DatasetColumn("EXTRA", false, false, true));
+    }
+
+    @Test
+    void testDeleteRows_whenSomeRowsRemain_keepsNoPendingColumn()
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Bob\"/>\n"
+                + "    <USERS ID=\"2\" NAME=\"Alice\" EMAIL=\"a@x.org\"/>\n</dataset>\n");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.deleteRows("USERS", new int[] { 1 });
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                .as("Only deleting every row keeps the columns; here one is gone with the only row that "
+                        + "had it, as it is when its last value is set to NULL.")
+                .containsExactly(new DatasetColumn("ID", false, true, false),
+                        new DatasetColumn("NAME", false, true, false));
+    }
+
+    @Test
+    void testInsertBlankRow_afterDeletingAllRows_usesTheKeptColumns()
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Bob\"/>\n"
+                + "    <USERS ID=\"2\" NAME=\"Alice\"/>\n</dataset>\n");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        datasetDocument.deleteRows("USERS", new int[] { 0, 1 });
+
+        datasetDocument.insertBlankRow("USERS", 0);
+
+        assertThat(document.get()).as("A row must be insertable again, in the first of the kept columns.")
+                .isEqualTo("<dataset>\n    <USERS ID=\"\"/>\n</dataset>\n");
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                .as("The column that the new row gave a value is a data column again, and the other is "
+                        + "still pending.")
+                .containsExactly(new DatasetColumn("ID", false, true, false),
+                        new DatasetColumn("NAME", false, false, true));
+    }
+
+    @Test
+    void testDeleteRows_whenDeletingAllRowsIsUndoneAndRedone_theColumnsFollowTheRows() throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Bob\"/>\n"
+                + "    <USERS ID=\"2\" NAME=\"Alice\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.deleteRows("USERS", new int[] { 0, 1 });
+
+            undoManager.undo();
+            datasetDocument.refresh();
+
+            assertThat(document.get()).as("Undo must bring the rows back.").isEqualTo(original);
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("Undo must leave no pending column, because the rows have the columns again.")
+                    .containsExactly(new DatasetColumn("ID", false, true, false),
+                            new DatasetColumn("NAME", false, true, false));
+
+            undoManager.redo();
+            datasetDocument.refresh();
+
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("Redo must keep the columns as pending columns, as the first delete did.")
+                    .containsExactly(new DatasetColumn("ID", false, false, true),
+                            new DatasetColumn("NAME", false, false, true));
+        });
+    }
+
+    @Test
+    void testDeleteRows_whenDeletingAllRowsAndInsertingARowInOneBatch_undoAndRedoKeepTheColumnsRight()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Bob\"/>\n"
+                + "    <USERS ID=\"2\" NAME=\"Alice\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.batch(() ->
+            {
+                datasetDocument.deleteRows("USERS", new int[] { 0, 1 });
+                datasetDocument.insertBlankRow("USERS", 0);
+            });
+
+            undoManager.undo();
+            datasetDocument.refresh();
+
+            assertThat(document.get()).as("One undo must undo the whole batch.").isEqualTo(original);
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("Undo must leave no pending column.")
+                    .containsExactly(new DatasetColumn("ID", false, true, false),
+                            new DatasetColumn("NAME", false, true, false));
+
+            undoManager.redo();
+            datasetDocument.refresh();
+
+            assertThat(document.get()).as("Redo must apply the whole batch again.")
+                    .isEqualTo("<dataset>\n    <USERS ID=\"\"/>\n</dataset>\n");
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("The column that the new row gave a value is a data column, and the other is "
+                            + "still pending, whichever intermediate state the redo passes through.")
+                    .containsExactly(new DatasetColumn("ID", false, true, false),
+                            new DatasetColumn("NAME", false, false, true));
+        });
+    }
+
+    @Test
     void testDeleteRows_whenARowIndexIsOutOfRange_throwsAndChangesNothing()
     {
         final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");

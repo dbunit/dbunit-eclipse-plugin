@@ -127,7 +127,8 @@ public interface DatasetDocument
     void duplicateRows(String tableKey, int[] rowIndexes);
 
     /**
-     * Deletes rows from a table.
+     * Deletes rows from a table. When they are every row of the table, the columns that only the rows gave
+     * it stay in the table as pending columns, so that rows can be inserted again.
      *
      * @param tableKey The key of the table.
      * @param rowIndexes The indexes of the rows to delete.

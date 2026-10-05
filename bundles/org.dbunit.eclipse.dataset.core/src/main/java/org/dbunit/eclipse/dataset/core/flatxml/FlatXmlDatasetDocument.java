@@ -307,6 +307,11 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         if (!edits.isEmpty())
         {
             applier.apply(document, edits);
+            final boolean deletedEveryRow = rowIndexes.length == table.getRows().size();
+            if (deletedEveryRow)
+            {
+                pendingColumns.keepDataColumns(table);
+            }
             refreshInternal(ChangeOrigin.EDIT);
         }
     }

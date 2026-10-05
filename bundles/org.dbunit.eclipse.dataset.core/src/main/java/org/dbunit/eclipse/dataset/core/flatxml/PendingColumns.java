@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.core.commands.ExecutionException;
 import org.eclipse.core.commands.operations.AbstractOperation;
@@ -53,7 +54,8 @@ import org.eclipse.text.undo.IDocumentUndoManager;
  * that an undo of the text has left since, because nothing refreshed after that undo. A snapshot for each
  * modification stamp brings the columns back when undo or redo returns the text to an earlier state.
  * Whenever such a change is undone or redone, the owner is asked to refresh through the callback that it
- * gave.
+ * gave. The columns that a table keeps after all its rows were deleted are recorded here too; they have no
+ * step of their own, because the delete of the rows is the step, and the snapshots bring them back with it.
  */
 final class PendingColumns
 {
@@ -184,6 +186,35 @@ final class PendingColumns
     void deleteTable(final String tableKey)
     {
         pendingColumns.remove(tableKey);
+    }
+
+    /**
+     * Records the data columns of a table as pending columns, ahead of the pending columns that it has.
+     * A data column is one that only the rows give the table, because the DTD does not declare it, and a
+     * flat XML file stores it only as attributes of rows, so the table loses it when all its rows are
+     * deleted unless the editor session keeps it. The columns that the DTD declares need no record, and the
+     * pending ones are recorded already.
+     *
+     * @param table The table as it was before its rows were deleted; nothing is recorded when it has no data
+     *              column.
+     */
+    void keepDataColumns(final DatasetTable table)
+    {
+        final List<String> dataColumns = new ArrayList<>();
+        for (final DatasetColumn column : table.getColumns())
+        {
+            if (!column.declared() && !column.pending())
+            {
+                dataColumns.add(column.name());
+            }
+        }
+        if (dataColumns.isEmpty())
+        {
+            return;
+        }
+        final List<String> alreadyPending = pendingColumns.getOrDefault(table.getKey(), List.of());
+        dataColumns.addAll(alreadyPending);
+        pendingColumns.put(table.getKey(), dataColumns);
     }
 
     /**

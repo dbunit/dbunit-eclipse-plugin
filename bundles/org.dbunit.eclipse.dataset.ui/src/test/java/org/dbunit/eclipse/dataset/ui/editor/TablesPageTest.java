@@ -30,6 +30,8 @@ import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
+import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
+import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.actions.DatasetCommandIds;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.core.commands.NotEnabledException;
@@ -450,6 +452,39 @@ class TablesPageTest
                     .extracting(row -> row.getValues())
                     .as("Delete with part of a row selected must only make the cell NULL.")
                     .containsExactly(List.of("1", "A"), Arrays.asList("2", null));
+        }
+    }
+
+    @Test
+    void testDeleteHandler_withEveryRowSelected_keepsTheColumnsSoThatARowCanBeInserted() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\" NAME=\"A\"/><USERS ID=\"2\" NAME=\"B\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final FlatXmlDatasetDocument datasetDocument = editor.getDatasetDocument();
+            final IHandlerService handlerService =
+                    editor.getEditorSite().getService(IHandlerService.class);
+            tablesPage.selectRegion(0, 0, 2, 2);
+
+            tablesPage.getGlobalActionHandler(ActionFactory.DELETE.getId()).run();
+
+            final DatasetTable emptied = datasetDocument.getModel().findTable("USERS").orElseThrow();
+            assertThat(emptied.getColumns())
+                    .as("Deleting every row must leave the table its columns, as pending ones.")
+                    .containsExactly(new DatasetColumn("ID", false, false, true),
+                            new DatasetColumn("NAME", false, false, true));
+            assertThat(tablesPage.getSelection().columnCount())
+                    .as("The grid must still show both columns.").isEqualTo(2);
+
+            handlerService.executeCommand(DatasetCommandIds.INSERT_ROW_BELOW, null);
+
+            final DatasetTable refilled = datasetDocument.getModel().findTable("USERS").orElseThrow();
+            assertThat(refilled.getRows()).extracting(row -> row.getValues())
+                    .as("A row must be insertable into the table that has no rows.")
+                    .containsExactly(Arrays.asList("", null));
         }
     }
 
