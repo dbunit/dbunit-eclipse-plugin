@@ -516,6 +516,26 @@ class PendingColumnsTest
     }
 
     @Test
+    void testRestore_whenCalledTwiceForTheSameStamp_changesNothingTheSecondTime()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        pending.record(1L);
+        pending.addTable("USERS", List.of("EXTRA"));
+        pending.record(2L);
+        pending.restore(1L);
+        pending.addTable("ORDERS", List.of("TOTAL"));
+
+        pending.restore(1L);
+
+        assertThat(pending.asMap())
+                .as("The columns belong to stamp 1 once it was restored, so a second restore of it must "
+                        + "leave them alone.")
+                .containsExactly(Map.entry("ORDERS", List.of("TOTAL")));
+    }
+
+    @Test
     void testRestore_whenTheStampIsTheLastRecordedOne_changesNothing()
     {
         final PendingColumns pending = new PendingColumns(() ->

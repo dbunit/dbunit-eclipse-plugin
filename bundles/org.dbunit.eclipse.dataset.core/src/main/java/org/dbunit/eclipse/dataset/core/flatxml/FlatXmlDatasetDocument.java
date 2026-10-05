@@ -68,7 +68,10 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         @Override
         public void documentAboutToBeChanged(final DocumentEvent event)
         {
-            // Nothing to do before a change: documentChanged marks the model stale afterwards.
+            // An undo that nothing refreshed left the pending columns in the state it undid, and the
+            // stamp that this change leads to has no snapshot to put them right.
+            final long modificationStamp = PendingColumns.modificationStampOf(document);
+            pendingColumns.restore(modificationStamp);
         }
 
         @Override

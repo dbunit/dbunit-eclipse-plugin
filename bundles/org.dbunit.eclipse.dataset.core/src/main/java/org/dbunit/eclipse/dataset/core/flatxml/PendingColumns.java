@@ -201,7 +201,7 @@ final class PendingColumns
      * from the stamp that the columns were last refreshed or set for, and a snapshot was recorded for it.
      * This is how the pending columns that belonged to an earlier document state come back once undo or
      * redo, which restores the document's modification stamp along with its text, returns the document to
-     * that earlier state.
+     * that earlier state. The columns then belong to that stamp.
      */
     void restore(final long modificationStamp)
     {
@@ -215,6 +215,7 @@ final class PendingColumns
             return;
         }
         replaceColumns(snapshot);
+        lastRefreshModificationStamp = modificationStamp;
     }
 
     /**

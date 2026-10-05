@@ -1836,6 +1836,84 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testRefresh_whenATextChangeFollowsAnUnrefreshedUndo_keepsThePendingColumnThatTheUndoBroughtBack()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "NAME");
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Alice")));
+            undoManager.undo();
+
+            document.replace(document.get().indexOf("</dataset>"), 0, "<ORDERS ID=\"5\"/>");
+            datasetDocument.refresh();
+
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("The column must stay pending, though a new text change followed the undo of its "
+                            + "value before anything refreshed.")
+                    .containsExactly(new DatasetColumn("ID", false, true, false),
+                            new DatasetColumn("NAME", false, false, true));
+        });
+    }
+
+    @Test
+    void testRenameTable_whenUndoneAndRedoneBeforeAnyRefresh_thePendingColumnFollowsTheTable()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "EXTRA");
+            datasetDocument.renameTable("USERS", "CUSTOMERS");
+
+            undoManager.undo();
+            undoManager.redo();
+            datasetDocument.refresh();
+
+            assertThat(datasetDocument.getModel().findTable("CUSTOMERS").orElseThrow().getColumns())
+                    .as("The redo of the rename must leave the pending column with the renamed table.")
+                    .containsExactly(new DatasetColumn("ID", false, true, false),
+                            new DatasetColumn("EXTRA", false, false, true));
+        });
+    }
+
+    @Test
+    void testBatch_whenUndoneAndRedoneWithAPendingColumnInTheTable_theColumnStaysPending() throws Exception
+    {
+        final IDocument document = new Document(
+                "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "EXTRA");
+            datasetDocument.batch(() ->
+            {
+                datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Alicia")));
+                datasetDocument.setCells("USERS", List.of(new CellChange(1, "NAME", "Robert")));
+            });
+
+            undoManager.undo();
+            undoManager.redo();
+            datasetDocument.refresh();
+
+            assertThat(document.get()).as("The redo must bring back both changes of the batch.").isEqualTo(
+                    "<dataset><USERS ID=\"1\" NAME=\"Alicia\"/><USERS ID=\"2\" NAME=\"Robert\"/></dataset>");
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("The pending column must stay, whichever intermediate state the redo passes "
+                            + "through.")
+                    .containsExactly(new DatasetColumn("ID", false, true, false),
+                            new DatasetColumn("NAME", false, true, false),
+                            new DatasetColumn("EXTRA", false, false, true));
+        });
+    }
+
+    @Test
     void testRefresh_whenTheExternalDtdIsNotLoadedForAWhile_keepsThePendingColumnsOfATableOnlyItDeclares()
     {
         final IDocument document =
