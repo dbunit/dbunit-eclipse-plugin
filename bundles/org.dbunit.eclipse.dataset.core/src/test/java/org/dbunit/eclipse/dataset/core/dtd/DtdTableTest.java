@@ -24,12 +24,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests that {@link DtdTable} keeps its column list to itself.
+ * Tests that {@link DtdTable} keeps its column list and its defaults to itself.
  */
 class DtdTableTest
 {
@@ -53,5 +55,36 @@ class DtdTableTest
         assertThatThrownBy(() -> table.columns().add("EXTRA"))
                 .as("The returned column list must not let a caller change the table.")
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void testConstructor_whenTheGivenDefaultsChangeAfterwards_keepsTheDefaultsItWasGiven()
+    {
+        final Map<String, String> defaults = new HashMap<>(Map.of("NAME", "x"));
+        final DtdTable table = new DtdTable("USERS", List.of("ID", "NAME"), defaults);
+
+        defaults.put("ID", "0");
+
+        assertThat(table).as("A later change to the caller's map must not change the table.")
+                .isEqualTo(new DtdTable("USERS", List.of("ID", "NAME"), Map.of("NAME", "x")));
+    }
+
+    @Test
+    void testDefaults_whenTheReturnedMapIsModified_throws()
+    {
+        final DtdTable table = new DtdTable("USERS", List.of("NAME"), new HashMap<>(Map.of("NAME", "x")));
+
+        assertThatThrownBy(() -> table.defaults().put("ID", "0"))
+                .as("The returned map must not let a caller change the table.")
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void testConstructor_whenGivenNoDefaults_isEqualToATableWithAnEmptyDefaultsMap()
+    {
+        final DtdTable table = new DtdTable("USERS", List.of("ID"));
+
+        assertThat(table).as("A table created without defaults must have none.")
+                .isEqualTo(new DtdTable("USERS", List.of("ID"), Map.of()));
     }
 }

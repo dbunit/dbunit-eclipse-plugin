@@ -191,26 +191,41 @@ final class DtdLexer
         }
     }
 
-    void scanQuotedLiteralIfPresent()
+    /**
+     * Scans a quoted literal when the text continues with a quote.
+     *
+     * @return The literal's text between the quotes, or null when the text does not continue with a quote.
+     */
+    String scanQuotedLiteralIfPresent()
     {
         if (pos < length && isQuote(dtdText.charAt(pos)))
         {
-            scanQuotedLiteral();
+            return scanQuotedLiteral();
         }
+        return null;
     }
 
-    void scanQuotedLiteral()
+    /**
+     * Scans the quoted literal the text continues with.
+     *
+     * @return The literal's text between the quotes; a literal that is never closed ends at the end of the
+     *         text.
+     */
+    String scanQuotedLiteral()
     {
         final char quote = dtdText.charAt(pos);
         pos++;
+        final int start = pos;
         while (pos < length && dtdText.charAt(pos) != quote)
         {
             pos++;
         }
+        final String literal = dtdText.substring(start, pos);
         if (pos < length)
         {
             pos++; // consume the closing quote
         }
+        return literal;
     }
 
     String scanParenthesizedContentSpec()

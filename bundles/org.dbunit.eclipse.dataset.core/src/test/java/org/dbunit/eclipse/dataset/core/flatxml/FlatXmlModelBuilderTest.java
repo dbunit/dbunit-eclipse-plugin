@@ -22,6 +22,7 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -254,6 +255,97 @@ class FlatXmlModelBuilderTest
     }
 
     @Test
+    void testBuild_whenDtdColumnsHaveDefaultAndFixedValues_theModelColumnsCarryThem()
+    {
+        final DatasetModel model = buildWithDoctype(
+                dtdDefaultsDoctype() + "<dataset><USERS ID=\"1\"/></dataset>", FlatXmlOptions.DBUNIT_DEFAULTS,
+                Map.of());
+
+        final DatasetTable users = model.findTable("USERS").orElseThrow();
+        assertThat(users.getColumns())
+                .as("Only the columns the DTD gives a default or fixed value carry one.")
+                .containsExactly(new DatasetColumn("ID", true, true, false),
+                        new DatasetColumn("STATUS", true, false, false, "ACTIVE"),
+                        new DatasetColumn("KIND", true, false, false, "A"));
+    }
+
+    @Test
+    void testBuild_whenARowOmitsDefaultedAttributes_keepsNullAndLoadsTheDefaults()
+    {
+        final DatasetModel model = buildWithDoctype(
+                dtdDefaultsDoctype() + "<dataset><USERS ID=\"1\"/></dataset>", FlatXmlOptions.DBUNIT_DEFAULTS,
+                Map.of());
+
+        final DatasetTable users = model.findTable("USERS").orElseThrow();
+        assertThat(users.getRows().get(0).getValues())
+                .as("The row must keep no value where it has no attribute.")
+                .containsExactly("1", null, null);
+        assertThat(effectiveValues(users, 0))
+                .as("dbUnit loads the defaults for the attributes the row omits.")
+                .containsExactly("1", "ACTIVE", "A");
+    }
+
+    @Test
+    void testBuild_whenARowSpecifiesDefaultedAttributes_theirValuesWinEvenWhenEmpty()
+    {
+        final DatasetModel model = buildWithDoctype(
+                dtdDefaultsDoctype() + "<dataset><USERS ID=\"1\" STATUS=\"x\" KIND=\"B\"/>"
+                        + "<USERS ID=\"2\" STATUS=\"\"/></dataset>",
+                FlatXmlOptions.DBUNIT_DEFAULTS, Map.of());
+
+        final DatasetTable users = model.findTable("USERS").orElseThrow();
+        assertThat(effectiveValues(users, 0))
+                .as("A specified value must win over a default or a fixed value.")
+                .containsExactly("1", "x", "B");
+        assertThat(effectiveValues(users, 1)).as("An empty specified value must win over the default.")
+                .containsExactly("2", "", "A");
+    }
+
+    @Test
+    void testBuild_whenADeclaredOnlyTableHasDefaults_itsColumnsCarryThem()
+    {
+        final DatasetModel model = buildWithDoctype(dtdDefaultsDoctype() + "<dataset/>",
+                FlatXmlOptions.DBUNIT_DEFAULTS, Map.of());
+
+        final DatasetTable users = model.findTable("USERS").orElseThrow();
+        assertThat(users.getColumns())
+                .as("A table that only the DTD declares must still show its columns' defaults.")
+                .extracting(DatasetColumn::defaultValue).containsExactly(null, "ACTIVE", "A");
+    }
+
+    @Test
+    void testBuild_whenAnElementWithoutAttributesHasDefaultValues_isARowOfDefaults()
+    {
+        final FlatXmlModelBuilder.Result result = buildResultWithDoctype(
+                dtdDefaultsDoctype() + "<dataset><USERS/></dataset>", FlatXmlOptions.DBUNIT_DEFAULTS);
+
+        final DatasetTable users = result.model().findTable("USERS").orElseThrow();
+        assertThat(users.getRows()).as("dbUnit loads the empty element as a row of default values.")
+                .hasSize(1);
+        assertThat(effectiveValues(users, 0)).as("The row must show what dbUnit loads for it.")
+                .containsExactly(null, "ACTIVE", "A");
+        assertThat(result.index().getMarkerElements("USERS"))
+                .as("The element must be indexed as a row, so that edits treat it as one.").isEmpty();
+        assertThat(result.index().getRowElements("USERS")).as("The element must be the row's element.")
+                .hasSize(1);
+    }
+
+    @Test
+    void testBuild_whenAnElementWithoutAttributesHasNoDefaultValues_isStillAMarker()
+    {
+        final FlatXmlModelBuilder.Result result = buildResultWithDoctype(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED STATUS CDATA #IMPLIED>\n]>\n"
+                        + "<dataset><USERS/></dataset>",
+                FlatXmlOptions.DBUNIT_DEFAULTS);
+
+        assertThat(result.model().findTable("USERS").orElseThrow().getRows())
+                .as("Without a default, dbUnit loads no row for the empty element.").isEmpty();
+        assertThat(result.index().getMarkerElements("USERS")).as("The element must stay a marker.")
+                .hasSize(1);
+    }
+
+    @Test
     void testBuild_whenParseIsNotWellFormed_givesANonEditableModel()
     {
         final FlatXmlParseResult parse = FlatXmlParser.parse("<dataset><USERS ID=\"1\"></ORDERS>");
@@ -278,5 +370,33 @@ class FlatXmlModelBuilderTest
         final FlatXmlParseResult parse = FlatXmlParser.parse(text);
         final DtdDeclarations dtd = DtdReader.read(parse.doctype().internalSubset());
         return FlatXmlModelBuilder.build(text, parse, dtd, options, pendingColumns).model();
+    }
+
+    private static FlatXmlModelBuilder.Result buildResultWithDoctype(final String text,
+            final FlatXmlOptions options)
+    {
+        final FlatXmlParseResult parse = FlatXmlParser.parse(text);
+        final DtdDeclarations dtd = DtdReader.read(parse.doctype().internalSubset());
+        return FlatXmlModelBuilder.build(text, parse, dtd, options, Map.of());
+    }
+
+    /**
+     * Returns a DOCTYPE whose DTD declares USERS with a column without a default, a column with a default,
+     * and a column with a fixed value.
+     */
+    private static String dtdDefaultsDoctype()
+    {
+        return "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                + "<!ATTLIST USERS ID CDATA #IMPLIED STATUS CDATA \"ACTIVE\" KIND CDATA #FIXED \"A\">\n]>\n";
+    }
+
+    private static List<String> effectiveValues(final DatasetTable table, final int rowIndex)
+    {
+        final List<String> values = new ArrayList<>();
+        for (int columnIndex = 0; columnIndex < table.getColumns().size(); columnIndex++)
+        {
+            values.add(table.getEffectiveValue(rowIndex, columnIndex));
+        }
+        return values;
     }
 }

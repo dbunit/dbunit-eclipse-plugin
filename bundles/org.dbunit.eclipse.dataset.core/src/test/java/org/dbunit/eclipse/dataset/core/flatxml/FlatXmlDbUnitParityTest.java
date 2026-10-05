@@ -68,7 +68,8 @@ class FlatXmlDbUnitParityTest
 
     @ParameterizedTest
     @ValueSource(strings = { "flatXmlTableTest.xml", "flatXmlDataSetDtdDifferentCaseTest.xml",
-            "internal-subset.xml", "column-name-case-dtd.xml" })
+            "internal-subset.xml", "column-name-case-dtd.xml", "dtd-defaults-internal.xml",
+            "dtd-defaults-external.xml" })
     void testBuild_whenFixtureHasADoctype_matchesDbUnitOnDeclaredColumns(final String fixtureName)
             throws Exception
     {
@@ -135,7 +136,7 @@ class FlatXmlDbUnitParityTest
                 for (int row = 0; row < rowCount; row++)
                 {
                     final Object expected = dbUnitTable.getValue(row, columnName);
-                    final String actual = modelTable.getRows().get(row).getValue(columnIndex);
+                    final String actual = modelTable.getEffectiveValue(row, columnIndex);
                     assertThat(actual)
                             .as("Table '" + modelTable.getName() + "', row " + row + ", column '"
                                     + columnName + "'.")

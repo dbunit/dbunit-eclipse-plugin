@@ -91,7 +91,8 @@ final class RowEdits
     /**
      * Plans the deletion of rows: each row goes with its line when it is alone on it. When every row of a
      * table that has no marker element goes, the first is replaced by an empty element instead, so that the
-     * table stays in the document.
+     * table stays in the document. A table whose DTD gives a column a default value gets no such element,
+     * because dbUnit would load it as a row of default values; the DTD keeps the table instead.
      *
      * @param tableKey The key of the table.
      * @param table The table.
@@ -105,11 +106,12 @@ final class RowEdits
         final int[] sorted = sortedRowIndexes(table, rowElements, rowIndexes);
         final boolean deletingAllRows = sorted.length == rowElements.size();
         final boolean hasMarker = !index.getMarkerElements(tableKey).isEmpty();
+        final boolean needsMarker = deletingAllRows && !hasMarker && !table.hasDefaultValues();
         final List<TextEdit> edits = new ArrayList<>();
         for (int position = 0; position < sorted.length; position++)
         {
             final FlatXmlElement element = rowElements.get(sorted[position]);
-            if (position == 0 && deletingAllRows && !hasMarker)
+            if (position == 0 && needsMarker)
             {
                 edits.add(new ReplaceEdit(element.offset(), element.endOffset() - element.offset(),
                         "<" + table.getName() + "/>"));

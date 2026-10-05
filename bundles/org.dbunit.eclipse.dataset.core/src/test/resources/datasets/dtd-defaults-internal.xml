@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dataset [
+<!ELEMENT dataset (USERS*, ORDERS*, AUDIT*)>
+<!ELEMENT USERS EMPTY>
+<!ATTLIST USERS
+    ID CDATA #REQUIRED
+    STATUS CDATA "ACTIVE"
+    KIND CDATA #FIXED "A"
+    NOTE CDATA ""
+    LEVEL (LOW|HIGH) "LOW"
+    TEXT CDATA "a&amp;b&#10;c"
+    NAME CDATA #IMPLIED
+>
+<!ELEMENT ORDERS EMPTY>
+<!ATTLIST ORDERS
+    ID CDATA #REQUIRED
+    STATE CDATA #IMPLIED
+>
+<!ELEMENT AUDIT EMPTY>
+<!ATTLIST AUDIT
+    ID CDATA #REQUIRED
+    ACTION CDATA "READ"
+>
+]>
+<dataset>
+    <USERS ID="1"/>
+    <USERS ID="2" STATUS="x" KIND="B" NOTE="n" LEVEL="HIGH"/>
+    <USERS ID="3" STATUS="" NAME="Carl"/>
+    <USERS/>
+    <ORDERS ID="10"/>
+    <ORDERS/>
+</dataset>

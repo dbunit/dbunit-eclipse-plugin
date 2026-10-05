@@ -28,8 +28,48 @@ package org.dbunit.eclipse.dataset.core.model;
  * @param hasValues True when at least one row has a non-null value for this column.
  * @param pending True when the column was added in this editor session and is not yet saved in the
  *                document.
+ * @param defaultValue The value dbUnit loads for a row that has no attribute for this column: the default
+ *                     or {@code #FIXED} value that the DTD declares for it, or null when the DTD declares
+ *                     none and a row without the attribute loads NULL.
  * @since 1.0.0
  */
-public record DatasetColumn(String name, boolean declared, boolean hasValues, boolean pending)
+public record DatasetColumn(String name, boolean declared, boolean hasValues, boolean pending,
+        String defaultValue)
 {
+    /**
+     * Creates a column that has no default value.
+     *
+     * @param name The name of the column.
+     * @param declared True when the column is declared for this table in the DTD.
+     * @param hasValues True when at least one row has a non-null value for this column.
+     * @param pending True when the column was added in this editor session and is not yet saved in the
+     *                document.
+     */
+    public DatasetColumn(final String name, final boolean declared, final boolean hasValues,
+            final boolean pending)
+    {
+        this(name, declared, hasValues, pending, null);
+    }
+
+    /**
+     * Returns whether a row without an attribute for this column loads a value other than NULL.
+     *
+     * @return True when the DTD declares a default value for the column.
+     */
+    public boolean hasDefaultValue()
+    {
+        return defaultValue != null;
+    }
+
+    /**
+     * Returns the value dbUnit loads for a cell of this column.
+     *
+     * @param value The cell's value, which is null when the row has no attribute for the column.
+     * @return The value when it is not null, otherwise the column's default value, which is null when the
+     *         column has none.
+     */
+    public String effectiveValue(final String value)
+    {
+        return value == null ? defaultValue : value;
+    }
 }

@@ -62,7 +62,8 @@ final class FlatXmlModelBuilder
             final FlatXmlOptions options, final Map<String, List<String>> pendingColumns)
     {
         final Map<String, DtdTable> dtdTablesByKey = indexDtdTables(dtd, options);
-        final Map<String, TableGroup> groups = groupElementsByTable(parse.elements(), options);
+        final Map<String, TableGroup> groups =
+                groupElementsByTable(parse.elements(), options, dtdTablesByKey);
 
         final List<DatasetTable> tables = new ArrayList<>();
         for (final Map.Entry<String, TableGroup> entry : groups.entrySet())
@@ -98,23 +99,33 @@ final class FlatXmlModelBuilder
     }
 
     private static Map<String, TableGroup> groupElementsByTable(final List<FlatXmlElement> elements,
-            final FlatXmlOptions options)
+            final FlatXmlOptions options, final Map<String, DtdTable> dtdTablesByKey)
     {
         final Map<String, TableGroup> groups = new LinkedHashMap<>();
         for (final FlatXmlElement element : elements)
         {
             final String key = tableKey(element.name(), options);
             final TableGroup group = groups.computeIfAbsent(key, unused -> new TableGroup(element.name()));
-            if (element.attributes().isEmpty())
-            {
-                group.markerElements.add(element);
-            }
-            else
+            if (isRow(element, dtdTablesByKey.get(key)))
             {
                 group.rowElements.add(element);
             }
+            else
+            {
+                group.markerElements.add(element);
+            }
         }
         return groups;
+    }
+
+    /**
+     * Returns whether dbUnit loads an element as a row. An element with attributes is a row. An element
+     * without any is one only when the DTD gives a column of its table a default value, because the XML
+     * parser then reports that default as an attribute of the element.
+     */
+    private static boolean isRow(final FlatXmlElement element, final DtdTable dtdTable)
+    {
+        return !element.attributes().isEmpty() || (dtdTable != null && !dtdTable.defaults().isEmpty());
     }
 
     private static List<ColumnInfo> buildColumns(final List<FlatXmlElement> rowElements,
@@ -125,7 +136,8 @@ final class FlatXmlModelBuilder
         {
             for (final String declaredName : dtdTable.columns())
             {
-                columns.put(columnKey(declaredName), new ColumnInfo(declaredName, true, false));
+                final String defaultValue = dtdTable.defaults().get(declaredName);
+                columns.put(columnKey(declaredName), new ColumnInfo(declaredName, true, false, defaultValue));
             }
         }
         for (final FlatXmlElement row : rowElements)
@@ -133,12 +145,12 @@ final class FlatXmlModelBuilder
             for (final FlatXmlAttribute attribute : row.attributes())
             {
                 columns.putIfAbsent(columnKey(attribute.name()),
-                        new ColumnInfo(attribute.name(), false, false));
+                        new ColumnInfo(attribute.name(), false, false, null));
             }
         }
         for (final String pendingName : pendingNames)
         {
-            columns.putIfAbsent(columnKey(pendingName), new ColumnInfo(pendingName, false, true));
+            columns.putIfAbsent(columnKey(pendingName), new ColumnInfo(pendingName, false, true, null));
         }
         return List.copyOf(columns.values());
     }
@@ -181,7 +193,7 @@ final class FlatXmlModelBuilder
         {
             final ColumnInfo column = columns.get(index);
             result.add(new DatasetColumn(column.displayName(), column.declared(), hasValues[index],
-                    column.pending()));
+                    column.pending(), column.defaultValue()));
         }
         return List.copyOf(result);
     }
@@ -256,7 +268,7 @@ final class FlatXmlModelBuilder
     /**
      * One column, before its rows are known.
      */
-    private record ColumnInfo(String displayName, boolean declared, boolean pending)
+    private record ColumnInfo(String displayName, boolean declared, boolean pending, String defaultValue)
     {
     }
 

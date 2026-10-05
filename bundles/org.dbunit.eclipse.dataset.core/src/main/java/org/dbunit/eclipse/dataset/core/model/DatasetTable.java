@@ -124,6 +124,39 @@ public final class DatasetTable
     }
 
     /**
+     * Returns the value dbUnit loads for a cell.
+     *
+     * @param rowIndex The index of the cell's row.
+     * @param columnIndex The index of the cell's column.
+     * @return The cell's value, or, when the row has no attribute for the column, the column's default
+     *         value, which is null when the column has none.
+     * @throws IndexOutOfBoundsException When the table has no such row or column.
+     */
+    public String getEffectiveValue(final int rowIndex, final int columnIndex)
+    {
+        final String value = rows.get(rowIndex).getValue(columnIndex);
+        return columns.get(columnIndex).effectiveValue(value);
+    }
+
+    /**
+     * Returns whether a row without any attribute would load a value for some column.
+     *
+     * @return True when at least one column has a default value, so an element without attributes is a
+     *         row of the table, not just a marker that the table exists.
+     */
+    public boolean hasDefaultValues()
+    {
+        for (final DatasetColumn column : columns)
+        {
+            if (column.hasDefaultValue())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Returns whether the table exists only because the DTD declares it.
      *
      * @return True when the table is declared in the DTD but has no element in the document.

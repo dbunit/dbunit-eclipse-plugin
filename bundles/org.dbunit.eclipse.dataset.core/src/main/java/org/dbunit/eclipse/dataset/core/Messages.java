@@ -406,6 +406,12 @@ public final class Messages extends NLS
      */
     public static String Dtd_parameterEntityReferencesIgnored;
 
+    /**
+     * An attribute's default value in a DTD cannot be decoded, so it is ignored; {0} is the attribute's
+     * name, {1} the element's name, and {2} why the value cannot be decoded.
+     */
+    public static String Dtd_attributeDefaultNotShown;
+
     static
     {
         NLS.initializeMessages(BUNDLE_NAME, Messages.class);

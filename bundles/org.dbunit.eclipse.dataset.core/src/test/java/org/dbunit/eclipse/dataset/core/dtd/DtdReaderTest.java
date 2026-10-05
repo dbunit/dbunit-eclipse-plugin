@@ -23,11 +23,13 @@ package org.dbunit.eclipse.dataset.core.dtd;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import java.util.Map;
 
 import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
+import org.eclipse.osgi.util.NLS;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -307,5 +309,142 @@ class DtdReaderTest
 
         assertThat(merged.tables().get(0).columns()).as("A column declared in both must appear once.")
                 .containsExactly("ID", "NAME");
+    }
+
+    @Test
+    void testRead_whenAttributesHaveDefaultAndFixedValues_recordsThemOnTheirColumns()
+    {
+        final DtdDeclarations declarations = DtdReader.read("<!ELEMENT dataset (USERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS\n    ID CDATA #REQUIRED\n    NAME CDATA #IMPLIED\n"
+                + "    STATUS CDATA \"ACTIVE\"\n    KIND (A|B) #FIXED 'A'\n>");
+
+        assertThat(declarations.tables())
+                .as("Only the columns declared with a default or a fixed value may have a default.")
+                .containsExactly(new DtdTable("USERS", List.of("ID", "NAME", "STATUS", "KIND"),
+                        Map.of("STATUS", "ACTIVE", "KIND", "A")));
+    }
+
+    @Test
+    void testRead_whenADefaultIsTheEmptyString_recordsTheEmptyString()
+    {
+        final DtdDeclarations declarations = DtdReader.read(
+                "<!ELEMENT dataset (USERS*)>\n<!ATTLIST USERS ID CDATA #REQUIRED STATUS CDATA \"\">");
+
+        assertThat(declarations.tables())
+                .as("An empty default is a value, not an absent one: dbUnit loads an empty string.")
+                .containsExactly(new DtdTable("USERS", List.of("ID", "STATUS"), Map.of("STATUS", "")));
+    }
+
+    @Test
+    void testRead_whenADefaultHasReferencesAndWhitespace_decodesItLikeAnAttributeValue()
+    {
+        final DtdDeclarations declarations = DtdReader.read("<!ELEMENT dataset (USERS*)>\n"
+                + "<!ATTLIST USERS NOTE CDATA \"a&#38;b&lt;c  d&#10;e\tf\">");
+
+        assertThat(declarations.tables()).as("Character references and the predefined entities must "
+                + "decode, a line feed written as a reference must stay one, and a literal tab must "
+                + "become a space.")
+                .containsExactly(new DtdTable("USERS", List.of("NOTE"), Map.of("NOTE", "a&b<c  d\ne f")));
+    }
+
+    @Test
+    void testRead_whenADefaultIsSingleQuoted_mayContainADoubleQuote()
+    {
+        final DtdDeclarations declarations =
+                DtdReader.read("<!ELEMENT dataset (USERS*)>\n<!ATTLIST USERS NOTE CDATA 'it\"s'>");
+
+        assertThat(declarations.tables()).as("A single-quoted default may hold a double quote.")
+                .containsExactly(new DtdTable("USERS", List.of("NOTE"), Map.of("NOTE", "it\"s")));
+    }
+
+    @Test
+    void testRead_whenADefaultUsesAnEntityReference_hasNoDefaultAndReportsAnInfoAtTheValue()
+    {
+        final String prefix = "<!ELEMENT dataset (USERS*)>\n<!ATTLIST USERS NOTE CDATA ";
+        final String literal = "\"&active;\"";
+
+        final DtdDeclarations declarations = DtdReader.read(prefix + literal + ">");
+
+        assertThat(declarations.tables()).as("A default the editor cannot decode must not be shown.")
+                .containsExactly(new DtdTable("USERS", List.of("NOTE")));
+        final String reason = NLS.bind(Messages.Codec_unsupportedEntity, "active");
+        assertThat(declarations.getProblems()).as("The info must cover the default value's literal.")
+                .containsExactly(new DatasetProblem(ProblemCode.UNSUPPORTED_DTD_CONSTRUCT,
+                        ProblemSeverity.INFO, NLS.bind(Messages.Dtd_attributeDefaultNotShown,
+                                new Object[] { "NOTE", "USERS", reason }),
+                        null, null, -1, prefix.length(), literal.length()));
+    }
+
+    @Test
+    void testRead_whenAnAttributeIsDeclaredTwiceInOneAttlist_theFirstDeclarationWins()
+    {
+        final DtdDeclarations declarations = DtdReader.read("<!ELEMENT dataset (USERS*)>\n"
+                + "<!ATTLIST USERS STATUS CDATA \"FIRST\" STATUS CDATA \"SECOND\">");
+
+        assertThat(declarations.tables()).as("The first declaration of an attribute is binding in XML.")
+                .containsExactly(new DtdTable("USERS", List.of("STATUS"), Map.of("STATUS", "FIRST")));
+    }
+
+    @Test
+    void testRead_whenALaterAttlistGivesADefaultToAnAttributeDeclaredWithoutOne_theFirstDeclarationWins()
+    {
+        final DtdDeclarations declarations = DtdReader.read("<!ELEMENT dataset (USERS*)>\n"
+                + "<!ATTLIST USERS STATUS CDATA #IMPLIED>\n<!ATTLIST USERS STATUS CDATA \"LATE\">");
+
+        assertThat(declarations.tables())
+                .as("The earlier declaration without a default is binding, so the column has none.")
+                .containsExactly(new DtdTable("USERS", List.of("STATUS")));
+    }
+
+    @Test
+    void testMerge_whenBothDeclareTheSameColumnWithDefaults_keepsTheInternalSubsetsDefault()
+    {
+        final DtdDeclarations internalSubset = DtdReader
+                .read("<!ELEMENT dataset (USERS*)>\n<!ATTLIST USERS STATUS CDATA \"INTERNAL\">");
+        final DtdDeclarations externalDtd =
+                DtdReader.read("<!ATTLIST USERS STATUS CDATA \"EXTERNAL\" ID CDATA \"0\">");
+
+        final DtdDeclarations merged = internalSubset.merge(externalDtd);
+
+        assertThat(merged.tables()).as("The internal subset is read first, so its declaration is binding, "
+                + "and the external DTD's other columns keep their defaults.")
+                .containsExactly(new DtdTable("USERS", List.of("STATUS", "ID"),
+                        Map.of("STATUS", "INTERNAL", "ID", "0")));
+    }
+
+    @Test
+    void testMerge_whenTheInternalSubsetDeclaresAColumnWithoutADefault_dropsTheExternalDefault()
+    {
+        final DtdDeclarations internalSubset = DtdReader
+                .read("<!ELEMENT dataset (USERS*)>\n<!ATTLIST USERS STATUS CDATA #IMPLIED>");
+        final DtdDeclarations externalDtd = DtdReader.read("<!ATTLIST USERS STATUS CDATA \"EXTERNAL\">");
+
+        final DtdDeclarations merged = internalSubset.merge(externalDtd);
+
+        assertThat(merged.tables())
+                .as("The internal subset's declaration without a default is binding.")
+                .containsExactly(new DtdTable("USERS", List.of("STATUS")));
+    }
+
+    @Test
+    void testWithProblemsShiftedBy_whenColumnsHaveDefaults_keepsTheDefaults()
+    {
+        final DtdDeclarations declarations = DtdReader
+                .read("<!ELEMENT dataset (USERS*)>\n<!ATTLIST USERS STATUS CDATA \"ACTIVE\">");
+
+        assertThat(declarations.withProblemsShiftedBy(10).tables())
+                .as("Relocating the problems must not lose the defaults.")
+                .isEqualTo(declarations.tables());
+    }
+
+    @Test
+    void testWithProblemsAt_whenColumnsHaveDefaults_keepsTheDefaults()
+    {
+        final DtdDeclarations declarations = DtdReader
+                .read("<!ELEMENT dataset (USERS*)>\n<!ATTLIST USERS STATUS CDATA \"ACTIVE\">");
+
+        assertThat(declarations.withProblemsAt(3, 4).tables())
+                .as("Relocating the problems must not lose the defaults.")
+                .isEqualTo(declarations.tables());
     }
 }

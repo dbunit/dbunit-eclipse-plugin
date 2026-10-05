@@ -22,12 +22,13 @@ package org.dbunit.eclipse.dataset.core.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests case-insensitive column lookup and the plain getters of a dataset table.
+ * Tests case-insensitive column lookup, the plain getters, and the default values of a dataset table.
  */
 class DatasetTableTest
 {
@@ -96,5 +97,56 @@ class DatasetTableTest
                 .containsExactly(ID_COLUMN, NAME_COLUMN);
         assertThat(table.getRows()).as("getRows must return the given rows.").containsExactly(row);
         assertThat(table.isDeclaredOnly()).as("isDeclaredOnly must return the given flag.").isTrue();
+    }
+
+    @Test
+    void testGetEffectiveValue_whenTheCellHasAValue_returnsTheValueNotTheDefault()
+    {
+        final DatasetTable table = tableWithDefaultStatus(List.of("1", "x"));
+
+        assertThat(table.getEffectiveValue(0, 1))
+                .as("An attribute that is present must win over the default.").isEqualTo("x");
+    }
+
+    @Test
+    void testGetEffectiveValue_whenTheCellHasNoValueAndTheColumnHasADefault_returnsTheDefault()
+    {
+        final DatasetTable table = tableWithDefaultStatus(Arrays.asList("1", null));
+
+        assertThat(table.getEffectiveValue(0, 1)).as("An absent attribute loads the column's default.")
+                .isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void testGetEffectiveValue_whenTheCellHasNoValueAndTheColumnHasNoDefault_returnsNull()
+    {
+        final DatasetTable table = tableWithDefaultStatus(Arrays.asList(null, "x"));
+
+        assertThat(table.getEffectiveValue(0, 0))
+                .as("An absent attribute of a column without a default is NULL.").isNull();
+    }
+
+    @Test
+    void testHasDefaultValues_whenSomeColumnHasADefault_returnsTrue()
+    {
+        assertThat(tableWithDefaultStatus(List.of("1", "x")).hasDefaultValues())
+                .as("One column with a default is enough.").isTrue();
+    }
+
+    @Test
+    void testHasDefaultValues_whenNoColumnHasADefault_returnsFalse()
+    {
+        final DatasetTable table = new DatasetTable("USERS", "USERS", List.of(ID_COLUMN, NAME_COLUMN),
+                List.of(), false);
+
+        assertThat(table.hasDefaultValues()).as("Without any default, an empty element is not a row.")
+                .isFalse();
+    }
+
+    private static DatasetTable tableWithDefaultStatus(final List<String> rowValues)
+    {
+        final DatasetColumn statusColumn = new DatasetColumn("STATUS", true, true, false, "ACTIVE");
+        return new DatasetTable("USERS", "USERS", List.of(ID_COLUMN, statusColumn),
+                List.of(new DatasetRow(rowValues)), false);
     }
 }

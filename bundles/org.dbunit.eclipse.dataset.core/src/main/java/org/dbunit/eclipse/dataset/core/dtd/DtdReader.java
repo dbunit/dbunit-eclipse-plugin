@@ -26,9 +26,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.dbunit.eclipse.dataset.core.Messages;
+import org.dbunit.eclipse.dataset.core.flatxml.AttributeValueCodec;
+import org.dbunit.eclipse.dataset.core.flatxml.AttributeValueException;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
+import org.eclipse.osgi.util.NLS;
 
 /**
  * Reads the {@code ELEMENT} and {@code ATTLIST} declarations of a DTD, serving both external DTD files
@@ -63,6 +66,8 @@ public final class DtdReader
         private final DtdLexer lexer;
 
         private final Map<String, List<String>> elements = new LinkedHashMap<>();
+
+        private final Map<String, Map<String, String>> attributeDefaults = new LinkedHashMap<>();
 
         private final List<DatasetProblem> problems = new ArrayList<>();
 
@@ -104,7 +109,7 @@ public final class DtdReader
                 }
             }
             return new DtdDeclarations(contentModelDeclared, contentModelAny, contentModelNames, elements,
-                    problems);
+                    attributeDefaults, problems);
         }
 
         private void scanMarkupDeclaration()
@@ -200,21 +205,34 @@ public final class DtdReader
                 lexer.skipWhitespace();
                 scanAttributeType();
                 lexer.skipWhitespace();
-                scanAttributeDefault();
+                final String defaultValue = scanAttributeDefault(elementName, attributeName);
                 if (collectsColumns)
                 {
-                    addColumn(elementName, attributeName);
+                    addColumn(elementName, attributeName, defaultValue);
                 }
             }
             lexer.skipCharacter('>');
         }
 
-        private void addColumn(final String elementName, final String attributeName)
+        /**
+         * Adds a column to an element, with its default value when it has one. The first declaration of an
+         * attribute is binding, as in XML, so a later declaration of the same attribute adds neither a
+         * column nor a default.
+         */
+        private void addColumn(final String elementName, final String attributeName,
+                final String defaultValue)
         {
             final List<String> columns = elements.get(elementName);
-            if (!columns.contains(attributeName))
+            if (columns.contains(attributeName))
             {
-                columns.add(attributeName);
+                return;
+            }
+            columns.add(attributeName);
+            if (defaultValue != null)
+            {
+                final Map<String, String> defaults =
+                        attributeDefaults.computeIfAbsent(elementName, key -> new LinkedHashMap<>());
+                defaults.put(attributeName, defaultValue);
             }
         }
 
@@ -236,7 +254,14 @@ public final class DtdReader
             }
         }
 
-        private void scanAttributeDefault()
+        /**
+         * Scans an attribute's default declaration: {@code #REQUIRED}, {@code #IMPLIED}, {@code #FIXED}
+         * with a value, or just a value.
+         *
+         * @return The default or fixed value, decoded the way an XML parser decodes an attribute value, or
+         *         null when the attribute has none or its value cannot be decoded.
+         */
+        private String scanAttributeDefault(final String elementName, final String attributeName)
         {
             if (lexer.atCharacter('#'))
             {
@@ -244,12 +269,31 @@ public final class DtdReader
                 if ("#FIXED".equals(word))
                 {
                     lexer.skipWhitespace();
-                    lexer.scanQuotedLiteralIfPresent();
+                    return scanDefaultValue(elementName, attributeName);
                 }
+                return null;
             }
-            else
+            return scanDefaultValue(elementName, attributeName);
+        }
+
+        private String scanDefaultValue(final String elementName, final String attributeName)
+        {
+            final int start = lexer.position();
+            final String literal = lexer.scanQuotedLiteralIfPresent();
+            if (literal == null)
             {
-                lexer.scanQuotedLiteralIfPresent();
+                return null;
+            }
+            try
+            {
+                return AttributeValueCodec.decode(literal);
+            }
+            catch (final AttributeValueException e)
+            {
+                final String message = NLS.bind(Messages.Dtd_attributeDefaultNotShown,
+                        new Object[] { attributeName, elementName, e.getMessage() });
+                addInfoProblem(message, start, lexer.position() - start);
+                return null;
             }
         }
 

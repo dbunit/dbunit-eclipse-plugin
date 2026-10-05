@@ -160,6 +160,37 @@ class RowEditsTest
     }
 
     @Test
+    void testDeleteEdits_whenEveryRowOfATableWithDefaultValuesIsGiven_leavesNoEmptyElement() throws Exception
+    {
+        final String text = dataset("  <USERS ID=\"1\"/>\n", "  <USERS ID=\"2\"/>\n", ORDER);
+        final ParsedDataset parsed = ParsedDataset.withDtd(text,
+                "<!ELEMENT dataset (USERS*, ORDERS*)>\n<!ELEMENT USERS EMPTY>\n<!ELEMENT ORDERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED STATUS CDATA \"ACTIVE\">\n"
+                        + "<!ATTLIST ORDERS ID CDATA #REQUIRED>");
+
+        final List<TextEdit> edits =
+                rowEditsFor(parsed).deleteEdits("USERS", usersOf(parsed), new int[] { 0, 1 });
+
+        assertThat(parsed.apply(edits)).as("An empty element would be a row of default values in dbUnit, "
+                + "so every row must go; the DTD keeps the table.").isEqualTo(dataset(ORDER));
+    }
+
+    @Test
+    void testDeleteEdits_whenAnEmptyElementIsARowOfDefaultValues_removesItsLineLikeAnyRow() throws Exception
+    {
+        final String text = dataset("  <USERS ID=\"1\"/>\n", "  <USERS/>\n");
+        final ParsedDataset parsed = ParsedDataset.withDtd(text,
+                "<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED STATUS CDATA \"ACTIVE\">");
+
+        final List<TextEdit> edits =
+                rowEditsFor(parsed).deleteEdits("USERS", usersOf(parsed), new int[] { 1 });
+
+        assertThat(parsed.apply(edits)).as("The empty element is the table's second row.")
+                .isEqualTo(dataset("  <USERS ID=\"1\"/>\n"));
+    }
+
+    @Test
     void testDeleteEdits_whenTheRowSharesItsLine_removesTheElementAlone() throws Exception
     {
         final String text = "<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>\n";

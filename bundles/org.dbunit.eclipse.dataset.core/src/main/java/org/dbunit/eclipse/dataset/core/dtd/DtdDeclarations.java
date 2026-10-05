@@ -45,6 +45,8 @@ public final class DtdDeclarations
 
     private final Map<String, List<String>> declaredElements;
 
+    private final Map<String, Map<String, String>> attributeDefaults;
+
     private final List<DatasetProblem> problems;
 
     /**
@@ -57,11 +59,13 @@ public final class DtdDeclarations
      *                          or contentModelDeclared is false.
      * @param declaredElements Each declared element's columns, in declaration order, keyed by element
      *                         name in declaration order; copied defensively.
+     * @param attributeDefaults The default or {@code #FIXED} value of each declared column that has one,
+     *                          keyed by element name and then by column name; copied defensively.
      * @param problems The problems found while reading, copied defensively.
      */
     DtdDeclarations(final boolean contentModelDeclared, final boolean contentModelAny,
             final List<String> contentModelNames, final Map<String, List<String>> declaredElements,
-            final List<DatasetProblem> problems)
+            final Map<String, Map<String, String>> attributeDefaults, final List<DatasetProblem> problems)
     {
         this.contentModelDeclared = contentModelDeclared;
         this.contentModelAny = contentModelAny;
@@ -72,6 +76,12 @@ public final class DtdDeclarations
             copy.put(entry.getKey(), List.copyOf(entry.getValue()));
         }
         this.declaredElements = copy;
+        final Map<String, Map<String, String>> defaultsCopy = new LinkedHashMap<>();
+        for (final Map.Entry<String, Map<String, String>> entry : attributeDefaults.entrySet())
+        {
+            defaultsCopy.put(entry.getKey(), Map.copyOf(entry.getValue()));
+        }
+        this.attributeDefaults = defaultsCopy;
         this.problems = List.copyOf(problems);
     }
 
@@ -103,7 +113,7 @@ public final class DtdDeclarations
                     problem.offset() + delta, problem.length()));
         }
         return new DtdDeclarations(contentModelDeclared, contentModelAny, contentModelNames,
-                declaredElements, relocated);
+                declaredElements, attributeDefaults, relocated);
     }
 
     /**
@@ -124,7 +134,7 @@ public final class DtdDeclarations
                     problem.tableKey(), problem.columnName(), problem.rowIndex(), offset, length));
         }
         return new DtdDeclarations(contentModelDeclared, contentModelAny, contentModelNames,
-                declaredElements, relocated);
+                declaredElements, attributeDefaults, relocated);
     }
 
     /**
@@ -132,7 +142,8 @@ public final class DtdDeclarations
      * model's names in order, or, for {@code ANY}, every declared element in declaration order.
      *
      * @return An unmodifiable list of tables, one per distinct name, each with the columns of its
-     *         element. Empty when the {@code dataset} element has no content model.
+     *         element and their default values. Empty when the {@code dataset} element has no content
+     *         model.
      */
     public List<DtdTable> tables()
     {
@@ -150,7 +161,8 @@ public final class DtdDeclarations
             {
                 continue;
             }
-            tables.add(new DtdTable(name, declaredElements.getOrDefault(name, List.of())));
+            tables.add(new DtdTable(name, declaredElements.getOrDefault(name, List.of()),
+                    attributeDefaults.getOrDefault(name, Map.of())));
         }
         return List.copyOf(tables);
     }
@@ -188,7 +200,9 @@ public final class DtdDeclarations
      *
      * @param later The declarations of the external DTD.
      * @return The merged declarations: this content model when declared, otherwise later's; elements
-     *         merged by name, appending later's columns after this's and skipping duplicates.
+     *         merged by name, appending later's columns after this's and skipping duplicates. A column
+     *         declared in both keeps the default value of this one, as the first declaration of an
+     *         attribute is binding.
      */
     public DtdDeclarations merge(final DtdDeclarations later)
     {
@@ -196,24 +210,48 @@ public final class DtdDeclarations
         final boolean mergedAny = contentModelDeclared ? contentModelAny : later.contentModelAny;
         final List<String> mergedNames = contentModelDeclared ? contentModelNames : later.contentModelNames;
         final Map<String, List<String>> mergedElements = new LinkedHashMap<>();
-        for (final Map.Entry<String, List<String>> entry : declaredElements.entrySet())
+        final Map<String, Map<String, String>> mergedDefaults = new LinkedHashMap<>();
+        addColumnsNotYetDeclared(mergedElements, mergedDefaults, this);
+        addColumnsNotYetDeclared(mergedElements, mergedDefaults, later);
+        final List<DatasetProblem> mergedProblems = new ArrayList<>(problems);
+        mergedProblems.addAll(later.problems);
+        return new DtdDeclarations(mergedDeclared, mergedAny, mergedNames, mergedElements, mergedDefaults,
+                mergedProblems);
+    }
+
+    /**
+     * Adds a source's elements, their columns, and the columns' default values to the merged ones, except
+     * the columns the merged elements already have.
+     */
+    private static void addColumnsNotYetDeclared(final Map<String, List<String>> mergedElements,
+            final Map<String, Map<String, String>> mergedDefaults, final DtdDeclarations source)
+    {
+        for (final Map.Entry<String, List<String>> entry : source.declaredElements.entrySet())
         {
-            mergedElements.put(entry.getKey(), new ArrayList<>(entry.getValue()));
-        }
-        for (final Map.Entry<String, List<String>> entry : later.declaredElements.entrySet())
-        {
+            final String elementName = entry.getKey();
             final List<String> columns =
-                    mergedElements.computeIfAbsent(entry.getKey(), key -> new ArrayList<>());
+                    mergedElements.computeIfAbsent(elementName, key -> new ArrayList<>());
+            final Map<String, String> sourceDefaults =
+                    source.attributeDefaults.getOrDefault(elementName, Map.of());
             for (final String column : entry.getValue())
             {
                 if (!columns.contains(column))
                 {
                     columns.add(column);
+                    addDefault(mergedDefaults, elementName, column, sourceDefaults.get(column));
                 }
             }
         }
-        final List<DatasetProblem> mergedProblems = new ArrayList<>(problems);
-        mergedProblems.addAll(later.problems);
-        return new DtdDeclarations(mergedDeclared, mergedAny, mergedNames, mergedElements, mergedProblems);
+    }
+
+    private static void addDefault(final Map<String, Map<String, String>> mergedDefaults,
+            final String elementName, final String column, final String defaultValue)
+    {
+        if (defaultValue != null)
+        {
+            final Map<String, String> elementDefaults =
+                    mergedDefaults.computeIfAbsent(elementName, key -> new LinkedHashMap<>());
+            elementDefaults.put(column, defaultValue);
+        }
     }
 }

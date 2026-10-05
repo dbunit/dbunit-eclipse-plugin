@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -131,6 +132,22 @@ class DtdResolverTest
         assertThat(resolution.state()).as("The DTD was loaded.").isEqualTo(DtdState.LOADED);
         assertThat(tablesOf(resolution)).as("The external columns must follow the internal ones.")
                 .containsExactly(new DtdTable("USERS", List.of("ID", "NAME")));
+    }
+
+    @Test
+    void testResolve_whenBothDtdsDeclareDefaults_theInternalSubsetsDefaultWinsAndTheExternalOnesAreKept()
+    {
+        final DtdSource source = (publicId, systemId) -> Optional
+                .of("<!ATTLIST USERS STATUS CDATA \"EXTERNAL\" NAME CDATA \"Anonymous\">");
+        final FlatXmlDoctype doctype = new FlatXmlDoctype("dataset", null, "my.dtd",
+                "<!ELEMENT dataset (USERS*)><!ATTLIST USERS STATUS CDATA \"INTERNAL\">", 30, 0, 130);
+
+        final DtdResolution resolution = resolverFor(source).resolve(doctype);
+
+        assertThat(tablesOf(resolution))
+                .as("The internal subset is read first, so its declaration of STATUS is binding.")
+                .containsExactly(new DtdTable("USERS", List.of("STATUS", "NAME"),
+                        Map.of("STATUS", "INTERNAL", "NAME", "Anonymous")));
     }
 
     @Test

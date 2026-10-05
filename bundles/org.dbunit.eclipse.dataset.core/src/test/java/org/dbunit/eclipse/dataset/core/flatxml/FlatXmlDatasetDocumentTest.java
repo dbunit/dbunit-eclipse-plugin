@@ -2373,6 +2373,66 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testDeleteRows_whenEveryRowOfATableWithDefaultValuesIsDeleted_leavesADeclaredOnlyTable()
+            throws Exception
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED STATUS CDATA \"ACTIVE\">\n]>\n<dataset>\n"
+                        + "    <USERS ID=\"1\"/>\n    <USERS ID=\"2\"/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.deleteRows("USERS", new int[] { 0, 1 });
+
+            assertThat(document.get())
+                    .as("No empty element may be left: dbUnit loads it as a row of default values.")
+                    .isEqualTo("<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                            + "<!ATTLIST USERS ID CDATA #REQUIRED STATUS CDATA \"ACTIVE\">\n]>\n<dataset>\n"
+                            + "</dataset>\n");
+            final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+            assertThat(table.getRows()).as("The table must have no rows left.").isEmpty();
+            assertThat(table.isDeclaredOnly()).as("The DTD must keep the table, as declared-only.").isTrue();
+            assertThat(table.getColumns()).as("The table must keep its columns and their defaults.")
+                    .containsExactly(new DatasetColumn("ID", true, false, false),
+                            new DatasetColumn("STATUS", true, false, false, "ACTIVE"));
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testSetCells_whenTheRowIsAnEmptyElementOfDefaultValues_addsTheAttributeToIt() throws Exception
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #IMPLIED STATUS CDATA \"ACTIVE\">\n]>\n<dataset>\n"
+                        + "    <USERS/>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "ID", "5")));
+
+            assertThat(document.get()).as("The empty element is the table's row, so it takes the value.")
+                    .isEqualTo("<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                            + "<!ATTLIST USERS ID CDATA #IMPLIED STATUS CDATA \"ACTIVE\">\n]>\n<dataset>\n"
+                            + "    <USERS ID=\"5\"/>\n</dataset>\n");
+            final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+            assertThat(table.getRows().get(0).getValues())
+                    .as("The row must hold the new value and still no value for the defaulted column.")
+                    .containsExactly("5", null);
+            undoManager.undo();
+            assertThat(document.get()).isEqualTo(original);
+        });
+    }
+
+    @Test
     void testDeleteTable_whenTableIsDeclaredOnly_throwsAndChangesNothing()
     {
         final IDocument document = new Document(

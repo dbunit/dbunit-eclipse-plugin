@@ -224,6 +224,13 @@ When a dataset has a DOCTYPE, dbUnit reads its tables and columns from the DTD, 
 
 * The tables are the elements that the content model of the `dataset` element lists, in that order.
 * A table's columns are the attributes of its `ATTLIST`, in declared order, followed by any other columns the rows use.
+* An attribute can have a default value (`STATUS CDATA "ACTIVE"`) or a fixed value (`STATUS CDATA #FIXED "ACTIVE"`).
+dbUnit loads it for a row without the attribute, and the editor shows it in italics (see <<null-values>>).
+A row that writes the attribute keeps its own value.
+When the internal subset and an external DTD both declare an attribute, the internal subset's declaration is binding, as in XML.
+In such a table, an element without attributes, such as `<USERS/>`, is a row of default values for dbUnit,
+and the editor shows it as a row; *Delete Rows* then removes every element of the deleted rows,
+and the DTD keeps the table.
 * Tables the DTD lists but the file does not contain appear as tabs with their names in italics;
 their tooltip says _Declared in the DTD; no rows_.
 dbUnit 3.5.0 and later load such a table as an empty table, so operations such as `CLEAN_INSERT` clear it
@@ -300,6 +307,11 @@ dbUnit ignores text between elements.
 
 |*This empty element is redundant; table ... already has rows.* (information)
 |Remove the element; a table needs an empty element only when it has no rows.
+
+|*The default value of attribute ... of element ... is ignored: ...* (information)
+The default value uses an entity reference or is not valid, so the editor cannot decode it,
+and the cells that dbUnit gives that default show NULL.
+|Write the default value with the five predefined entities and character references only.
 
 |*Parameter entity references are ignored.*, and the same for parameter entity declarations and
 conditional sections in a DTD (information).
@@ -393,6 +405,10 @@ Right-click for the commands that apply to what you clicked.
 * The Tables page has no find or replace across cells; use the Source page's Find/Replace instead.
 * Problems appear in the editor only, not in the Problems view.
 * The editor does not connect to databases.
+* dbUnit gives the DTD's default values only to elements spelled exactly like the DTD's element,
+and a default replaces a value that a row writes with the attribute spelled in another letter case.
+The editor shows the defaults whatever the spelling.
+Use the DTD's spelling, as the warnings about differently spelled tables and columns suggest.
 * Placeholders of dbUnit's `ReplacementDataSet`, such as `[NULL]`, are ordinary text to the editor.
 * Every change on the Tables page reads the whole file again, so changes take longer in large datasets.
 On a typical developer computer, a change takes a fraction of a second in 100,000 rows of 4 columns (9 MB),
