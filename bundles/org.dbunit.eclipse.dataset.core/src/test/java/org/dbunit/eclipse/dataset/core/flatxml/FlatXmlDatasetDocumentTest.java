@@ -1681,6 +1681,139 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testAddColumn_whenFilledAndBothStepsAreUndoneBeforeAnyRefresh_theColumnIsGone() throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "NAME");
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Alice")));
+
+            undoManager.undo();
+            undoManager.undo();
+
+            assertThat(document.get()).as("Both undo steps must bring back the original text.")
+                    .isEqualTo(original);
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("Undoing the add must remove the column, though the typed value's undo left "
+                            + "the model without a refresh.")
+                    .containsExactly(new DatasetColumn("ID", false, true, false));
+        });
+    }
+
+    @Test
+    void testAddColumn_whenFilledAndBothStepsAreUndoneBeforeAnyRefresh_redoOfTheAddLeavesNoTwinToRename()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "NAME");
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Alice")));
+            undoManager.undo();
+            undoManager.undo();
+
+            undoManager.redo();
+            datasetDocument.renameColumn("USERS", "NAME", "OTHER");
+
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("Redo of the add must list the column once, or the rename leaves a twin behind "
+                            + "under the old name.")
+                    .containsExactly(new DatasetColumn("ID", false, true, false),
+                            new DatasetColumn("OTHER", false, false, true));
+        });
+    }
+
+    @Test
+    void testAddColumn_whenFilledAndBothStepsAreUndoneAndRedoneBeforeAnyRefresh_theColumnHoldsTheValue()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "NAME");
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Alice")));
+            undoManager.undo();
+            undoManager.undo();
+
+            undoManager.redo();
+            undoManager.redo();
+            datasetDocument.refresh();
+
+            assertThat(document.get()).as("Redoing both steps must bring back the typed value.")
+                    .isEqualTo("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("The column must be a data column once, without a pending twin.")
+                    .containsExactly(new DatasetColumn("ID", false, true, false),
+                            new DatasetColumn("NAME", false, true, false));
+        });
+    }
+
+    @Test
+    void testDeleteColumn_whenAnotherColumnWasFilledAndBothStepsAreUndoneBeforeAnyRefresh_bothAreBack()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "FIRST");
+            datasetDocument.addColumn("USERS", "SECOND");
+            datasetDocument.deleteColumn("USERS", "SECOND");
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "FIRST", "x")));
+
+            undoManager.undo();
+            undoManager.undo();
+
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("Undoing the delete must bring the deleted column back after the other one, "
+                            + "though the typed value's undo left the model without a refresh.")
+                    .containsExactly(new DatasetColumn("ID", false, true, false),
+                            new DatasetColumn("FIRST", false, false, true),
+                            new DatasetColumn("SECOND", false, false, true));
+        });
+    }
+
+    @Test
+    void testDeleteColumn_whenAReloadedDtdNowDeclaresTheOtherColumn_undoPutsTheDeletedColumnBack()
+            throws Exception
+    {
+        final IDocument document = new Document(
+                "<!DOCTYPE dataset SYSTEM \"my.dtd\"><dataset><USERS ID=\"1\"/></dataset>");
+        final MutableDtdSource dtdSource = new MutableDtdSource(
+                "<!ELEMENT dataset (USERS*)><!ELEMENT USERS EMPTY><!ATTLIST USERS ID CDATA #REQUIRED>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, dtdSource,
+                    FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "FIRST");
+            datasetDocument.addColumn("USERS", "SECOND");
+            datasetDocument.deleteColumn("USERS", "SECOND");
+            dtdSource.setText("<!ELEMENT dataset (USERS*)><!ELEMENT USERS EMPTY>"
+                    + "<!ATTLIST USERS ID CDATA #REQUIRED FIRST CDATA #IMPLIED>");
+            datasetDocument.reloadDtd();
+
+            undoManager.undo();
+
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("Undo must put the deleted column back, though the reload dropped the other "
+                            + "pending column from the list because the DTD declares it now.")
+                    .containsExactly(new DatasetColumn("ID", true, true, false),
+                            new DatasetColumn("FIRST", true, false, false),
+                            new DatasetColumn("SECOND", false, false, true));
+        });
+    }
+
+    @Test
     void testRenameColumn_whenColumnHasMatchingAttributes_renamesEveryOccurrenceCaseInsensitively()
             throws Exception
     {

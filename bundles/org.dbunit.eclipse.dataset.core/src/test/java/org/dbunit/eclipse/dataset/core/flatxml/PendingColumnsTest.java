@@ -162,6 +162,78 @@ class PendingColumnsTest
     }
 
     @Test
+    void testAddColumn_whenUndoneAfterTheColumnsChangedMeanwhile_setsTheColumnsFromBeforeTheAdd()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset/>");
+        withUndoManager(document, undoManager ->
+        {
+            final PendingColumns pending = new PendingColumns(() ->
+            {
+            });
+            pending.addTable("USERS", List.of("A"));
+            pending.addColumn(document, "USERS", "B");
+            pending.deleteTable("USERS");
+
+            undoManager.undo();
+
+            assertThat(pending.asMap())
+                    .as("Undo must set the columns that existed before the add, not take the column out "
+                            + "of whatever is left.")
+                    .containsExactly(Map.entry("USERS", List.of("A")));
+        });
+    }
+
+    @Test
+    void testAddColumn_whenRedoneAfterTheColumnsChangedMeanwhile_setsTheColumnsFromAfterTheAdd()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset/>");
+        withUndoManager(document, undoManager ->
+        {
+            final PendingColumns pending = new PendingColumns(() ->
+            {
+            });
+            pending.addColumn(document, "USERS", "A");
+            undoManager.undo();
+            pending.addTable("USERS", List.of("A"));
+
+            undoManager.redo();
+
+            assertThat(pending.asMap())
+                    .as("Redo must set the columns that existed after the add, not add the column a "
+                            + "second time.")
+                    .containsExactly(Map.entry("USERS", List.of("A")));
+        });
+    }
+
+    @Test
+    void testAddColumn_whenUndoneAfterTheTextWentBack_aRestoreOfTheCurrentStampChangesNothing()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset/>");
+        withUndoManager(document, undoManager ->
+        {
+            final PendingColumns pending = new PendingColumns(() ->
+            {
+            });
+            pending.addColumn(document, "USERS", "EXTRA");
+            pending.record(PendingColumns.modificationStampOf(document));
+            document.replace(0, 0, " ");
+            pending.record(PendingColumns.modificationStampOf(document));
+            undoManager.undo();
+            undoManager.undo();
+
+            pending.restore(PendingColumns.modificationStampOf(document));
+
+            assertThat(pending.asMap())
+                    .as("The refresh that follows the undone add must not bring the column back from the "
+                            + "snapshot that the add itself left at this stamp.")
+                    .isEmpty();
+        });
+    }
+
+    @Test
     void testRenameColumn_whenTheOldNameDiffersInCase_renamesTheColumn()
     {
         final PendingColumns pending = new PendingColumns(() ->
@@ -237,6 +309,28 @@ class PendingColumnsTest
 
             assertThat(pending.asMap()).as("Undo must restore the column at its old position.")
                     .containsExactly(Map.entry("USERS", List.of("A", "B", "C")));
+        });
+    }
+
+    @Test
+    void testDeleteColumn_whenUndoneAfterTheTableLostItsOtherColumns_putsBothColumnsBack() throws Exception
+    {
+        final IDocument document = new Document("<dataset/>");
+        withUndoManager(document, undoManager ->
+        {
+            final PendingColumns pending = new PendingColumns(() ->
+            {
+            });
+            pending.addTable("USERS", List.of("A", "B"));
+            pending.deleteColumn(document, "USERS", "B");
+            pending.deleteTable("USERS");
+
+            undoManager.undo();
+
+            assertThat(pending.asMap())
+                    .as("Undo must set the columns that existed before the delete, though its saved "
+                            + "position is past the end of the columns left.")
+                    .containsExactly(Map.entry("USERS", List.of("A", "B")));
         });
     }
 

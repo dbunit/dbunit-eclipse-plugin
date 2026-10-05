@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.core.commands.ExecutionException;
@@ -47,9 +48,12 @@ import org.eclipse.text.undo.IDocumentUndoManager;
 /**
  * The columns that were added in an editor session and are not yet in the text of the document, per table
  * key, in the order they were added. They exist only here, so a change to them is an undoable step of the
- * text document's undo history of its own, and a snapshot for each modification stamp brings them back when
- * undo or redo returns the text to an earlier state. Whenever such a change is undone or redone, the owner
- * is asked to refresh through the callback that it gave.
+ * text document's undo history of its own. Such a step keeps the columns as they were before it and as they
+ * are after it, and undo and redo set those outright: the columns held now may still belong to a text state
+ * that an undo of the text has left since, because nothing refreshed after that undo. A snapshot for each
+ * modification stamp brings the columns back when undo or redo returns the text to an earlier state.
+ * Whenever such a change is undone or redone, the owner is asked to refresh through the callback that it
+ * gave.
  */
 final class PendingColumns
 {
@@ -75,6 +79,23 @@ final class PendingColumns
     }
 
     /**
+     * Returns the modification stamp of a text document, which undo and redo restore along with its text,
+     * and which the snapshots of the pending columns are recorded under.
+     *
+     * @param document The text document.
+     * @return The document's current modification stamp, or
+     *         {@link IDocumentExtension4#UNKNOWN_MODIFICATION_STAMP} when it does not support one.
+     */
+    static long modificationStampOf(final IDocument document)
+    {
+        if (document instanceof final IDocumentExtension4 extension)
+        {
+            return extension.getModificationStamp();
+        }
+        return IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP;
+    }
+
+    /**
      * Returns the pending columns, per table key, for the model builder to add to the columns of the tables.
      *
      * @return An unmodifiable view of the pending columns, which shows later changes.
@@ -94,8 +115,7 @@ final class PendingColumns
     void addColumn(final IDocument document, final String tableKey, final String columnName)
     {
         applyPendingColumnsChange(document, "Add pending column",
-                () -> pendingColumns.computeIfAbsent(tableKey, unused -> new ArrayList<>()).add(columnName),
-                () -> removePendingColumn(tableKey, columnName));
+                columns -> columns.computeIfAbsent(tableKey, unused -> new ArrayList<>()).add(columnName));
     }
 
     /**
@@ -110,8 +130,7 @@ final class PendingColumns
             final String newColumnName)
     {
         applyPendingColumnsChange(document, "Rename pending column",
-                () -> renamePendingColumn(tableKey, columnName, newColumnName),
-                () -> renamePendingColumn(tableKey, newColumnName, columnName));
+                columns -> renamePendingColumn(columns, tableKey, columnName, newColumnName));
     }
 
     /**
@@ -124,11 +143,8 @@ final class PendingColumns
      */
     void deleteColumn(final IDocument document, final String tableKey, final String columnName)
     {
-        final List<String> pending = pendingColumns.get(tableKey);
-        final int pendingIndex = pending == null ? -1 : indexOfColumn(pending, columnName);
         applyPendingColumnsChange(document, "Delete pending column",
-                () -> removePendingColumn(tableKey, columnName),
-                () -> restorePendingColumn(tableKey, pendingIndex, columnName));
+                columns -> removePendingColumn(columns, tableKey, columnName));
     }
 
     /**
@@ -182,9 +198,10 @@ final class PendingColumns
 
     /**
      * Restores pendingColumns from the snapshot recorded for modificationStamp, when that stamp differs
-     * from the previous refresh's stamp and a snapshot was recorded for it. This is how the pending
-     * columns that belonged to an earlier document state come back once undo or redo, which restores the
-     * document's modification stamp along with its text, returns the document to that earlier state.
+     * from the stamp that the columns were last refreshed or set for, and a snapshot was recorded for it.
+     * This is how the pending columns that belonged to an earlier document state come back once undo or
+     * redo, which restores the document's modification stamp along with its text, returns the document to
+     * that earlier state.
      */
     void restore(final long modificationStamp)
     {
@@ -197,11 +214,7 @@ final class PendingColumns
         {
             return;
         }
-        pendingColumns.clear();
-        for (final Map.Entry<String, List<String>> entry : snapshot.entrySet())
-        {
-            pendingColumns.put(entry.getKey(), new ArrayList<>(entry.getValue()));
-        }
+        replaceColumns(snapshot);
     }
 
     /**
@@ -211,12 +224,7 @@ final class PendingColumns
      */
     void record(final long modificationStamp)
     {
-        final Map<String, List<String>> snapshot = new LinkedHashMap<>();
-        for (final Map.Entry<String, List<String>> entry : pendingColumns.entrySet())
-        {
-            snapshot.put(entry.getKey(), new ArrayList<>(entry.getValue()));
-        }
-        pendingColumnsHistory.put(modificationStamp, snapshot);
+        pendingColumnsHistory.put(modificationStamp, copyOf(pendingColumns));
         lastRefreshModificationStamp = modificationStamp;
         if (pendingColumnsHistory.size() > PENDING_COLUMNS_HISTORY_LIMIT)
         {
@@ -257,9 +265,13 @@ final class PendingColumns
      * in the document's undo history instead of being invisible to undo; otherwise directly.
      */
     private void applyPendingColumnsChange(final IDocument document, final String label,
-            final Runnable doIt, final Runnable undoIt)
+            final Consumer<Map<String, List<String>>> change)
     {
-        final PendingColumnsOperation operation = new PendingColumnsOperation(label, doIt, undoIt);
+        final Map<String, List<String>> before = copyOf(pendingColumns);
+        final Map<String, List<String>> after = copyOf(pendingColumns);
+        change.accept(after);
+        final PendingColumnsOperation operation =
+                new PendingColumnsOperation(label, document, before, after);
         final IDocumentUndoManager undoManager =
                 DocumentUndoManagerRegistry.getDocumentUndoManager(document);
         try
@@ -281,9 +293,10 @@ final class PendingColumns
         }
     }
 
-    private void removePendingColumn(final String tableKey, final String columnName)
+    private static void removePendingColumn(final Map<String, List<String>> columns, final String tableKey,
+            final String columnName)
     {
-        final List<String> pending = pendingColumns.get(tableKey);
+        final List<String> pending = columns.get(tableKey);
         if (pending == null)
         {
             return;
@@ -292,22 +305,14 @@ final class PendingColumns
         pending.removeIf(name -> name.toUpperCase(Locale.ENGLISH).equals(columnKey));
         if (pending.isEmpty())
         {
-            pendingColumns.remove(tableKey);
+            columns.remove(tableKey);
         }
     }
 
-    private void restorePendingColumn(final String tableKey, final int index, final String columnName)
+    private static void renamePendingColumn(final Map<String, List<String>> columns, final String tableKey,
+            final String oldName, final String newName)
     {
-        if (index < 0)
-        {
-            return;
-        }
-        pendingColumns.computeIfAbsent(tableKey, unused -> new ArrayList<>()).add(index, columnName);
-    }
-
-    private void renamePendingColumn(final String tableKey, final String oldName, final String newName)
-    {
-        final List<String> pending = pendingColumns.get(tableKey);
+        final List<String> pending = columns.get(tableKey);
         if (pending == null)
         {
             return;
@@ -317,6 +322,22 @@ final class PendingColumns
         {
             pending.set(index, newName);
         }
+    }
+
+    private void replaceColumns(final Map<String, List<String>> columns)
+    {
+        pendingColumns.clear();
+        pendingColumns.putAll(copyOf(columns));
+    }
+
+    private static Map<String, List<String>> copyOf(final Map<String, List<String>> columns)
+    {
+        final Map<String, List<String>> copy = new LinkedHashMap<>();
+        for (final Map.Entry<String, List<String>> entry : columns.entrySet())
+        {
+            copy.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+        }
+        return copy;
     }
 
     private static int indexOfColumn(final List<String> names, final String name)
@@ -341,42 +362,49 @@ final class PendingColumns
     /**
      * An undoable operation for a pendingColumns change that has no text edit of its own to carry it: it
      * shares the connected document undo manager's own undo context, so undo and redo interleave with text
-     * edits in the same chronological order the user made them.
+     * edits in the same chronological order the user made them. It holds the columns from before and after
+     * the change and sets them outright, as the columns of the document's current modification stamp, so
+     * the refresh that follows does not install a snapshot that an earlier refresh left at that stamp.
      */
     private final class PendingColumnsOperation extends AbstractOperation
     {
-        private final Runnable doIt;
+        private final IDocument document;
 
-        private final Runnable undoIt;
+        private final Map<String, List<String>> before;
 
-        private PendingColumnsOperation(final String label, final Runnable doIt, final Runnable undoIt)
+        private final Map<String, List<String>> after;
+
+        private PendingColumnsOperation(final String label, final IDocument document,
+                final Map<String, List<String>> before, final Map<String, List<String>> after)
         {
             super(label);
-            this.doIt = doIt;
-            this.undoIt = undoIt;
+            this.document = document;
+            this.before = before;
+            this.after = after;
         }
 
         @Override
         public IStatus execute(final IProgressMonitor monitor, final IAdaptable info)
         {
-            return runAndRefresh(doIt);
+            return setAndRefresh(after);
         }
 
         @Override
         public IStatus redo(final IProgressMonitor monitor, final IAdaptable info)
         {
-            return runAndRefresh(doIt);
+            return setAndRefresh(after);
         }
 
         @Override
         public IStatus undo(final IProgressMonitor monitor, final IAdaptable info)
         {
-            return runAndRefresh(undoIt);
+            return setAndRefresh(before);
         }
 
-        private IStatus runAndRefresh(final Runnable action)
+        private IStatus setAndRefresh(final Map<String, List<String>> columns)
         {
-            action.run();
+            replaceColumns(columns);
+            lastRefreshModificationStamp = modificationStampOf(document);
             refreshAfterChange.run();
             return Status.OK_STATUS;
         }

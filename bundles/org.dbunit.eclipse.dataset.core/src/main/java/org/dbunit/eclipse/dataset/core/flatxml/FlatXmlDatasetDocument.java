@@ -45,7 +45,6 @@ import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
-import org.eclipse.jface.text.IDocumentExtension4;
 import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.TextUtilities;
@@ -514,7 +513,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         {
             return;
         }
-        final long modificationStamp = currentModificationStamp();
+        final long modificationStamp = PendingColumns.modificationStampOf(document);
         pendingColumns.restore(modificationStamp);
         final String text = document.get();
         final FlatXmlParseResult parse = FlatXmlParser.parse(text);
@@ -531,19 +530,6 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         layout = new FlatXmlTextLayout(text, TextUtilities.getDefaultLineDelimiter(document));
         stale = false;
         notifyListeners(new DatasetModelChangeEvent(oldModel, model, origin));
-    }
-
-    /**
-     * Returns the document's current modification stamp, or {@link IDocumentExtension4#UNKNOWN_MODIFICATION_STAMP}
-     * when it does not support one.
-     */
-    private long currentModificationStamp()
-    {
-        if (document instanceof final IDocumentExtension4 extension)
-        {
-            return extension.getModificationStamp();
-        }
-        return IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP;
     }
 
     private void notifyListeners(final DatasetModelChangeEvent event)
