@@ -415,7 +415,7 @@ public final class DtdReader
             for (int i = 0; i < contentSpec.length(); i++)
             {
                 final char ch = contentSpec.charAt(i);
-                if (isStructuralChar(ch) || Character.isWhitespace(ch))
+                if (isStructuralChar(ch) || XmlNames.isWhitespace(ch))
                 {
                     addToken(names, token, contentSpecOffset + i);
                 }

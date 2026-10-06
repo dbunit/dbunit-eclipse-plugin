@@ -129,6 +129,33 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testIsBlank_forTextOfCharactersThatOnlyJavaCallsWhitespace_isFalse()
+    {
+        final String ideographicSpace = String.valueOf((char) 0x3000);
+        final String formFeed = String.valueOf((char) 0xC);
+        final String emSpace = String.valueOf((char) 0x2003);
+
+        assertThat(List.of(create(new Document(ideographicSpace)).isBlank(),
+                create(new Document(" " + formFeed)).isBlank(), create(new Document(emSpace)).isBlank()))
+                .as("The XML parser sees an ideographic space, a form feed, and an em space as text, not "
+                        + "as whitespace, so a document of them has content, though String.isBlank "
+                        + "disagrees.")
+                .containsOnly(false);
+    }
+
+    @Test
+    void testRefresh_whenTheTextHoldsOnlyAnIdeographicSpace_buildsAModelThatIsNotBlank()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create(new Document(String.valueOf((char) 0x3000)));
+
+        datasetDocument.refresh();
+
+        assertThat(datasetDocument.getModel().isBlank())
+                .as("The model must agree with the text about what is blank.").isFalse();
+    }
+
+    @Test
     void testIsBlank_forTextWithAnyOtherCharacter_isFalse()
     {
         final String nonBreakingSpace = String.valueOf((char) 0xA0);
@@ -1354,6 +1381,24 @@ class FlatXmlDatasetDocumentTest
 
         assertThat(document.get()).as("An element with nothing in it is replaced whole, without leftovers.")
                 .isEqualTo(declarations + "<dataset>\n    <USERS ID=\"1\"/>\n</dataset>\n");
+    }
+
+    @Test
+    void testInsertRows_whenTheMarkerHoldsOnlyAnIdeographicSpace_keepsIt()
+    {
+        final String declarations = "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n";
+        final IDocument document =
+                new Document(declarations + "<dataset>\n  <USERS>\u3000</USERS>\n</dataset>\n");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.insertRows("USERS", 0, List.of(List.of("1")));
+
+        assertThat(document.get())
+                .as("The ideographic space is text to the XML parser, not whitespace, so what the marker "
+                        + "held stays.")
+                .isEqualTo(declarations + "<dataset>\n  <USERS ID=\"1\"/>\u3000\n</dataset>\n");
     }
 
     @Test

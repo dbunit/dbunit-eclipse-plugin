@@ -149,11 +149,6 @@ final class XmlLexer
                 && XmlNames.isNameStartChar(Character.codePointAt(text, pos + 1));
     }
 
-    static boolean isWhitespace(final char ch)
-    {
-        return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
-    }
-
     void skipBom()
     {
         if (length > 0 && text.charAt(0) == BYTE_ORDER_MARK)
@@ -164,7 +159,7 @@ final class XmlLexer
 
     void skipWhitespace()
     {
-        while (pos < length && isWhitespace(text.charAt(pos)))
+        while (pos < length && XmlNames.isWhitespace(text.charAt(pos)))
         {
             pos++;
         }
@@ -257,7 +252,7 @@ final class XmlLexer
 
     private boolean atTargetEnd()
     {
-        return pos >= length || isWhitespace(text.charAt(pos)) || matchesAt(pos, "?>");
+        return pos >= length || XmlNames.isWhitespace(text.charAt(pos)) || matchesAt(pos, "?>");
     }
 
     void skipCData()

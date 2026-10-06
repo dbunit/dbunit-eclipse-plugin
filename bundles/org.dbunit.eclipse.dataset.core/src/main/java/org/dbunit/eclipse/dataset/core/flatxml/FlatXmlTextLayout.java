@@ -164,7 +164,7 @@ final class FlatXmlTextLayout
         int index = offset;
         while (index > 0 && !isLineBreakChar(text.charAt(index - 1)))
         {
-            if (!Character.isWhitespace(text.charAt(index - 1)))
+            if (!XmlNames.isWhitespace(text.charAt(index - 1)))
             {
                 return -1;
             }
@@ -182,7 +182,7 @@ final class FlatXmlTextLayout
         int index = offset;
         while (index < text.length() && !isLineBreakChar(text.charAt(index)))
         {
-            if (!Character.isWhitespace(text.charAt(index)))
+            if (!XmlNames.isWhitespace(text.charAt(index)))
             {
                 return -1;
             }

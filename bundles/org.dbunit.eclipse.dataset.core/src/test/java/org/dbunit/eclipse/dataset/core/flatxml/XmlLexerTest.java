@@ -246,24 +246,6 @@ class XmlLexerTest
     }
 
     @Test
-    void testIsWhitespace_whenTheCharacterIsSpaceTabLineFeedOrCarriageReturn_isTrue()
-    {
-        assertThat(List.of(XmlLexer.isWhitespace(' '), XmlLexer.isWhitespace('\t'),
-                XmlLexer.isWhitespace('\n'), XmlLexer.isWhitespace('\r')))
-                .as("The four XML whitespace characters must all be whitespace.")
-                .containsExactly(true, true, true, true);
-    }
-
-    @Test
-    void testIsWhitespace_whenTheCharacterIsAnyOther_isFalse()
-    {
-        assertThat(List.of(XmlLexer.isWhitespace('a'), XmlLexer.isWhitespace('\f'),
-                XmlLexer.isWhitespace((char) 0xA0)))
-                .as("Letters, form feeds, and no-break spaces are not XML whitespace.")
-                .containsExactly(false, false, false);
-    }
-
-    @Test
     void testTextBetween_whenCalled_returnsTheRange()
     {
         final XmlLexer lexer = lexerFor("<dataset/>");

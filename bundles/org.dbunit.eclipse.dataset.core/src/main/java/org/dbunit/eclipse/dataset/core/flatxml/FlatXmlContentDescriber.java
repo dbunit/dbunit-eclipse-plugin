@@ -89,7 +89,7 @@ public final class FlatXmlContentDescriber extends XMLContentDescriber
             int value;
             while ((value = contents.read()) != -1)
             {
-                if (!Character.isWhitespace(value))
+                if (!XmlNames.isWhitespace((char) value))
                 {
                     return false;
                 }
@@ -110,7 +110,7 @@ public final class FlatXmlContentDescriber extends XMLContentDescriber
             int value;
             while ((value = contents.read()) != -1)
             {
-                if (!Character.isWhitespace(value))
+                if (!XmlNames.isWhitespace((char) value))
                 {
                     return false;
                 }

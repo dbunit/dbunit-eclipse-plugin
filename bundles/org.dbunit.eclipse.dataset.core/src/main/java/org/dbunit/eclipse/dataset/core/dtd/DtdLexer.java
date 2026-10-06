@@ -95,7 +95,7 @@ final class DtdLexer
 
     void skipWhitespace()
     {
-        while (pos < length && Character.isWhitespace(dtdText.charAt(pos)))
+        while (pos < length && XmlNames.isWhitespace(dtdText.charAt(pos)))
         {
             pos++;
         }
@@ -273,7 +273,7 @@ final class DtdLexer
     String scanBareWord()
     {
         final int start = pos;
-        while (pos < length && !Character.isWhitespace(dtdText.charAt(pos))
+        while (pos < length && !XmlNames.isWhitespace(dtdText.charAt(pos))
                 && dtdText.charAt(pos) != '>')
         {
             pos++;

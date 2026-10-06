@@ -321,6 +321,14 @@ class FlatXmlParserTest
     }
 
     @Test
+    void testParse_whenAnIdeographicSpaceFollowsTheRoot_reportsNotWellFormedAtIt()
+    {
+        final String text = "<dataset><USERS ID=\"1\"/></dataset>\n\u3000";
+
+        assertBlockingProblem(text, ProblemCode.NOT_WELL_FORMED, text.indexOf('\u3000'));
+    }
+
+    @Test
     void testParse_whenEndTagNameDoesNotMatch_reportsNotWellFormedAtEndTagOffset()
     {
         final String text = TestDatasets.read("malformed/mismatched-end-tag.xml");

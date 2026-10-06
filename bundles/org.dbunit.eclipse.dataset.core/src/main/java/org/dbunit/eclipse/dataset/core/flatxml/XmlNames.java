@@ -25,7 +25,8 @@ package org.dbunit.eclipse.dataset.core.flatxml;
  * dataset with: the production of the fourth edition, whose names are made of the letters, digits, combining
  * characters, and extenders of Appendix B of that edition. It is narrower than the production of the fifth
  * edition, and the parser refuses a name that the fifth edition allows, such as one with a character beyond
- * U+FFFF, so a name that this class rejects is one that dbUnit cannot load.
+ * U+FFFF, so a name that this class rejects is one that dbUnit cannot load. It also tells what XML white
+ * space is, which the parser decides too.
  *
  * @since 1.0.0
  */
@@ -146,6 +147,20 @@ public final class XmlNames
     public static boolean isNameChar(final int codePoint)
     {
         return isInRanges(NAME_RANGES, codePoint);
+    }
+
+    /**
+     * Returns whether a character is XML white space, the {@code S} production of XML 1.0: a space, a tab, a
+     * carriage return, or a line feed. It is narrower than {@link Character#isWhitespace(char)}, which also
+     * accepts, for example, the form feed and the ideographic space U+3000, and what separates two things
+     * for the XML parser of the Java runtime, which dbUnit loads a dataset with, is only these four.
+     *
+     * @param character The character to test.
+     * @return True when the character is a space, a tab, a carriage return, or a line feed.
+     */
+    public static boolean isWhitespace(final char character)
+    {
+        return character == ' ' || character == '\t' || character == '\n' || character == '\r';
     }
 
     /**

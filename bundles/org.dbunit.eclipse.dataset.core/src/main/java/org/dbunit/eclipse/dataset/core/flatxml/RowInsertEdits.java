@@ -230,7 +230,7 @@ final class RowInsertEdits
     {
         final String text = context.text();
         int end = element.endTagOffset();
-        while (end > element.startTagEndOffset() && XmlLexer.isWhitespace(text.charAt(end - 1)))
+        while (end > element.startTagEndOffset() && XmlNames.isWhitespace(text.charAt(end - 1)))
         {
             end--;
         }

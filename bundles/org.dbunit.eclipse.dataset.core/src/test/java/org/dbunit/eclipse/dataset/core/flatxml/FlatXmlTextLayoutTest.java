@@ -56,6 +56,19 @@ class FlatXmlTextLayoutTest
     }
 
     @Test
+    void testIndentOf_whenIdeographicSpacesPrecedeTheElement_returnsEmpty()
+    {
+        final String text = "<dataset>\n\u3000\u3000<USERS ID=\"1\"/>\n</dataset>\n";
+        final FlatXmlElement element = FlatXmlParser.parse(text).elements().get(0);
+        final FlatXmlTextLayout layout = new FlatXmlTextLayout(text, "\n");
+
+        assertThat(layout.indentOf(element))
+                .as("The ideographic space is not white space to the XML parser, so it is not an "
+                        + "indentation that new rows may copy.")
+                .isEmpty();
+    }
+
+    @Test
     void testIndentOf_whenElementIsInline_returnsEmpty()
     {
         final String text = "<dataset><USERS ID=\"1\"/></dataset>\n";
@@ -132,6 +145,21 @@ class FlatXmlTextLayoutTest
 
         assertThat(substringOf(text, region)).as("The whitespace around the element belongs to its line.")
                 .isEqualTo("  \t<USERS ID=\"1\"/>  \t\n");
+    }
+
+    @Test
+    void testLineExtent_whenAnIdeographicSpaceFollowsTheElement_returnsTheElementAlone()
+    {
+        final String text = "<dataset>\n  <USERS ID=\"1\"/>\u3000\n</dataset>\n";
+        final FlatXmlElement element = FlatXmlParser.parse(text).elements().get(0);
+        final FlatXmlTextLayout layout = new FlatXmlTextLayout(text, "\n");
+
+        final IRegion region = layout.lineExtent(element);
+
+        assertThat(substringOf(text, region))
+                .as("An ideographic space is something else on the line to the XML parser, so the line "
+                        + "does not belong to the element.")
+                .isEqualTo("<USERS ID=\"1\"/>");
     }
 
     @Test

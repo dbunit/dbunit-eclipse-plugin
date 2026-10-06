@@ -427,9 +427,9 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     }
 
     /**
-     * Tells whether the text is empty or only whitespace, as {@link String#isBlank()} does, from the text
-     * as it is now. It reads characters up to the first one that is not whitespace instead of copying the
-     * whole text, because the Tables page asks on each change.
+     * Tells whether the text is empty or only XML white space, from the text as it is now. It reads
+     * characters up to the first one that is not white space instead of copying the whole text, because the
+     * Tables page asks on each change.
      */
     @Override
     public boolean isBlank()
@@ -437,7 +437,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         final int length = document.getLength();
         for (int offset = 0; offset < length; offset++)
         {
-            if (!Character.isWhitespace(characterAt(offset)))
+            if (!XmlNames.isWhitespace(characterAt(offset)))
             {
                 return false;
             }
@@ -566,7 +566,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         }
         pendingColumns.record(modificationStamp);
         pendingColumns.keepOnly(PendingColumns.snapshotsToKeep(document));
-        final boolean blank = text.isBlank();
+        final boolean blank = isBlank();
         final List<DatasetProblem> problems = blank ? List.of()
                 : FlatXmlValidator.validate(parse, built.index(), tables, dtdResolution.state(),
                         dtdResolution.declarations(), options);

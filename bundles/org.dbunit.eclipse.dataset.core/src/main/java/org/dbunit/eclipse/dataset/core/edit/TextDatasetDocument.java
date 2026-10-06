@@ -35,7 +35,8 @@ public interface TextDatasetDocument extends DatasetDocument
     /**
      * Returns whether the text has no content worth parsing.
      *
-     * @return True when the text is empty or only whitespace.
+     * @return True when the text is empty or only XML white space: spaces, tabs, carriage returns, and
+     *         line feeds.
      */
     boolean isBlank();
 

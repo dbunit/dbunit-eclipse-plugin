@@ -49,6 +49,28 @@ class XmlNamesTest
     }
 
     @Test
+    void testIsWhitespace_whenTheCharacterIsSpaceTabLineFeedOrCarriageReturn_isTrue()
+    {
+        assertThat(List.of(XmlNames.isWhitespace(' '), XmlNames.isWhitespace('\t'),
+                XmlNames.isWhitespace('\n'), XmlNames.isWhitespace('\r')))
+                .as("The four XML whitespace characters must all be whitespace.")
+                .containsExactly(true, true, true, true);
+    }
+
+    @Test
+    void testIsWhitespace_whenTheCharacterIsAnyOther_isFalse()
+    {
+        assertThat(List.of(XmlNames.isWhitespace('a'), XmlNames.isWhitespace('\f'),
+                XmlNames.isWhitespace((char) 0xB), XmlNames.isWhitespace((char) 0xA0),
+                XmlNames.isWhitespace((char) 0x2003), XmlNames.isWhitespace((char) 0x2028),
+                XmlNames.isWhitespace((char) 0x3000)))
+                .as("Letters, the form feed, the vertical tab, the no-break space, the em space, the line "
+                        + "separator, and the ideographic space are not XML whitespace, though some of them "
+                        + "are whitespace to Java.")
+                .containsOnly(false);
+    }
+
+    @Test
     void testIsValidName_whenNameHasACharacterBeyondTheBasicPlane_returnsFalse()
     {
         final String supplementary = new String(Character.toChars(0x20000));

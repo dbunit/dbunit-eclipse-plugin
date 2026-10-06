@@ -179,6 +179,15 @@ class DtdLexerTest
     }
 
     @Test
+    void testSkipWhitespace_whenAnIdeographicSpaceLeads_stopsAtIt()
+    {
+        final String remainder = remainderAfter(" \u3000x", DtdLexer::skipWhitespace);
+
+        assertThat(remainder).as("The ideographic space is not XML whitespace, so skipping stops at it.")
+                .isEqualTo("\u3000x");
+    }
+
+    @Test
     void testSkipWhitespace_whenOnlyWhitespaceRemains_stopsAtTheEnd()
     {
         final String remainder = remainderAfter("  \n", DtdLexer::skipWhitespace);
@@ -453,6 +462,15 @@ class DtdLexerTest
 
         assertThat(scan).as("The word must end at the first whitespace character.")
                 .isEqualTo(new Scan("#REQUIRED", " next"));
+    }
+
+    @Test
+    void testScanBareWord_whenFollowedByAnIdeographicSpace_doesNotStopAtIt()
+    {
+        final Scan scan = scan("CDATA\u3000next>", DtdLexer::scanBareWord);
+
+        assertThat(scan).as("The ideographic space is not XML whitespace, so it does not end the word.")
+                .isEqualTo(new Scan("CDATA\u3000next", ">"));
     }
 
     @Test

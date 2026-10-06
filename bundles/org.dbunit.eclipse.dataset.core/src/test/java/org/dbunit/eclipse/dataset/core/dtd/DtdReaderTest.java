@@ -50,6 +50,19 @@ class DtdReaderTest
     }
 
     @Test
+    void testRead_whenAnIdeographicSpaceFollowsAContentModelName_doesNotTakeItForASeparator()
+    {
+        final DtdDeclarations declarations = DtdReader
+                .read("<!ELEMENT dataset (USERS\u3000, ORDERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ELEMENT ORDERS EMPTY>");
+
+        assertThat(declarations.tables())
+                .as("The ideographic space is not XML whitespace, so it is no separator: the name that it "
+                        + "is part of is not a name, and only the other table is listed.")
+                .extracting(DtdTable::name).containsExactly("ORDERS");
+    }
+
+    @Test
     void testRead_whenContentModelIsAChoice_extractsNamesInOrder()
     {
         final DtdDeclarations declarations = DtdReader.read(

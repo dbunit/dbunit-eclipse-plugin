@@ -196,7 +196,7 @@ public final class DatasetModel
     }
 
     /**
-     * Returns whether the source is blank: empty or only whitespace. A blank source has no content to
+     * Returns whether the source is blank: empty or only XML white space. A blank source has no content to
      * build a model from, which is no problem to list; it needs an empty dataset to be created in it.
      *
      * @return True when the source has no content.

@@ -194,7 +194,7 @@ final class FlatXmlParser
             while (!lexer.atEnd())
             {
                 final char ch = lexer.currentCharacter();
-                if (XmlLexer.isWhitespace(ch))
+                if (XmlNames.isWhitespace(ch))
                 {
                     lexer.advance(1);
                 }
