@@ -69,6 +69,11 @@ class TableTabsTest
 
     private static final String A_B_C = "<dataset><A ID=\"1\"/><B ID=\"1\"/><C ID=\"1\"/></dataset>";
 
+    private static final String USERS_WITH_TWO_ROWS =
+            "<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>";
+
+    private static final String INVALID_VALUE = "2" + (char) 1;
+
     private Shell shell;
 
     private Document document;
@@ -622,6 +627,80 @@ class TableTabsTest
     }
 
     @Test
+    void testCommitActiveCellEditor_whenNoCellEditorIsOpen_returnsTrue()
+    {
+        tabs.reconcile(show("<dataset><USERS ID=\"1\"/></dataset>"));
+
+        final boolean noEditorLeft = tabs.commitActiveCellEditor();
+
+        assertThat(noEditorLeft).as("With no cell editor open, nothing holds anything back.").isTrue();
+    }
+
+    @Test
+    void testCommitActiveCellEditor_whenTheValueIsValid_returnsTrueAndClosesTheEditor()
+    {
+        final NatTable natTable = openCellEditorHolding(USERS_WITH_TWO_ROWS, "20");
+
+        final boolean noEditorLeft = tabs.commitActiveCellEditor();
+
+        assertThat(noEditorLeft).as("A committed value closes the cell editor.").isTrue();
+        assertThat(natTable.getActiveCellEditor()).as("No cell editor may stay open.").isNull();
+    }
+
+    @Test
+    void testCommitActiveCellEditor_whenTheValueFailsValidationAndTheUserChoosesToChangeIt_returnsFalse()
+    {
+        final NatTable natTable = openCellEditorHolding(USERS_WITH_TWO_ROWS, INVALID_VALUE);
+        try (MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.CHANGE_BUTTON_OF_VALIDATION_DIALOG);
+
+            final boolean noEditorLeft = tabs.commitActiveCellEditor();
+
+            assertThat(dialogDriver.hasHandledDialog()).as("The invalid value must be reported.").isTrue();
+            assertThat(noEditorLeft).as("The cell editor stays open with a value that is not accepted.")
+                    .isFalse();
+            assertThat(natTable.getActiveCellEditor()).as("The cell editor must stay open.").isNotNull();
+            assertThat(document.get()).as("The value that is not accepted must not reach the document.")
+                    .isEqualTo(USERS_WITH_TWO_ROWS);
+        }
+    }
+
+    @Test
+    void testCommitActiveCellEditor_whenTheValueInTheFirstOfTwoGridsFailsValidation_returnsFalse()
+    {
+        openCellEditorHolding(USERS_AND_ORDERS, INVALID_VALUE);
+        try (MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.CHANGE_BUTTON_OF_VALIDATION_DIALOG);
+
+            final boolean noEditorLeft = tabs.commitActiveCellEditor();
+
+            assertThat(noEditorLeft)
+                    .as("A grid without an open editor must not hide that another one has one.").isFalse();
+        }
+    }
+
+    @Test
+    void testCommitActiveCellEditor_whenTheValueFailsValidationAndTheUserChoosesToDiscardIt_returnsTrue()
+    {
+        final NatTable natTable = openCellEditorHolding(USERS_WITH_TWO_ROWS, INVALID_VALUE);
+        try (MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.DISCARD_BUTTON_OF_VALIDATION_DIALOG);
+
+            final boolean noEditorLeft = tabs.commitActiveCellEditor();
+
+            assertThat(dialogDriver.hasHandledDialog()).as("The invalid value must be reported.").isTrue();
+            assertThat(noEditorLeft)
+                    .as("A discarded value leaves no cell editor open, so nothing is held back.").isTrue();
+            assertThat(natTable.getActiveCellEditor()).as("No cell editor may stay open.").isNull();
+            assertThat(document.get()).as("The discarded value must not reach the document.")
+                    .isEqualTo(USERS_WITH_TWO_ROWS);
+        }
+    }
+
+    @Test
     void testCancelActiveCellEditor_whileACellIsBeingEdited_closesItsEditorWithoutWritingItsValue()
     {
         final String originalText = "<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>";
@@ -638,6 +717,18 @@ class TableTabsTest
         assertThat(natTable.getActiveCellEditor()).as("The open editor must be closed.").isNull();
         assertThat(document.get()).as("The value of a cancelled editor must not reach the document.")
                 .isEqualTo(originalText);
+    }
+
+    private NatTable openCellEditorHolding(final String content, final String value)
+    {
+        tabs.reconcile(show(content));
+        shell.layout(true, true);
+        UiTestWorkspace.processEvents();
+        final NatTable natTable = (NatTable) tabFolder.getSelection().getControl();
+        natTable.doCommand(new SelectCellCommand(natTable, 1, 2, false, false));
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+        natTable.getActiveCellEditor().setEditorValue(value);
+        return natTable;
     }
 
     private DatasetModel show(final String content)

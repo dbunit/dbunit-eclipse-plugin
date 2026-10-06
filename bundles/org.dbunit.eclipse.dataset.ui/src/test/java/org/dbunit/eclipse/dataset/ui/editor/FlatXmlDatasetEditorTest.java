@@ -22,6 +22,7 @@ package org.dbunit.eclipse.dataset.ui.editor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -37,6 +38,7 @@ import org.dbunit.eclipse.dataset.ui.preferences.PreferenceKeys;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IMarker;
 import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.preferences.IEclipsePreferences;
 import org.eclipse.core.runtime.preferences.InstanceScope;
@@ -47,11 +49,13 @@ import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.config.CellConfigAttributes;
 import org.eclipse.nebula.widgets.nattable.data.convert.IDisplayConverter;
+import org.eclipse.nebula.widgets.nattable.edit.command.EditSelectionCommand;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
 import org.eclipse.nebula.widgets.nattable.layer.event.ILayerEvent;
 import org.eclipse.nebula.widgets.nattable.layer.event.VisualRefreshEvent;
 import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
 import org.eclipse.swt.custom.CTabItem;
+import org.eclipse.swt.widgets.Composite;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbenchPage;
@@ -74,6 +78,8 @@ class FlatXmlDatasetEditorTest
     private static final int SOURCE_PAGE_INDEX = 1;
 
     private static final String SAVED_USERS = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
+
+    private static final String INVALID_VALUE = "a" + (char) 1 + "b";
 
     private static final String UTF8_DECLARED_USERS =
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?><dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
@@ -242,6 +248,135 @@ class FlatXmlDatasetEditorTest
             }
             assertThat(written).as("The saved file must contain the source edit.")
                     .isEqualTo("<!--edited--><dataset><USERS ID=\"1\"/></dataset>");
+        }
+    }
+
+    @Test
+    void testDoSave_whenACellEditorKeepsAValueThatFailedValidation_writesNothingAndCancelsTheMonitor()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            makeDirty(editor);
+            openCellEditorHolding(editor, INVALID_VALUE);
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.CHANGE_BUTTON_OF_VALIDATION_DIALOG);
+            final NullProgressMonitor monitor = new NullProgressMonitor();
+
+            editor.doSave(monitor);
+            UiTestWorkspace.processEvents();
+
+            assertThat(dialogDriver.hasHandledDialog()).as("The invalid value must be reported.").isTrue();
+            assertThat(monitor.isCanceled())
+                    .as("A save that cannot take the value of the open cell editor must be canceled, so that "
+                            + "closing the editor stops as well.")
+                    .isTrue();
+            assertThat(fileText(file)).as("Nothing may be written.").isEqualTo(SAVED_USERS);
+            assertThat(editor.isDirty()).as("The changes must stay unsaved.").isTrue();
+            assertThat(editor.getTablesPage().hasActiveCellEditor())
+                    .as("The cell editor stays open, so that the value can be changed.").isTrue();
+        }
+    }
+
+    @Test
+    void testDoSave_whenTheValueThatFailedValidationIsDiscarded_savesTheDocument() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            makeDirty(editor);
+            openCellEditorHolding(editor, INVALID_VALUE);
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.DISCARD_BUTTON_OF_VALIDATION_DIALOG);
+            final NullProgressMonitor monitor = new NullProgressMonitor();
+
+            editor.doSave(monitor);
+            UiTestWorkspace.processEvents();
+
+            assertThat(monitor.isCanceled()).as("Nothing is left to hold the save back.").isFalse();
+            assertThat(fileText(file)).as("The document without the discarded value must be written.")
+                    .isEqualTo("<!--edited-->" + SAVED_USERS);
+            assertThat(editor.isDirty()).as("Saving must clear the dirty state.").isFalse();
+            assertThat(editor.getTablesPage().hasActiveCellEditor())
+                    .as("Discarding the value closes the cell editor.").isFalse();
+        }
+    }
+
+    @Test
+    void testDoSaveAs_whenACellEditorKeepsAValueThatFailedValidation_asksForNoFile() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            makeDirty(editor);
+            openCellEditorHolding(editor, INVALID_VALUE);
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.CHANGE_BUTTON_OF_VALIDATION_DIALOG);
+
+            editor.doSaveAs();
+            UiTestWorkspace.processEvents();
+
+            assertThat(dialogDriver.unexpectedDialogTitles())
+                    .as("Save As must not ask for a file while the value of the open cell editor is "
+                            + "invalid.")
+                    .isEmpty();
+            assertThat(editor.getTablesPage().hasActiveCellEditor())
+                    .as("The cell editor stays open, so that the value can be changed.").isTrue();
+        }
+    }
+
+    @Test
+    void testShowOnSourcePage_whenACellEditorKeepsAValueThatFailedValidation_staysOnTheTablesPage()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            openCellEditorHolding(editor, INVALID_VALUE);
+            dialogDriver.pressButtonOfEveryDialog(MessageDialogDriver.CHANGE_BUTTON_OF_VALIDATION_DIALOG);
+
+            editor.showOnSourcePage(0, 0);
+            UiTestWorkspace.processEvents();
+
+            assertThat(editor.getActivePage())
+                    .as("The Tables page must stay, because leaving it would leave its cell editor open with "
+                            + "a value that is not accepted.")
+                    .isEqualTo(TABLES_PAGE_INDEX);
+            assertThat(editor.getTablesPage().isActive())
+                    .as("A page change that is refused leaves the Tables page the page that is active.")
+                    .isTrue();
+            assertThat(documentText(editor)).as("The value that is not accepted must not reach the document.")
+                    .isEqualTo(SAVED_USERS);
+            assertThat(dialogDriver.unexpectedDialogTitles())
+                    .as("No dialog but the one about the invalid value may open.").isEmpty();
+        }
+    }
+
+    @Test
+    void testShowOnSourcePage_whenTheValueThatFailedValidationIsDiscarded_showsTheSourcePage()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            openCellEditorHolding(editor, INVALID_VALUE);
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.DISCARD_BUTTON_OF_VALIDATION_DIALOG);
+
+            editor.showOnSourcePage(0, 0);
+            UiTestWorkspace.processEvents();
+
+            assertThat(editor.getActivePage()).as("With the value discarded, nothing holds the page back.")
+                    .isEqualTo(SOURCE_PAGE_INDEX);
+            assertThat(editor.getTablesPage().hasActiveCellEditor())
+                    .as("Discarding the value closes the cell editor.").isFalse();
         }
     }
 
@@ -715,6 +850,27 @@ class FlatXmlDatasetEditorTest
         final int offset = document.get().indexOf(oldText);
         document.replace(offset, oldText.length(), newText);
         UiTestWorkspace.processEvents();
+    }
+
+    private static void openCellEditorHolding(final FlatXmlDatasetEditor editor, final String value)
+    {
+        final TablesPage tablesPage = editor.getTablesPage();
+        final Composite page = (Composite) tablesPage.getControl();
+        page.setSize(800, 600);
+        page.layout(true, true);
+        UiTestWorkspace.processEvents();
+        final NatTable natTable = (NatTable) tablesPage.getTabFolder().getSelection().getControl();
+        tablesPage.selectRegion(1, 1, 1, 1);
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+        natTable.getActiveCellEditor().setEditorValue(value);
+    }
+
+    private static String fileText(final IFile file) throws CoreException, IOException
+    {
+        try (InputStream contents = file.getContents())
+        {
+            return new String(contents.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
     private static void setLightweightAutoRefresh(final boolean enabled)

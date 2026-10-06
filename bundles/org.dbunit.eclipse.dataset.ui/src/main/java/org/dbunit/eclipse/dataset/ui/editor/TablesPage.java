@@ -202,10 +202,13 @@ final class TablesPage implements DatasetGridContext
     /**
      * Commits the value of an open cell editor, so that it is in the document before the document is saved
      * or the Source page shows it.
+     *
+     * @return True when no cell editor is open anymore; false when the value of one was not accepted and
+     *         its editor stays open, so that the value is not in the document.
      */
-    void commitActiveCellEditor()
+    boolean commitActiveCellEditor()
     {
-        tabs.commitActiveCellEditor();
+        return tabs.commitActiveCellEditor();
     }
 
     /**
@@ -440,6 +443,11 @@ final class TablesPage implements DatasetGridContext
     ProblemsSection getProblemsSection()
     {
         return problemsSection;
+    }
+
+    boolean isActive()
+    {
+        return active;
     }
 
     boolean isShowingBlankState()

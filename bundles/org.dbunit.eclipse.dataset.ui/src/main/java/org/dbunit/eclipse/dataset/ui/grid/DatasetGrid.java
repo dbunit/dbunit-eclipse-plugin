@@ -188,7 +188,8 @@ public final class DatasetGrid
      */
     public boolean commitActiveCellEditor()
     {
-        return natTable.commitAndCloseActiveCellEditor();
+        natTable.commitAndCloseActiveCellEditor();
+        return natTable.getActiveCellEditor() == null;
     }
 
     /**

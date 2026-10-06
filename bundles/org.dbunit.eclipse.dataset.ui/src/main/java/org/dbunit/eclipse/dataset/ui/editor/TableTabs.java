@@ -94,13 +94,19 @@ final class TableTabs
     /**
      * Commits the value of an open cell editor, so that it is in the document before the document is saved
      * or the Source page shows it.
+     *
+     * @return True when no cell editor is open anymore; false when the value of one was not accepted and
+     *         its editor stays open, so that the value is not in the document.
      */
-    void commitActiveCellEditor()
+    boolean commitActiveCellEditor()
     {
+        boolean noEditorLeft = true;
         for (final DatasetGrid grid : gridsByKey.values())
         {
-            grid.commitActiveCellEditor();
+            final boolean closed = grid.commitActiveCellEditor();
+            noEditorLeft = noEditorLeft && closed;
         }
+        return noEditorLeft;
     }
 
     /**

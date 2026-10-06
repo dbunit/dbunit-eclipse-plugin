@@ -35,6 +35,7 @@ import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IFindReplaceTarget;
 import org.eclipse.jface.util.IPropertyChangeListener;
+import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
@@ -195,7 +196,11 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
     {
         if (previousPageIndex == TABLES_PAGE_INDEX)
         {
-            tablesPage.commitActiveCellEditor();
+            if (!tablesPage.commitActiveCellEditor())
+            {
+                keepTablesPage();
+                return;
+            }
             tablesPage.deactivate();
         }
         super.pageChange(newPageIndex);
@@ -210,15 +215,21 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
     @Override
     public void doSave(final IProgressMonitor monitor)
     {
-        commitActiveCellEditor();
+        if (!commitActiveCellEditor())
+        {
+            monitor.setCanceled(true);
+            return;
+        }
         sourceEditor.doSave(monitor);
     }
 
     @Override
     public void doSaveAs()
     {
-        commitActiveCellEditor();
-        sourceEditor.doSaveAs();
+        if (commitActiveCellEditor())
+        {
+            sourceEditor.doSaveAs();
+        }
     }
 
     @Override
@@ -336,12 +347,25 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         tablesPage.inputChanged();
     }
 
-    private void commitActiveCellEditor()
+    /**
+     * Puts the selection of the page tabs back on the Tables page, for a page change that is refused. The
+     * change itself is not run again, because the Tables page was never left.
+     */
+    private void keepTablesPage()
     {
-        if (tablesPage != null)
+        if (getContainer() instanceof final CTabFolder tabFolder)
         {
-            tablesPage.commitActiveCellEditor();
+            tabFolder.setSelection(TABLES_PAGE_INDEX);
         }
+    }
+
+    private boolean commitActiveCellEditor()
+    {
+        if (tablesPage == null)
+        {
+            return true;
+        }
+        return tablesPage.commitActiveCellEditor();
     }
 
     private void cancelActiveCellEditor()

@@ -71,6 +71,18 @@ final class MessageDialogDriver implements AutoCloseable
      */
     static final int IGNORE_BUTTON_OF_CHANGED_FILE_DIALOG = 1;
 
+    /**
+     * The position of Change in the dialog that a cell editor shows when its value fails validation, which
+     * keeps the cell editor open.
+     */
+    static final int CHANGE_BUTTON_OF_VALIDATION_DIALOG = 0;
+
+    /**
+     * The position of Discard in the dialog that a cell editor shows when its value fails validation, which
+     * closes the cell editor without writing the value.
+     */
+    static final int DISCARD_BUTTON_OF_VALIDATION_DIALOG = 1;
+
     private static final int POLL_MILLIS = 20;
 
     private final Display display;
@@ -81,11 +93,15 @@ final class MessageDialogDriver implements AutoCloseable
 
     private final Set<Shell> closedDialogs = new HashSet<>();
 
+    private final Set<Shell> pressedDialogs = new HashSet<>();
+
     private Predicate<Shell> expectedDialog = dialog -> false;
 
     private boolean watching;
 
     private boolean handled;
+
+    private boolean everyDialogExpected;
 
     MessageDialogDriver()
     {
@@ -100,6 +116,17 @@ final class MessageDialogDriver implements AutoCloseable
     void pressButtonOfNextDialog(final int buttonIndex)
     {
         watch(dialog -> pressButton(dialog, buttonIndex));
+    }
+
+    /**
+     * Presses a button of every dialog that opens, for code that shows the same dialog more than once.
+     *
+     * @param buttonIndex The position of the button among the dialog's buttons, from 0.
+     */
+    void pressButtonOfEveryDialog(final int buttonIndex)
+    {
+        watch(dialog -> pressButton(dialog, buttonIndex));
+        everyDialogExpected = true;
     }
 
     /**
@@ -144,8 +171,10 @@ final class MessageDialogDriver implements AutoCloseable
     {
         expectedDialog = expected;
         handled = false;
+        everyDialogExpected = false;
         unexpectedDialogTitles.clear();
         closedDialogs.clear();
+        pressedDialogs.clear();
         watching = true;
         display.asyncExec(poller);
     }
@@ -169,9 +198,11 @@ final class MessageDialogDriver implements AutoCloseable
 
     private void handle(final Shell dialog)
     {
-        if (!handled && expectedDialog.test(dialog))
+        final boolean mayBeExpected = everyDialogExpected ? !pressedDialogs.contains(dialog) : !handled;
+        if (mayBeExpected && expectedDialog.test(dialog))
         {
             handled = true;
+            pressedDialogs.add(dialog);
             return;
         }
         if (closedDialogs.add(dialog))

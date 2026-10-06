@@ -127,6 +127,8 @@ because dbUnit takes a table's columns from the first row and would then ignore 
 
 To enter a value with line breaks, use *Edit Cell in Dialog* (*Shift+F2*).
 Characters that XML does not allow, such as most control characters, are rejected.
+A dialog then lets you change the value or discard it.
+Until you do, the cell stays in edit mode, and neither saving nor switching to the Source page goes ahead.
 
 The editor escapes values as dbUnit's own writer does, for example `&amp;`, `&lt;`, and `&#xA;` for a line break.
 A character that the file's encoding cannot store, such as `€` in an ISO-8859-1 file,
