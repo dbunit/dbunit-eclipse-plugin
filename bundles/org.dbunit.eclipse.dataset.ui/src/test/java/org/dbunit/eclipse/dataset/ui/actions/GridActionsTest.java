@@ -34,6 +34,7 @@ import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlOptions;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
+import org.dbunit.eclipse.dataset.core.model.DatasetRow;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
 import org.dbunit.eclipse.dataset.ui.dialogs.AddTableDialog;
@@ -98,6 +99,56 @@ class GridActionsTest
         assertThat(context.selectedRegion)
                 .as("Insert Row Below must select the new row at index 2, in the anchor column.")
                 .isEqualTo(new Rectangle(0, 2, 1, 1));
+    }
+
+    @Test
+    void testInsertRowBelow_withAnchorInTheFirstOfThreeRows_putsTheRowSecond()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/><USERS ID=\"3\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.anchorColumnIndex = 0;
+        context.anchorRowIndex = 0;
+
+        new InsertRowBelowAction(context).run();
+
+        assertThat(firstColumnValues(datasetDocument, "USERS"))
+                .as("The anchor in the first row is an anchor like any other: the new row goes right below "
+                        + "it.")
+                .containsExactly("1", "", "2", "3");
+    }
+
+    @Test
+    void testInsertRowBelow_withNoAnchor_appendsTheRowAfterTheLastRow()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/><USERS ID=\"3\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final InsertRowBelowAction action = new InsertRowBelowAction(context);
+
+        action.run();
+
+        assertThat(firstColumnValues(datasetDocument, "USERS"))
+                .as("With nothing to insert below, the new row must go after the last row, not before the "
+                        + "first.")
+                .containsExactly("1", "2", "3", "");
+        assertThat(context.selectedRegion).as("The new, last row must be selected.")
+                .isEqualTo(new Rectangle(0, 3, 1, 1));
+    }
+
+    @Test
+    void testInsertRowAbove_withNoAnchor_putsTheRowBeforeTheFirstRow()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/><USERS ID=\"3\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final InsertRowAboveAction action = new InsertRowAboveAction(context);
+
+        action.run();
+
+        assertThat(firstColumnValues(datasetDocument, "USERS"))
+                .as("With nothing to insert above, the new row must go before the first row.")
+                .containsExactly("", "1", "2", "3");
     }
 
     @Test
@@ -2043,6 +2094,18 @@ class GridActionsTest
                         + "cell to NULL.")
                 .containsExactly("2", null);
         assertThat(context.statusMessage).as("Pasting onto an existing row skips nothing.").isNull();
+    }
+
+    private static List<String> firstColumnValues(final FlatXmlDatasetDocument datasetDocument,
+            final String tableKey)
+    {
+        final DatasetTable table = datasetDocument.getModel().findTable(tableKey).orElseThrow();
+        final List<String> values = new ArrayList<>();
+        for (final DatasetRow row : table.getRows())
+        {
+            values.add(row.getValues().get(0));
+        }
+        return values;
     }
 
     private static FlatXmlDatasetDocument create(final String content)

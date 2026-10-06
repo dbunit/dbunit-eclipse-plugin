@@ -26,7 +26,8 @@ import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 
 /**
- * Inserts a blank row above the selection anchor and selects it.
+ * Inserts a blank row above the selection anchor and selects it. With no anchor, it goes before the first
+ * row.
  *
  * @since 1.0.0
  */

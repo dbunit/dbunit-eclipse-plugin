@@ -26,7 +26,7 @@ import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 
 /**
- * Inserts a blank row below the selection anchor and selects it.
+ * Inserts a blank row below the selection anchor and selects it. With no anchor, it goes after the last row.
  *
  * @since 1.0.0
  */
@@ -47,6 +47,10 @@ public final class InsertRowBelowAction extends InsertRowAction
     @Override
     int insertionIndex(final GridSelection selection)
     {
-        return Math.max(selection.anchorRowIndex() + 1, 0);
+        if (selection.anchorRowIndex() < 0)
+        {
+            return selection.rowCount();
+        }
+        return selection.anchorRowIndex() + 1;
     }
 }
