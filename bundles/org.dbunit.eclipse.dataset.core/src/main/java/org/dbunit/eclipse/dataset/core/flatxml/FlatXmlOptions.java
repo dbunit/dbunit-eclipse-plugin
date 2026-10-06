@@ -34,7 +34,8 @@ import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 public record FlatXmlOptions(boolean caseSensitiveTableNames, boolean columnSensing)
 {
     /**
-     * dbUnit's own defaults: case-insensitive table names and no column sensing.
+     * The options that dbUnit itself uses by default, which match table names case-insensitively and do not
+     * sense columns.
      */
     public static final FlatXmlOptions DBUNIT_DEFAULTS = new FlatXmlOptions(false, false);
 

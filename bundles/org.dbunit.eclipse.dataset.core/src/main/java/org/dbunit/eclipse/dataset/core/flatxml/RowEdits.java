@@ -136,7 +136,7 @@ final class RowEdits
      * @param table The table.
      * @param firstRowIndex The index of the first row of the block.
      * @param rowCount The number of rows in the block.
-     * @param delta -1 to move the block up, 1 to move it down.
+     * @param delta The distance to move the block by, which is -1 to move it up or 1 to move it down.
      * @return The edits.
      * @throws org.dbunit.eclipse.dataset.core.edit.DatasetEditException When the block is not in the table,
      *         the distance is not one position, or there is no room to move.

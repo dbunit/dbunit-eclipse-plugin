@@ -33,7 +33,7 @@ public enum ProblemSeverity
     ERROR,
 
     /**
-     * dbUnit tolerates the condition, but it is likely a mistake.
+     * The condition is tolerated by dbUnit, but it is likely a mistake.
      */
     WARNING,
 

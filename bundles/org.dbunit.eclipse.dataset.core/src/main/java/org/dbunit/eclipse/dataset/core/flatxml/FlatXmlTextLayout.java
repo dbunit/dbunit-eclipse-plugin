@@ -64,8 +64,8 @@ final class FlatXmlTextLayout
      *
      * @param root The root element.
      * @param children The root's current children, in document order.
-     * @return {@code indentOf} the first child, or, without children, the root line's indentation plus
-     *         two spaces.
+     * @return The indentation of the first child, or, without children, the indentation of the root's line
+     *         plus two spaces.
      */
     String childIndentation(final FlatXmlRoot root, final List<FlatXmlElement> children)
     {

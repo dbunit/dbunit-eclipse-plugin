@@ -41,7 +41,7 @@ record FlatXmlAttribute(String name, String key, String value, int segmentOffset
     /**
      * Returns the offset just after this attribute, including its closing quote.
      *
-     * @return {@code valueEndOffset() + 1}.
+     * @return The offset of the first character after the closing quote.
      */
     int endOffset()
     {
