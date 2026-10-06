@@ -21,7 +21,6 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.util.List;
-import java.util.Locale;
 
 /**
  * One element parsed from the flat XML body: a table row when it has attributes, or a marker when it
@@ -53,7 +52,7 @@ record FlatXmlElement(String name, int offset, int nameEndOffset, List<FlatXmlAt
         int matches = 0;
         for (final FlatXmlAttribute attribute : attributes)
         {
-            if (attribute.name().toUpperCase(Locale.ENGLISH).equals(columnKey))
+            if (attribute.key().equals(columnKey))
             {
                 matches++;
             }

@@ -118,6 +118,23 @@ class FlatXmlParserTest
     }
 
     @Test
+    void testParse_forAttributesOfTheSameName_givesThemTheUpperCasedNameAsOneSharedKey()
+    {
+        final String text = "<dataset><USERS Name=\"1\"/><ORDERS Name=\"2\" other=\"3\"/></dataset>";
+
+        final FlatXmlParseResult result = FlatXmlParser.parse(text);
+
+        final FlatXmlAttribute first = result.elements().get(0).attributes().get(0);
+        final FlatXmlAttribute second = result.elements().get(1).attributes().get(0);
+        final FlatXmlAttribute other = result.elements().get(1).attributes().get(1);
+        assertThat(List.of(first.key(), other.key())).as("The key must be the name in upper case.")
+                .containsExactly("NAME", "OTHER");
+        assertThat(second.key())
+                .as("Attributes of one name must share one key, which the parser works out only once.")
+                .isSameAs(first.key());
+    }
+
+    @Test
     void testParse_whenStartTagSpansSeveralLines_attributeSegmentsCoverExactlyTheAttributesRange()
     {
         final String text =

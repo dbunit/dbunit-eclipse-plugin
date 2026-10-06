@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -67,7 +66,7 @@ final class StartTagRewriter
         int nextAddition = 0;
         for (final FlatXmlAttribute attribute : element.attributes())
         {
-            final String key = attribute.name().toUpperCase(Locale.ENGLISH);
+            final String key = attribute.key();
             final int attributeColumnIndex = columnKeys.indexOf(key);
             while (nextAddition < additions.size()
                     && columnKeys.indexOf(additions.get(nextAddition)) < attributeColumnIndex)
@@ -93,7 +92,7 @@ final class StartTagRewriter
         final Set<String> keys = new HashSet<>();
         for (final FlatXmlAttribute attribute : element.attributes())
         {
-            keys.add(attribute.name().toUpperCase(Locale.ENGLISH));
+            keys.add(attribute.key());
         }
         return keys;
     }

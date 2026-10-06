@@ -424,7 +424,7 @@ final class FlatXmlValidator
         {
             for (final FlatXmlAttribute attribute : row.attributes())
             {
-                final String key = columnKey(attribute.name());
+                final String key = attribute.key();
                 if (rowAttributesByKey.put(key, attribute) != null)
                 {
                     duplicates.add(attribute);

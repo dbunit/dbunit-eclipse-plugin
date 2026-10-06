@@ -235,7 +235,7 @@ final class ColumnEdits
         int remaining = 0;
         for (final FlatXmlAttribute attribute : element.attributes())
         {
-            if (attribute.name().toUpperCase(Locale.ENGLISH).equals(key))
+            if (attribute.key().equals(key))
             {
                 hasColumn = true;
             }

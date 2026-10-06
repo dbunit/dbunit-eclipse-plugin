@@ -163,7 +163,7 @@ final class CellLocator
         FlatXmlAttribute found = null;
         for (final FlatXmlAttribute attribute : element.attributes())
         {
-            if (attribute.name().toUpperCase(Locale.ENGLISH).equals(columnKey))
+            if (attribute.key().equals(columnKey))
             {
                 found = attribute;
             }

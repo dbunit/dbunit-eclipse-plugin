@@ -21,8 +21,11 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 import org.dbunit.eclipse.dataset.core.Messages;
@@ -74,6 +77,8 @@ final class FlatXmlParser
          * them all.
          */
         private final Set<String> startTagAttributeNames = new HashSet<>();
+
+        private final Map<String, String> keysByName = new HashMap<>();
 
         private FlatXmlDoctype doctype;
 
@@ -310,8 +315,10 @@ final class FlatXmlParser
             final CharSequence rawValue = lexer.textBetween(valueOffset, valueEndOffset);
             final String value = decodeValue(rawValue, valueOffset);
             lexer.advance(1); // consume the closing quote
-            return new FlatXmlAttribute(name, value, segmentOffset, nameOffset, valueOffset, valueEndOffset,
-                    quote);
+            final String key =
+                    keysByName.computeIfAbsent(name, spelling -> spelling.toUpperCase(Locale.ENGLISH));
+            return new FlatXmlAttribute(name, key, value, segmentOffset, nameOffset, valueOffset,
+                    valueEndOffset, quote);
         }
 
         private String decodeValue(final CharSequence raw, final int valueOffset)

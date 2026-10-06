@@ -24,6 +24,8 @@ package org.dbunit.eclipse.dataset.core.flatxml;
  * One attribute of a flat XML element, with the offsets needed to rewrite it in place.
  *
  * @param name The attribute name, exactly as spelled in the document.
+ * @param key The attribute name in upper case, which identifies the column of the attribute whatever its
+ *            spelling. The parser works it out once for each name, so attributes of the same name share it.
  * @param value The decoded, normalized value.
  * @param segmentOffset The start of the whitespace that precedes the name; for the first attribute this
  *                       equals the element's nameEndOffset, so the segments of all of an element's
@@ -33,8 +35,8 @@ package org.dbunit.eclipse.dataset.core.flatxml;
  * @param valueEndOffset The offset of the closing quote.
  * @param quote The quote character used, either a double or a single quote.
  */
-record FlatXmlAttribute(String name, String value, int segmentOffset, int nameOffset, int valueOffset,
-        int valueEndOffset, char quote)
+record FlatXmlAttribute(String name, String key, String value, int segmentOffset, int nameOffset,
+        int valueOffset, int valueEndOffset, char quote)
 {
     /**
      * Returns the offset just after this attribute, including its closing quote.

@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 
@@ -34,7 +35,7 @@ class FlatXmlElementTest
 {
     private static FlatXmlAttribute attribute(final String name)
     {
-        return new FlatXmlAttribute(name, "v", 0, 0, 0, 0, '"');
+        return new FlatXmlAttribute(name, name.toUpperCase(Locale.ENGLISH), "v", 0, 0, 0, 0, '"');
     }
 
     private static FlatXmlElement elementWith(final String... attributeNames)

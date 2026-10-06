@@ -165,8 +165,10 @@ final class FlatXmlModelBuilder
         {
             for (final FlatXmlAttribute attribute : row.attributes())
             {
-                columns.putIfAbsent(columnKey(attribute.name()),
-                        new ColumnInfo(attribute.name(), false, false, null));
+                if (!columns.containsKey(attribute.key()))
+                {
+                    columns.put(attribute.key(), new ColumnInfo(attribute.name(), false, false, null));
+                }
             }
         }
         for (final String pendingName : pendingNames)
@@ -192,7 +194,7 @@ final class FlatXmlModelBuilder
             for (final FlatXmlAttribute attribute : row.attributes())
             {
                 // Since dbUnit 2.7.0, an attribute matches its column without regard to letter case.
-                final Integer columnIndex = columnIndexByKey.get(columnKey(attribute.name()));
+                final Integer columnIndex = columnIndexByKey.get(attribute.key());
                 if (columnIndex != null)
                 {
                     // Attributes are visited in document order, so when two of an element's attributes
