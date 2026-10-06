@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,15 +35,21 @@ import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.actions.DatasetCommandIds;
+import org.dbunit.eclipse.dataset.ui.actions.InsertRowAboveAction;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.core.commands.NotEnabledException;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.ListenerList;
+import org.eclipse.jface.action.ActionContributionItem;
 import org.eclipse.jface.action.IAction;
+import org.eclipse.jface.action.IContributionItem;
+import org.eclipse.jface.action.MenuManager;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.config.CellConfigAttributes;
 import org.eclipse.nebula.widgets.nattable.edit.command.EditSelectionCommand;
+import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
 import org.eclipse.nebula.widgets.nattable.style.CellStyleAttributes;
 import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
 import org.eclipse.nebula.widgets.nattable.style.IStyle;
@@ -891,6 +898,30 @@ class TablesPageTest
     }
 
     @Test
+    void testTablesPage_afterManySwitchesBetweenThePages_addsNoListenerToItsActionsEachTime() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IAction action = insertRowAboveAction(editor);
+            showTheSourcePageAndThenTheTablesPage(editor);
+            final int listenersAfterOneRoundTrip = propertyChangeListenerCount(action);
+
+            for (int round = 0; round < 4; round++)
+            {
+                showTheSourcePageAndThenTheTablesPage(editor);
+            }
+
+            assertThat(propertyChangeListenerCount(action))
+                    .as("A handler that stays attached to its action once the page is left adds a listener "
+                            + "each time the Tables page comes back, and the action tells all of them about "
+                            + "each change.")
+                    .isEqualTo(listenersAfterOneRoundTrip);
+        }
+    }
+
+    @Test
     void testTablesPage_afterTheEditorInputChanges_undoesAndRefreshesWithTheNewDocument() throws Exception
     {
         try (UiTestWorkspace workspace = new UiTestWorkspace())
@@ -990,6 +1021,54 @@ class TablesPageTest
             assertThat(sourceDocument(editor).get())
                     .as("The cancelled value must not land in the reloaded text.").isEqualTo(reloadedText);
         }
+    }
+
+    private static IAction insertRowAboveAction(final FlatXmlDatasetEditor editor)
+    {
+        final MenuManager menu = new MenuManager();
+        editor.getTablesPage().fillContextMenu(menu, GridRegion.BODY);
+        for (final IContributionItem item : menu.getItems())
+        {
+            if (item instanceof final ActionContributionItem actionItem
+                    && actionItem.getAction() instanceof InsertRowAboveAction)
+            {
+                return actionItem.getAction();
+            }
+        }
+        throw new AssertionError("The menu of the body has no Insert Row Above action.");
+    }
+
+    private static void showTheSourcePageAndThenTheTablesPage(final FlatXmlDatasetEditor editor)
+    {
+        editor.showOnSourcePage(0, 0);
+        UiTestWorkspace.processEvents();
+        final CTabFolder pages = (CTabFolder) editor.getTablesPage().getControl().getParent();
+        final CTabItem tablesTab = pages.getItem(0);
+        pages.setSelection(tablesTab);
+        final Event click = new Event();
+        click.item = tablesTab;
+        pages.notifyListeners(SWT.Selection, click);
+        UiTestWorkspace.processEvents();
+    }
+
+    /**
+     * Counts the listeners that an action keeps in its list of them, which JFace offers no way to read, so
+     * the list is found by its type.
+     */
+    private static int propertyChangeListenerCount(final IAction action) throws IllegalAccessException
+    {
+        for (Class<?> type = action.getClass(); type != null; type = type.getSuperclass())
+        {
+            for (final Field field : type.getDeclaredFields())
+            {
+                if (ListenerList.class.isAssignableFrom(field.getType()))
+                {
+                    field.setAccessible(true);
+                    return ((ListenerList<?>) field.get(action)).size();
+                }
+            }
+        }
+        throw new AssertionError("The action has no list of listeners that the test could count.");
     }
 
     private static IDocument sourceDocument(final FlatXmlDatasetEditor editor)

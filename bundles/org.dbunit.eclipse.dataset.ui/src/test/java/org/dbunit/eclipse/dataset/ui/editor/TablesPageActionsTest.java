@@ -41,10 +41,12 @@ import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlOptions;
 import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.actions.DatasetCommandIds;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
+import org.eclipse.core.commands.IHandler;
 import org.eclipse.jface.action.ActionContributionItem;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.action.IContributionItem;
 import org.eclipse.jface.action.MenuManager;
+import org.eclipse.jface.commands.ActionHandler;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IDocument;
@@ -367,6 +369,41 @@ class TablesPageActionsTest
     }
 
     @Test
+    void testDeactivate_afterActivate_stopsEachHandlerFromListeningToItsAction()
+    {
+        actions.activate();
+        final List<AtomicInteger> reports = listenToTheActivatedHandlers();
+        toggleTheEnablementOfTheHandledActions();
+        final List<Integer> reportsWhileActive = counts(reports);
+
+        actions.deactivate();
+        toggleTheEnablementOfTheHandledActions();
+
+        assertThat(reportsWhileActive).as("A handler that is active reports what its action does.")
+                .doesNotContain(0);
+        assertThat(counts(reports))
+                .as("A handler that was deactivated must not stay attached to its action, or each "
+                        + "activation of the page adds a listener that the action tells about every change.")
+                .isEqualTo(reportsWhileActive);
+    }
+
+    @Test
+    void testDispose_whileThePageIsActive_stopsEachHandlerFromListeningToItsAction()
+    {
+        actions.activate();
+        final List<AtomicInteger> reports = listenToTheActivatedHandlers();
+        toggleTheEnablementOfTheHandledActions();
+        final List<Integer> reportsWhileActive = counts(reports);
+
+        actions.dispose();
+        toggleTheEnablementOfTheHandledActions();
+
+        assertThat(counts(reports))
+                .as("An editor that closes while its Tables page is active must release its handlers too.")
+                .isEqualTo(reportsWhileActive);
+    }
+
+    @Test
     void testDeactivate_afterASecondActivate_deactivatesOnlyTheNewActivations()
     {
         actions.activate();
@@ -648,6 +685,36 @@ class TablesPageActionsTest
         return states;
     }
 
+    /**
+     * Listens to each handler that was activated, the way that the handler service does, which makes the
+     * handler listen to its action.
+     */
+    private List<AtomicInteger> listenToTheActivatedHandlers()
+    {
+        final List<AtomicInteger> reports = new ArrayList<>();
+        for (final IHandler handler : services.activatedHandlers)
+        {
+            final AtomicInteger report = new AtomicInteger();
+            handler.addHandlerListener(event -> report.incrementAndGet());
+            reports.add(report);
+        }
+        return reports;
+    }
+
+    private void toggleTheEnablementOfTheHandledActions()
+    {
+        for (final IHandler handler : services.activatedHandlers)
+        {
+            final IAction action = ((ActionHandler) handler).getAction();
+            action.setEnabled(!action.isEnabled());
+        }
+    }
+
+    private static List<Integer> counts(final List<AtomicInteger> reports)
+    {
+        return reports.stream().map(AtomicInteger::get).toList();
+    }
+
     private static List<Integer> indexes(final int fromInclusive, final int toExclusive)
     {
         final List<Integer> indexes = new ArrayList<>();
@@ -674,6 +741,8 @@ class TablesPageActionsTest
         private final List<Object> contextActivations = new ArrayList<>();
 
         private final List<Object> handlerActivations = new ArrayList<>();
+
+        private final List<IHandler> activatedHandlers = new ArrayList<>();
 
         private final IContextService contextService = proxy(IContextService.class, this::contextCall);
 
@@ -725,6 +794,7 @@ class TablesPageActionsTest
                 calls.add("activateHandler " + arguments[0] + " " + arguments[1].getClass().getSimpleName());
                 final Object activation = proxy(IHandlerActivation.class, RecordingServices::identityOnly);
                 handlerActivations.add(activation);
+                activatedHandlers.add((IHandler) arguments[1]);
                 return activation;
             }
             if ("deactivateHandlers".equals(name))

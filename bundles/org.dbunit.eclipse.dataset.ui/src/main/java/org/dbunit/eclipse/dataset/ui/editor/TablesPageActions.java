@@ -158,6 +158,8 @@ final class TablesPageActions
 
     private final List<IHandlerActivation> handlerActivations = new ArrayList<>();
 
+    private final List<ActionHandler> handlers = new ArrayList<>();
+
     private boolean active;
 
     private IContextActivation contextActivation;
@@ -284,8 +286,9 @@ final class TablesPageActions
         final IHandlerService handlerService = serviceLocator.get().getService(IHandlerService.class);
         for (final GridAction action : gridActions)
         {
-            handlerActivations.add(handlerService.activateHandler(action.getActionDefinitionId(),
-                    new ActionHandler(action)));
+            final ActionHandler handler = new ActionHandler(action);
+            handlers.add(handler);
+            handlerActivations.add(handlerService.activateHandler(action.getActionDefinitionId(), handler));
         }
         updateUndoRedoActions();
         updateGridActionsEnablement();
@@ -295,14 +298,33 @@ final class TablesPageActions
     {
         active = false;
         updateKeyBindingContext();
-        final IHandlerService handlerService = serviceLocator.get().getService(IHandlerService.class);
-        handlerService.deactivateHandlers(handlerActivations);
-        handlerActivations.clear();
+        releaseHandlers();
     }
 
     void dispose()
     {
         OperationHistoryFactory.getOperationHistory().removeOperationHistoryListener(operationHistoryListener);
+        if (!handlers.isEmpty())
+        {
+            releaseHandlers();
+        }
+    }
+
+    /**
+     * Deactivates the handlers of the grid commands and disposes them. The handler service never lets go
+     * of a handler that it was given, and a handler that is not disposed stays a listener of its action,
+     * so every activation of the page would otherwise add one that the action tells about each change.
+     */
+    private void releaseHandlers()
+    {
+        final IHandlerService handlerService = serviceLocator.get().getService(IHandlerService.class);
+        handlerService.deactivateHandlers(handlerActivations);
+        handlerActivations.clear();
+        for (final ActionHandler handler : handlers)
+        {
+            handler.dispose();
+        }
+        handlers.clear();
     }
 
     void fillContextMenu(final IMenuManager menu, final String region)
