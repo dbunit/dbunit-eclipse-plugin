@@ -355,19 +355,22 @@ final class FlatXmlParser
                 }
                 final char ch = lexer.currentCharacter();
                 final int offset = lexer.position();
-                if (ch != '<')
+                if (ch == '<')
                 {
-                    final boolean significant = textContentScanner.skip(entitiesMayBeDeclared);
-                    run.include(offset, significant);
-                }
-                else if (lexer.atText("</"))
-                {
-                    run.end(offset);
-                    endTagOffset = scanEndTag(endTagName);
+                    if (lexer.atText("</"))
+                    {
+                        run.end(offset);
+                        endTagOffset = scanEndTag(endTagName);
+                    }
+                    else
+                    {
+                        scanMarkup(run, allowElements);
+                    }
                 }
                 else
                 {
-                    scanMarkup(run, allowElements);
+                    final boolean significant = textContentScanner.skip(entitiesMayBeDeclared);
+                    run.include(offset, significant);
                 }
             }
             return endTagOffset;
