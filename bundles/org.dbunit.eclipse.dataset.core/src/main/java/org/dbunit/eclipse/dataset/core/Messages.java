@@ -393,6 +393,26 @@ public final class Messages extends NLS
     public static String Parser_unclosedComment;
 
     /**
+     * A comment holds two hyphens in a row.
+     */
+    public static String Parser_doubleHyphenInComment;
+
+    /**
+     * A processing instruction has no target name after '&lt;?'.
+     */
+    public static String Parser_expectedProcessingInstructionTarget;
+
+    /**
+     * A processing instruction's target is reserved for the XML declaration; {0} is the target.
+     */
+    public static String Parser_reservedProcessingInstructionTarget;
+
+    /**
+     * A processing instruction's target is not followed by whitespace or '?&gt;'.
+     */
+    public static String Parser_expectedSpaceAfterProcessingInstructionTarget;
+
+    /**
      * A CDATA section has no closing ']]>'.
      */
     public static String Parser_unclosedCdata;

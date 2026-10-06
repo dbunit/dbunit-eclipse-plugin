@@ -128,7 +128,30 @@ class FlatXmlWellFormednessParityTest
                 Arguments.of("a control character next to an external DTD",
                         EXTERNAL_DOCTYPE + body("a" + CONTROL_CHARACTER + "b")),
                 Arguments.of("a reference to a control character next to an external DTD",
-                        EXTERNAL_DOCTYPE + body("&#1;")));
+                        EXTERNAL_DOCTYPE + body("&#1;")),
+                Arguments.of("a double hyphen in a comment", body("<!-- a -- b -->")),
+                Arguments.of("a comment that ends with three hyphens", body("<!-- a --->")),
+                Arguments.of("a double hyphen in a comment before the root",
+                        "<!-- ---- USERS ---- -->\n" + body("")),
+                Arguments.of("a double hyphen in a comment after the root",
+                        body("") + "<!-- a -- b -->\n"),
+                Arguments.of("a double hyphen in a comment of the internal subset",
+                        INTERNAL_SUBSET_START + "<!-- a -- b -->\n]>\n" + body("")),
+                Arguments.of("an XML declaration after white space", "\n" + XML_DECLARATION + body("")),
+                Arguments.of("an XML declaration after a comment",
+                        "<!-- c -->\n" + XML_DECLARATION + body("")),
+                Arguments.of("a second XML declaration", XML_DECLARATION + XML_DECLARATION + body("")),
+                Arguments.of("an XML declaration inside the root", body(XML_DECLARATION)),
+                Arguments.of("an XML declaration after the root", body("") + XML_DECLARATION),
+                Arguments.of("an XML declaration in the internal subset",
+                        INTERNAL_SUBSET_START + XML_DECLARATION + "]>\n" + body("")),
+                Arguments.of("a processing instruction target in capitals", body("<?XML data?>")),
+                Arguments.of("a processing instruction target in mixed case", body("<?Xml data?>")),
+                Arguments.of("an XML declaration in capitals", "<?XML version=\"1.0\"?>\n" + body("")),
+                Arguments.of("a processing instruction without a target", body("<? data?>")),
+                Arguments.of("a processing instruction target that does not start with a name character",
+                        body("<?1abc data?>")),
+                Arguments.of("a processing instruction target followed by a quote", body("<?target\"x\"?>")));
     }
 
     private static Stream<Arguments> wellFormedTexts()
@@ -166,7 +189,24 @@ class FlatXmlWellFormednessParityTest
                 Arguments.of("an entity that the internal subset declares",
                         INTERNAL_SUBSET_START + "<!ENTITY nbsp \"&#160;\">\n]>\n" + body("&nbsp;")),
                 Arguments.of("an entity that the internal subset declares, in row text",
-                        INTERNAL_SUBSET_START + "<!ENTITY nbsp \"&#160;\">\n]>\n" + rowText("&nbsp;")));
+                        INTERNAL_SUBSET_START + "<!ENTITY nbsp \"&#160;\">\n]>\n" + rowText("&nbsp;")),
+                Arguments.of("an XML declaration at the start", XML_DECLARATION + body("")),
+                Arguments.of("an XML declaration after a byte order mark",
+                        "\uFEFF" + XML_DECLARATION + body("")),
+                Arguments.of("an XML declaration with an encoding and a standalone flag",
+                        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" + body("")),
+                Arguments.of("a processing instruction whose target starts with xml",
+                        body("<?xml-stylesheet href=\"a.xsl\"?>")),
+                Arguments.of("a processing instruction before the root", "<?target data?>\n" + body("")),
+                Arguments.of("a processing instruction without data", body("<?target?>")),
+                Arguments.of("a processing instruction target with hyphens, dots, and digits",
+                        body("<?a-b.c1 data?>")),
+                Arguments.of("single hyphens in a comment", body("<!-- a - b - c -->")),
+                Arguments.of("an empty comment", body("<!---->")),
+                Arguments.of("a comment with a hyphen before its end", body("<!-- a- -->")),
+                Arguments.of("a comment of hyphens and spaces", body("<!-- - - - -->")),
+                Arguments.of("a comment in the internal subset",
+                        INTERNAL_SUBSET_START + "<!-- a - b -->\n]>\n" + body("")));
     }
 
     @ParameterizedTest(name = "{0}")

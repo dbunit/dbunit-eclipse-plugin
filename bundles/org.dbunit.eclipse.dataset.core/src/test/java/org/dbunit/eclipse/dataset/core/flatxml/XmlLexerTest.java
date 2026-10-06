@@ -362,6 +362,126 @@ class XmlLexerTest
     }
 
     @Test
+    void testSkipComment_whenItHoldsADoubleHyphen_recordsABlockingProblemAtIt()
+    {
+        final List<DatasetProblem> problems =
+                problemsAfterFailure("<!-- a -- b -->", 0, XmlLexer::skipComment);
+
+        assertThat(problems).as("Two hyphens in a row are not allowed in a comment.")
+                .containsExactly(problemInFirstLine(Messages.Parser_doubleHyphenInComment, 7));
+    }
+
+    @Test
+    void testSkipComment_whenItEndsWithThreeHyphens_recordsABlockingProblemAtTheFirstOfThem()
+    {
+        final List<DatasetProblem> problems =
+                problemsAfterFailure("<!-- a --->", 0, XmlLexer::skipComment);
+
+        assertThat(problems).as("A comment cannot end with a hyphen right before its closing marker.")
+                .containsExactly(problemInFirstLine(Messages.Parser_doubleHyphenInComment, 7));
+    }
+
+    @Test
+    void testSkipComment_whenItHoldsSingleHyphensOrNothing_stopsAfterTheClosingMarker()
+    {
+        final String withHyphens = remainderAfter("<!-- a - b- - --> tail", XmlLexer::skipComment);
+        final String empty = remainderAfter("<!----> tail", XmlLexer::skipComment);
+
+        assertThat(List.of(withHyphens, empty))
+                .as("Hyphens that are not doubled and an empty comment are well-formed.")
+                .containsExactly(" tail", " tail");
+    }
+
+    @Test
+    void testSkipProcessingInstruction_whenTheTargetIsXmlAfterAByteOrderMark_stopsAfterTheClosingMarker()
+    {
+        final String remainder = remainderAfter("\uFEFF<?xml version=\"1.0\"?> tail", lexer ->
+        {
+            lexer.skipBom();
+            lexer.skipProcessingInstruction();
+        });
+
+        assertThat(remainder).as("A byte order mark does not move the start of the text.")
+                .isEqualTo(" tail");
+    }
+
+    @Test
+    void testSkipProcessingInstruction_whenTheTargetIsXmlAfterTheStart_recordsABlockingProblemAtTheTarget()
+    {
+        final List<DatasetProblem> problems = problemsAfterFailure("ab<?xml version=\"1.0\"?>", 2,
+                XmlLexer::skipProcessingInstruction);
+
+        assertThat(problems).as("The XML declaration can only start the text.")
+                .containsExactly(problemInFirstLine(
+                        NLS.bind(Messages.Parser_reservedProcessingInstructionTarget, "xml"), 4));
+    }
+
+    @Test
+    void testSkipProcessingInstruction_whenTheTargetIsXmlInCapitals_recordsABlockingProblemAtTheTarget()
+    {
+        final List<DatasetProblem> problems =
+                problemsAfterFailure("<?XML version=\"1.0\"?>", 0, XmlLexer::skipProcessingInstruction);
+
+        assertThat(problems).as("Only the lowercase xml names the XML declaration.")
+                .containsExactly(problemInFirstLine(
+                        NLS.bind(Messages.Parser_reservedProcessingInstructionTarget, "XML"), 2));
+    }
+
+    @Test
+    void testSkipProcessingInstruction_whenTheTargetOnlyStartsWithXml_stopsAfterTheClosingMarker()
+    {
+        final String remainder = remainderAfter("ab<?xml-stylesheet href=\"a.xsl\"?> tail", lexer ->
+        {
+            lexer.advance(2);
+            lexer.skipProcessingInstruction();
+        });
+
+        assertThat(remainder).as("A longer target is not reserved.").isEqualTo(" tail");
+    }
+
+    @Test
+    void testSkipProcessingInstruction_whenThereIsNoTarget_recordsABlockingProblemWhereItShouldBe()
+    {
+        final List<DatasetProblem> problems =
+                problemsAfterFailure("<? data?>", 0, XmlLexer::skipProcessingInstruction);
+
+        assertThat(problems).as("The target must follow the opening marker at once.")
+                .containsExactly(problemInFirstLine(Messages.Parser_expectedProcessingInstructionTarget, 2));
+    }
+
+    @Test
+    void testSkipProcessingInstruction_whenTheTargetIsNotFollowedByWhitespace_recordsABlockingProblemAfterIt()
+    {
+        final List<DatasetProblem> problems =
+                problemsAfterFailure("<?target\"x\"?>", 0, XmlLexer::skipProcessingInstruction);
+
+        assertThat(problems).as("Whitespace or the end marker must follow the target.")
+                .containsExactly(
+                        problemInFirstLine(Messages.Parser_expectedSpaceAfterProcessingInstructionTarget, 8));
+    }
+
+    @Test
+    void testSkipProcessingInstruction_whenTheTargetEndsTheInstructionOrIsFollowedByData_stopsAfterIt()
+    {
+        final String withoutData = remainderAfter("<?target?> tail", XmlLexer::skipProcessingInstruction);
+        final String withData = remainderAfter("<?a-b.c1 data?> tail", XmlLexer::skipProcessingInstruction);
+
+        assertThat(List.of(withoutData, withData))
+                .as("A target with or without data, and a target of hyphens, dots, and digits, are valid.")
+                .containsExactly(" tail", " tail");
+    }
+
+    @Test
+    void testSkipProcessingInstruction_whenTheTargetIsAtTheEndOfTheText_recordsTheUnclosedInstruction()
+    {
+        final List<DatasetProblem> problems =
+                problemsAfterFailure("ab<?target", 2, XmlLexer::skipProcessingInstruction);
+
+        assertThat(problems).as("A target that the text ends on is an unclosed instruction.")
+                .containsExactly(problemInFirstLine(Messages.Parser_unclosedProcessingInstruction, 2));
+    }
+
+    @Test
     void testSkipCData_whenClosed_stopsAfterTheClosingMarker()
     {
         final String remainder = remainderAfter("<![CDATA[ a < b ]]> tail", XmlLexer::skipCData);

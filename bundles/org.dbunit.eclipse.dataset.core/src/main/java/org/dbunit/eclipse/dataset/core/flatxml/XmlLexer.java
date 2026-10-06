@@ -37,6 +37,8 @@ import org.eclipse.osgi.util.NLS;
  */
 final class XmlLexer
 {
+    private static final char BYTE_ORDER_MARK = '\uFEFF';
+
     private final CharSequence text;
 
     private final int length;
@@ -155,7 +157,7 @@ final class XmlLexer
 
     void skipBom()
     {
-        if (length > 0 && text.charAt(0) == '﻿')
+        if (length > 0 && text.charAt(0) == BYTE_ORDER_MARK)
         {
             pos = 1;
         }
@@ -169,10 +171,16 @@ final class XmlLexer
         }
     }
 
+    /**
+     * Moves over a processing instruction, whose target must be a name that whitespace or the end of the
+     * instruction follows. A target that spells xml in any letter case is reserved for the XML declaration,
+     * which only the very start of the text may hold.
+     */
     void skipProcessingInstruction()
     {
         final int start = pos;
         pos += 2; // "<?"
+        skipProcessingInstructionTarget(start);
         while (pos < length && !matchesAt(pos, "?>"))
         {
             skipXmlCharacter();
@@ -185,12 +193,20 @@ final class XmlLexer
         pos += 2;
     }
 
+    /**
+     * Moves over a comment, which may not contain two hyphens in a row, so it cannot end with three.
+     */
     void skipComment()
     {
         final int start = pos;
         pos += 4; // "<!--"
         while (pos < length && !matchesAt(pos, "-->"))
         {
+            if (matchesAt(pos, "--"))
+            {
+                throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
+                        Messages.Parser_doubleHyphenInComment, pos);
+            }
             skipXmlCharacter();
         }
         if (pos >= length)
@@ -199,6 +215,50 @@ final class XmlLexer
                     start);
         }
         pos += 3;
+    }
+
+    private void skipProcessingInstructionTarget(final int instructionStart)
+    {
+        if (!atNameStart())
+        {
+            throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
+                    Messages.Parser_expectedProcessingInstructionTarget, pos);
+        }
+        final int targetStart = pos;
+        final String target = scanName();
+        if (isReservedTarget(target, instructionStart))
+        {
+            throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
+                    NLS.bind(Messages.Parser_reservedProcessingInstructionTarget, target), targetStart);
+        }
+        if (!atTargetEnd())
+        {
+            throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
+                    Messages.Parser_expectedSpaceAfterProcessingInstructionTarget, pos);
+        }
+    }
+
+    /**
+     * Tells whether a processing instruction's target is reserved: every spelling of xml is, except the
+     * lowercase one of the XML declaration at the start of the text.
+     */
+    private boolean isReservedTarget(final String target, final int instructionStart)
+    {
+        final boolean isDeclaration = "xml".equals(target) && startsText(instructionStart);
+        return "xml".equalsIgnoreCase(target) && !isDeclaration;
+    }
+
+    /**
+     * Tells whether an offset is where the text starts, which a byte order mark does not change.
+     */
+    private boolean startsText(final int offset)
+    {
+        return offset == 0 || (offset == 1 && text.charAt(0) == BYTE_ORDER_MARK);
+    }
+
+    private boolean atTargetEnd()
+    {
+        return pos >= length || isWhitespace(text.charAt(pos)) || matchesAt(pos, "?>");
     }
 
     void skipCData()
