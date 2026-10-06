@@ -509,6 +509,11 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         refresh();
     }
 
+    /**
+     * Reads the external DTD files that the document has used again, and refreshes the model when the text
+     * of any of them differs from the text it had when the document last read it, including a file that
+     * became readable or unreadable since. It does nothing when none of them changed.
+     */
     public void reloadDtd()
     {
         final boolean changed = dtdResolver.reload();
