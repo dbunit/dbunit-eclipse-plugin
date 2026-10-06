@@ -191,6 +191,62 @@ class DoctypeScannerTest
     }
 
     @Test
+    void testScan_whenNoWhitespaceFollowsSystem_recordsABlockingProblemAtTheLiteral()
+    {
+        final List<DatasetProblem> problems = problemsAfterFailure("<!DOCTYPE dataset SYSTEM\"d.dtd\">", 0);
+
+        assertThat(problems).as("Whitespace is required between SYSTEM and its literal.")
+                .containsExactly(problemInFirstLine(Messages.Parser_expectedWhitespaceAfterIdKeyword, 24));
+    }
+
+    @Test
+    void testScan_whenNoWhitespaceFollowsPublic_recordsABlockingProblemAtTheLiteral()
+    {
+        final List<DatasetProblem> problems =
+                problemsAfterFailure("<!DOCTYPE dataset PUBLIC'-//pub//id' \"d.dtd\">", 0);
+
+        assertThat(problems).as("Whitespace is required between PUBLIC and its literal.")
+                .containsExactly(problemInFirstLine(Messages.Parser_expectedWhitespaceAfterIdKeyword, 24));
+    }
+
+    @Test
+    void testScan_whenNoWhitespaceSeparatesThePublicAndTheSystemLiteral_recordsABlockingProblemAtTheSecond()
+    {
+        final String text = "<!DOCTYPE dataset PUBLIC '-//pub//id'\"d.dtd\">";
+
+        final List<DatasetProblem> problems = problemsAfterFailure(text, 0);
+
+        assertThat(problems).as("Whitespace is required between the public and the system literal.")
+                .containsExactly(problemInFirstLine(Messages.Parser_expectedWhitespaceBetweenIds,
+                        text.indexOf("\"d.dtd")));
+    }
+
+    @Test
+    void testScan_whenThePublicIdentifierHasNoSystemLiteral_recordsABlockingProblemAtTheEnd()
+    {
+        final String text = "<!DOCTYPE dataset PUBLIC '-//pub//id'>";
+
+        final List<DatasetProblem> problems = problemsAfterFailure(text, 0);
+
+        assertThat(problems).as("What is missing is the literal, not whitespace before it.")
+                .containsExactly(
+                        problemInFirstLine(Messages.Parser_expectedQuotedLiteral, text.length() - 1));
+    }
+
+    @Test
+    void testScan_whenTheInternalSubsetFollowsTheLiteralWithoutWhitespace_isAccepted()
+    {
+        final String subset = "<!ELEMENT dataset ANY>";
+        final String text = "<!DOCTYPE dataset SYSTEM \"d.dtd\"[" + subset + "]>";
+
+        final FlatXmlDoctype doctype = scanAt(text, 0);
+
+        assertThat(doctype).as("Whitespace before the bracket of the subset is optional.")
+                .isEqualTo(new FlatXmlDoctype("dataset", null, "d.dtd", subset, text.indexOf('[') + 1, 0,
+                        text.length()));
+    }
+
+    @Test
     void testScan_whenTheSystemIdentifierIsNotQuoted_recordsABlockingProblemAtIt()
     {
         final List<DatasetProblem> problems = problemsAfterFailure("<!DOCTYPE dataset SYSTEM d.dtd>", 0);

@@ -368,6 +368,16 @@ public final class Messages extends NLS
     public static String Parser_unclosedDoctype;
 
     /**
+     * A DOCTYPE has no whitespace between SYSTEM or PUBLIC and the quoted literal that follows it.
+     */
+    public static String Parser_expectedWhitespaceAfterIdKeyword;
+
+    /**
+     * A DOCTYPE has no whitespace between its public literal and its system literal.
+     */
+    public static String Parser_expectedWhitespaceBetweenIds;
+
+    /**
      * A DOCTYPE lacks a quoted literal.
      */
     public static String Parser_expectedQuotedLiteral;

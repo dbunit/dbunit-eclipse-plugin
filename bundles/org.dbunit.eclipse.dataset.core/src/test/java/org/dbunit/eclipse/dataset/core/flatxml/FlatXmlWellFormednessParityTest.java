@@ -182,7 +182,15 @@ class FlatXmlWellFormednessParityTest
                         rowOf("T", "A" + EMOJI + "B")),
                 Arguments.of("a table name that is a supplementary character", rowOf(EMOJI, "ID")),
                 Arguments.of("a column name with a combining character that the fourth edition lacks",
-                        rowOf("T", "A" + COMBINING_LETTER_X)));
+                        rowOf("T", "A" + COMBINING_LETTER_X)),
+                Arguments.of("a SYSTEM keyword with no white space before its literal",
+                        XML_DECLARATION + "<!DOCTYPE dataset SYSTEM\"plain.dtd\">\n" + body("")),
+                Arguments.of("a PUBLIC keyword with no white space before its literal",
+                        XML_DECLARATION + "<!DOCTYPE dataset PUBLIC\"-//DbUnit//DTD Test//EN\" "
+                                + "\"plain.dtd\">\n" + body("")),
+                Arguments.of("a public and a system literal with no white space between them",
+                        XML_DECLARATION + "<!DOCTYPE dataset PUBLIC \"-//DbUnit//DTD Test//EN\""
+                                + "\"plain.dtd\">\n" + body("")));
     }
 
     private static Stream<Arguments> wellFormedTexts()
@@ -244,7 +252,12 @@ class FlatXmlWellFormednessParityTest
                 Arguments.of("a column name with a middle dot and a combining accent in it",
                         rowOf("USERS", "A" + MIDDLE_DOT + "B" + COMBINING_GRAVE_ACCENT)),
                 Arguments.of("a column name with a hyphen, a dot, and digits in it",
-                        rowOf("USERS", "A-1.2")));
+                        rowOf("USERS", "A-1.2")),
+                Arguments.of("a DOCTYPE with line breaks and tabs between its parts",
+                        XML_DECLARATION + "<!DOCTYPE\ndataset\tPUBLIC\r\n\"-//DbUnit//DTD Test//EN\"\n\t"
+                                + "\"plain.dtd\"\n>\n" + body("")),
+                Arguments.of("an internal subset that follows the literal with no white space",
+                        XML_DECLARATION + "<!DOCTYPE dataset SYSTEM \"plain.dtd\"[]>\n" + body("")));
     }
 
     @ParameterizedTest(name = "{0}")

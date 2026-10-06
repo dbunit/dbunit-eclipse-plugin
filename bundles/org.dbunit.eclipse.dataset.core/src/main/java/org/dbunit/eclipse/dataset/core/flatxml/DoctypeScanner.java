@@ -56,16 +56,16 @@ final class DoctypeScanner
         if (lexer.atText("SYSTEM"))
         {
             lexer.advance("SYSTEM".length());
-            lexer.skipWhitespace();
+            skipWhitespaceBeforeLiteral(Messages.Parser_expectedWhitespaceAfterIdKeyword);
             systemId = lexer.scanQuotedLiteral();
             lexer.skipWhitespace();
         }
         else if (lexer.atText("PUBLIC"))
         {
             lexer.advance("PUBLIC".length());
-            lexer.skipWhitespace();
+            skipWhitespaceBeforeLiteral(Messages.Parser_expectedWhitespaceAfterIdKeyword);
             publicId = lexer.scanQuotedLiteral();
-            lexer.skipWhitespace();
+            skipWhitespaceBeforeLiteral(Messages.Parser_expectedWhitespaceBetweenIds);
             systemId = lexer.scanQuotedLiteral();
             lexer.skipWhitespace();
         }
@@ -85,6 +85,24 @@ final class DoctypeScanner
         final int doctypeEndOffset = lexer.position();
         return new FlatXmlDoctype(rootName, publicId, systemId, internalSubset, internalSubsetOffset,
                 doctypeOffset, doctypeEndOffset);
+    }
+
+    /**
+     * Skips the whitespace that must come before a quoted literal, and records a blocking problem when a
+     * quote follows with none. Anything else that follows is for the scan of the literal to refuse, with
+     * the message that says what is missing.
+     *
+     * @param message The message of the problem.
+     */
+    private void skipWhitespaceBeforeLiteral(final String message)
+    {
+        final int before = lexer.position();
+        lexer.skipWhitespace();
+        final boolean quoteFollows = lexer.atCharacter('"') || lexer.atCharacter('\'');
+        if (lexer.position() == before && quoteFollows)
+        {
+            throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, message, lexer.position());
+        }
     }
 
     private String scanDoctypeName()
