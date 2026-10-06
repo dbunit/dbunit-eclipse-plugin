@@ -120,6 +120,45 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testRequireTable_whenTheModelHasTheTable_returnsIt()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create(new Document("<dataset><USERS ID=\"1\"/><ORDERS ID=\"2\"/></dataset>"));
+        datasetDocument.refresh();
+
+        final DatasetTable table = datasetDocument.requireTable("ORDERS");
+
+        assertThat(table).as("The table with the key must be the one of the model.")
+                .isSameAs(datasetDocument.getModel().getTables().get(1));
+    }
+
+    @Test
+    void testRequireTable_whenNoTableHasTheKey_throwsAnEditExceptionNamingTheKey()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create(new Document("<dataset><USERS ID=\"1\"/></dataset>"));
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> datasetDocument.requireTable("GONE")).as("A missing table must be refused.")
+                .isInstanceOf(DatasetEditException.class).hasMessage("There is no table 'GONE'.");
+    }
+
+    @Test
+    void testRequireTable_whenTheTextChangedSinceTheLastRefresh_answersFromTheModelOfTheLastRefresh()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        document.set("<dataset><ORDERS ID=\"1\"/></dataset>");
+
+        final DatasetTable table = datasetDocument.requireTable("USERS");
+
+        assertThat(table).as("The table of the last refresh must be returned, with no new parse.")
+                .isSameAs(datasetDocument.getModel().getTables().get(0));
+        assertThat(datasetDocument.isStale()).as("The lookup must not refresh the model.").isTrue();
+    }
+
+    @Test
     void testIsBlank_forTextThatIsEmptyOrOnlyWhitespace_isTrue()
     {
         assertThat(List.of(create(new Document("")).isBlank(), create(new Document(" \t\r\n ")).isBlank(),

@@ -49,7 +49,6 @@ import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.TextUtilities;
-import org.eclipse.osgi.util.NLS;
 import org.eclipse.text.edits.ReplaceEdit;
 import org.eclipse.text.edits.TextEdit;
 
@@ -258,8 +257,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     private DatasetTable editableTable(final String tableKey)
     {
         refreshForEdit();
-        return getModel().findTable(tableKey)
-                .orElseThrow(() -> new DatasetEditException(NLS.bind(Messages.Edit_noSuchTable, tableKey)));
+        return requireTable(tableKey);
     }
 
     /**

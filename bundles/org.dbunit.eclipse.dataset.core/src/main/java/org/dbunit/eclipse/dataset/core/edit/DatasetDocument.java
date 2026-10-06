@@ -22,8 +22,10 @@ package org.dbunit.eclipse.dataset.core.edit;
 
 import java.util.List;
 
+import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.eclipse.osgi.util.NLS;
 
 /**
  * An editable dataset bound to its source. Not thread-safe: use it from one thread (the UI thread in the
@@ -42,6 +44,19 @@ public interface DatasetDocument
      * @return The current model.
      */
     DatasetModel getModel();
+
+    /**
+     * Returns the table with a key from the model of the last refresh. Never reparses.
+     *
+     * @param tableKey The key of the table.
+     * @return The table.
+     * @throws DatasetEditException When the model has no table with the key.
+     */
+    default DatasetTable requireTable(final String tableKey)
+    {
+        return getModel().findTable(tableKey)
+                .orElseThrow(() -> new DatasetEditException(NLS.bind(Messages.Edit_noSuchTable, tableKey)));
+    }
 
     /**
      * Returns whether the source changed since the last refresh.
