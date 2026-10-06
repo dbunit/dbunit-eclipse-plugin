@@ -57,7 +57,7 @@ public final class XmlSourceViewerConfiguration extends TextSourceViewerConfigur
      * Returns the XML partitioning.
      *
      * @param sourceViewer The viewer to configure.
-     * @return {@link XmlDocumentSetupParticipant#PARTITIONING}.
+     * @return The identifier of the XML partitioning, {@link XmlDocumentSetupParticipant#PARTITIONING}.
      */
     @Override
     public String getConfiguredDocumentPartitioning(final ISourceViewer sourceViewer)

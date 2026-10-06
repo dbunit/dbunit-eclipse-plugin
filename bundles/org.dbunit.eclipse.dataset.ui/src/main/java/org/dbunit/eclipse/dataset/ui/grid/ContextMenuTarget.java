@@ -52,8 +52,9 @@ final class ContextMenuTarget implements IMouseAction
      * @param natTable The grid.
      * @param x The point's x coordinate, relative to the grid.
      * @param y The point's y coordinate, relative to the grid.
-     * @return {@link GridRegion#ROW_HEADER}, {@link GridRegion#COLUMN_HEADER}, or {@link GridRegion#CORNER}
-     *         for a point in one of them, else {@link GridRegion#BODY}, also beyond the last column or row.
+     * @return The region that the point is in: {@link GridRegion#ROW_HEADER},
+     *         {@link GridRegion#COLUMN_HEADER}, or {@link GridRegion#CORNER} for a point in one of them, and
+     *         {@link GridRegion#BODY} for any other point, including one beyond the last column or row.
      */
     static String regionAt(final NatTable natTable, final int x, final int y)
     {
