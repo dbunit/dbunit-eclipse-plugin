@@ -23,6 +23,7 @@ package org.dbunit.eclipse.dataset.ui.editor;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
@@ -136,6 +137,8 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
 
     private FlatXmlSourceEditor sourceEditor;
 
+    private SaveEncoding saveEncoding;
+
     private TablesPage tablesPage;
 
     private FlatXmlDatasetDocument datasetDocument;
@@ -166,6 +169,8 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
 
         final IDocument document =
                 sourceEditor.getDocumentProvider().getDocument(sourceEditor.getEditorInput());
+        saveEncoding = new SaveEncoding(sourceEditor::getEditorInput,
+                () -> sourceEditor.getDocumentProvider().getDocument(sourceEditor.getEditorInput()));
         datasetDocument = new FlatXmlDatasetDocument(document,
                 new EditorInputDtdSource(getEditorInput()), PreferenceKeys.readOptions(),
                 this::currentCharset, LOG::log);
@@ -402,6 +407,16 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
     }
 
     Charset currentCharset()
+    {
+        final Optional<String> encodingOfText = saveEncoding.decidedByText();
+        if (encodingOfText.isPresent())
+        {
+            return encodingResolver.charsetOf(encodingOfText.get());
+        }
+        return charsetOfBuffer();
+    }
+
+    private Charset charsetOfBuffer()
     {
         final IEncodingSupport encodingSupport = sourceEditor.getAdapter(IEncodingSupport.class);
         if (encodingSupport == null)

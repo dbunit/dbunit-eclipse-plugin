@@ -131,6 +131,8 @@ Characters that XML does not allow, such as most control characters, are rejecte
 The editor escapes values as dbUnit's own writer does, for example `&amp;`, `&lt;`, and `&#xA;` for a line break.
 A character that the file's encoding cannot store, such as `€` in an ISO-8859-1 file,
 is written as a character reference, `&#x20AC;`.
+The file's encoding is the one that the XML declaration names as it is now, also before you save a change of it,
+unless the file has an encoding of its own in its Eclipse properties, which is the one that counts then.
 
 [[undo]]
 === Undo and Redo

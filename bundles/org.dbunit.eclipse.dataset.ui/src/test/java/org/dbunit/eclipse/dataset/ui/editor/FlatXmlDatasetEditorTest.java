@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
@@ -41,6 +42,7 @@ import org.eclipse.core.runtime.preferences.IEclipsePreferences;
 import org.eclipse.core.runtime.preferences.InstanceScope;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.text.BadLocationException;
+import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.config.CellConfigAttributes;
@@ -72,6 +74,9 @@ class FlatXmlDatasetEditorTest
     private static final int SOURCE_PAGE_INDEX = 1;
 
     private static final String SAVED_USERS = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
+
+    private static final String UTF8_DECLARED_USERS =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
 
     private static final String CHANGED_USERS = "<dataset><USERS ID=\"1\" NAME=\"Zed\"/></dataset>";
 
@@ -121,6 +126,73 @@ class FlatXmlDatasetEditorTest
             assertThat(editor.currentCharset())
                     .as("The XML declaration's encoding must become the editor's charset.")
                     .isEqualTo(StandardCharsets.ISO_8859_1);
+        }
+    }
+
+    @Test
+    void testCurrentCharset_whenTheDeclarationWasEditedAfterOpening_returnsTheCharsetThatItNamesNow()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", UTF8_DECLARED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+
+            replaceInDocument(editor, "UTF-8", "ISO-8859-1");
+
+            assertThat(editor.currentCharset())
+                    .as("A save writes the text in the encoding that its declaration names when it is saved, "
+                            + "not in the one that it named when the file was loaded.")
+                    .isEqualTo(StandardCharsets.ISO_8859_1);
+        }
+    }
+
+    @Test
+    void testCurrentCharset_whenTheFileHasACharsetOfItsOwn_returnsItWhateverTheDeclarationNames()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", UTF8_DECLARED_USERS);
+            file.setCharset("ISO-8859-1", null);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+
+            assertThat(editor.currentCharset())
+                    .as("A save writes a file that has a charset of its own in that charset, whatever its "
+                            + "declaration names.")
+                    .isEqualTo(StandardCharsets.ISO_8859_1);
+        }
+    }
+
+    @Test
+    void testSetCells_whenTheDeclarationWasEditedToAnEncodingThatLacksTheCharacter_writesAReferenceThatSaves()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            dialogDriver.expectNoDialog();
+            final IFile file = workspace.createFile("dataset.xml", UTF8_DECLARED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            replaceInDocument(editor, "UTF-8", "ISO-8859-1");
+
+            editor.getDatasetDocument().setCells("USERS", List.of(new CellChange(0, "NAME", "\u20AC")));
+            UiTestWorkspace.processEvents();
+
+            final String expectedText = "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>"
+                    + "<dataset><USERS ID=\"1\" NAME=\"&#x20AC;\"/></dataset>";
+            assertThat(documentText(editor)).as("The euro sign is not in ISO-8859-1, so the grid edit must "
+                    + "write it as a character reference.").isEqualTo(expectedText);
+            editor.doSave(new NullProgressMonitor());
+            UiTestWorkspace.processEvents();
+            assertThat(dialogDriver.unexpectedDialogTitles())
+                    .as("The save must not fail on a character that its encoding cannot hold.").isEmpty();
+            assertThat(editor.isDirty()).as("Saving must clear the dirty state.").isFalse();
+            try (InputStream contents = file.getContents())
+            {
+                assertThat(new String(contents.readAllBytes(), StandardCharsets.ISO_8859_1))
+                        .as("The saved file must hold the text.").isEqualTo(expectedText);
+            }
         }
     }
 
@@ -632,6 +704,17 @@ class FlatXmlDatasetEditorTest
                 "<!--edited-->");
         UiTestWorkspace.processEvents();
         assertThat(editor.isDirty()).as("A source edit must make the editor dirty.").isTrue();
+    }
+
+    private static void replaceInDocument(final FlatXmlDatasetEditor editor, final String oldText,
+            final String newText) throws BadLocationException
+    {
+        final ITextEditor sourceEditor = editor.getSourceEditor();
+        final IEditorInput input = sourceEditor.getEditorInput();
+        final IDocument document = sourceEditor.getDocumentProvider().getDocument(input);
+        final int offset = document.get().indexOf(oldText);
+        document.replace(offset, oldText.length(), newText);
+        UiTestWorkspace.processEvents();
     }
 
     private static void setLightweightAutoRefresh(final boolean enabled)
