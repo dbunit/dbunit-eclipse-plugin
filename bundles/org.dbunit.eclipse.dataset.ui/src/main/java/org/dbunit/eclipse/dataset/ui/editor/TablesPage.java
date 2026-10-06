@@ -60,6 +60,7 @@ import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.actions.ActionFactory;
 import org.eclipse.ui.texteditor.ITextEditor;
+import org.eclipse.ui.texteditor.ITextEditorActionConstants;
 
 /**
  * The Tables page of {@link FlatXmlDatasetEditor}: one sheet tab per table, an {@link ErrorBanner}, and a
@@ -181,8 +182,11 @@ final class TablesPage implements DatasetGridContext
                 SelectionListener.widgetSelectedAdapter(event -> runAddTableAction()));
 
         tabFolder = new CTabFolder(contentStack, SWT.TOP | SWT.BORDER | SWT.FLAT);
-        actions = new TablesPageActions(this, tabFolder, control, editor::getEditorSite, this::sourceDocument,
-                this::hasActiveCellEditor, this::getSelection);
+        final ITextEditor sourceEditor = editor.getSourceEditor();
+        actions = new TablesPageActions(this, tabFolder, editor::getEditorSite,
+                sourceEditor.getAction(ITextEditorActionConstants.UNDO),
+                sourceEditor.getAction(ITextEditorActionConstants.REDO), this::hasActiveCellEditor,
+                this::getSelection);
         tabs = new TableTabs(tabFolder, this, resources, actions::updateGridActionsEnablement);
         activeGrid = new ActiveGrid(tabFolder, tabs::activeGrid);
 
@@ -243,7 +247,6 @@ final class TablesPage implements DatasetGridContext
         listenedDocument.removeDocumentListener(sourceDocumentListener);
         listenedDocument = sourceDocument();
         listenedDocument.addDocumentListener(sourceDocumentListener);
-        actions.updateUndoRedoActions();
     }
 
     /**

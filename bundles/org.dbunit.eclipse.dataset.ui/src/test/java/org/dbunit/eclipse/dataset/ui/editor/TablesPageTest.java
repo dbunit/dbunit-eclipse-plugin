@@ -873,6 +873,67 @@ class TablesPageTest
     }
 
     @Test
+    void testGlobalActionHandler_afterAGridEdit_undoAndRedoShowWhatTheSourcePagesActionsShow()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final ITextEditor sourceEditor = editor.getSourceEditor();
+            final IAction undo = tablesPage.getGlobalActionHandler(ActionFactory.UNDO.getId());
+            final IAction redo = tablesPage.getGlobalActionHandler(ActionFactory.REDO.getId());
+            final IAction sourceUndo = sourceEditor.getAction(ITextEditorActionConstants.UNDO);
+            final IAction sourceRedo = sourceEditor.getAction(ITextEditorActionConstants.REDO);
+            final String undoTextBeforeTheEdit = undo.getText();
+
+            editor.getDatasetDocument().setCells("USERS", List.of(new CellChange(0, "NAME", "Carol")));
+            UiTestWorkspace.processEvents();
+
+            assertThat(List.of(undo.getText(), undo.getToolTipText(), undo.isEnabled()))
+                    .as("After an edit, undo must show what the Source page's undo shows.")
+                    .containsExactly(sourceUndo.getText(), sourceUndo.getToolTipText(), true);
+            assertThat(undo.getText()).as("After an edit, undo must name the operation that it undoes.")
+                    .isNotEqualTo(undoTextBeforeTheEdit);
+
+            undo.run();
+            UiTestWorkspace.processEvents();
+
+            assertThat(List.of(redo.getText(), redo.getToolTipText(), redo.isEnabled()))
+                    .as("After an undo, redo must show what the Source page's redo shows.")
+                    .containsExactly(sourceRedo.getText(), sourceRedo.getToolTipText(), true);
+        }
+    }
+
+    @Test
+    void testGlobalActionHandler_afterAddColumnAndItsUndo_undoAndRedoNameThePendingColumnOperation()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final IAction undo = tablesPage.getGlobalActionHandler(ActionFactory.UNDO.getId());
+            final IAction redo = tablesPage.getGlobalActionHandler(ActionFactory.REDO.getId());
+
+            editor.getDatasetDocument().addColumn("USERS", "EXTRA");
+            UiTestWorkspace.processEvents();
+            final String undoText = undo.getText();
+            undo.run();
+            UiTestWorkspace.processEvents();
+            final String redoText = redo.getText();
+
+            assertThat(List.of(undoText, redoText))
+                    .as("Undo and redo must name the operation that they undo and redo: the label of the "
+                            + "operation that the document's history holds.")
+                    .allSatisfy(text -> assertThat(text).contains("Add pending column"));
+        }
+    }
+
+    @Test
     void testGlobalActionHandler_undoFromTheSourcePage_undoesATablesPageEditTooBecauseHistoryIsShared()
             throws Exception
     {

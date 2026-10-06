@@ -199,16 +199,6 @@ public final class Messages extends NLS
     public static String Action_selectAll;
 
     /**
-     * The label of the Tables page's Undo action.
-     */
-    public static String Action_undo;
-
-    /**
-     * The label of the Tables page's Redo action.
-     */
-    public static String Action_redo;
-
-    /**
      * The title of the dialog that asks for a new column's name.
      */
     public static String ColumnDialog_addTitle;

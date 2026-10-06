@@ -42,14 +42,13 @@ import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.actions.DatasetCommandIds;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.core.commands.IHandler;
+import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.ActionContributionItem;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.action.IContributionItem;
 import org.eclipse.jface.action.MenuManager;
 import org.eclipse.jface.commands.ActionHandler;
-import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.Document;
-import org.eclipse.jface.text.IDocument;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
@@ -64,8 +63,6 @@ import org.eclipse.swt.widgets.MenuItem;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.ToolBar;
 import org.eclipse.swt.widgets.ToolItem;
-import org.eclipse.text.undo.DocumentUndoManagerRegistry;
-import org.eclipse.text.undo.IDocumentUndoManager;
 import org.eclipse.ui.actions.ActionFactory;
 import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
@@ -78,8 +75,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests {@link TablesPageActions}: the global action handlers, the menus and the toolbar, the enablement for
- * a selection, undo and redo of the shared history of a document, and the activation of the context and the
- * command handlers of the page, which is checked against a recording locator of the two services.
+ * a selection, undo and redo, which run the actions of the Source page on the shared history of a document,
+ * and the activation of the context and the command handlers of the page, which is checked against a
+ * recording locator of the two services.
  */
 class TablesPageActionsTest
 {
@@ -97,13 +95,23 @@ class TablesPageActionsTest
     private static final GridSelection USERS_CELL_SELECTED =
             new GridSelection("USERS", 2, 2, 0, 0, List.of(0), List.of(0), false);
 
+    private static final String UNDONE_TEXT = "<dataset><USERS ID=\"1\"/></dataset>";
+
+    private static final String REDONE_TEXT = "<dataset><ORDERS ID=\"1\"/></dataset>";
+
+    private final List<String> sourceActionRuns = new ArrayList<>();
+
     private Shell shell;
 
     private CTabFolder tabFolder;
 
-    private Document document;
+    private Document datasetText;
 
-    private AtomicReference<IDocument> sourceDocument;
+    private FlatXmlDatasetDocument datasetDocument;
+
+    private Action sourceUndo;
+
+    private Action sourceRedo;
 
     private AtomicReference<GridSelection> selection;
 
@@ -122,17 +130,17 @@ class TablesPageActionsTest
         shell.setLayout(new FillLayout());
         shell.setSize(400, 300);
         tabFolder = new CTabFolder(shell, SWT.TOP | SWT.BORDER | SWT.FLAT);
-        document = new Document("<dataset/>");
-        trackChanges(document);
-        sourceDocument = new AtomicReference<>(document);
+        sourceUndo = sourceAction("Undo", "undo", UNDONE_TEXT);
+        sourceRedo = sourceAction("Redo", "redo", REDONE_TEXT);
         selection = new AtomicReference<>(GridSelection.NONE);
         selectionReads = new AtomicInteger();
         cellEditorOpen = new AtomicBoolean();
         services = new RecordingServices();
-        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(new Document("<dataset/>"),
-                DtdSource.NONE, FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+        datasetText = new Document("<dataset/>");
+        datasetDocument = new FlatXmlDatasetDocument(datasetText, DtdSource.NONE,
+                FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
         final StubGridContext context = new StubGridContext(datasetDocument);
-        actions = new TablesPageActions(context, tabFolder, shell, () -> services, sourceDocument::get,
+        actions = new TablesPageActions(context, tabFolder, () -> services, sourceUndo, sourceRedo,
                 cellEditorOpen::get, () ->
                 {
                     selectionReads.incrementAndGet();
@@ -146,7 +154,6 @@ class TablesPageActionsTest
     void disposeActions()
     {
         actions.dispose();
-        stopTracking(document);
         shell.dispose();
     }
 
@@ -165,7 +172,7 @@ class TablesPageActionsTest
         }
 
         assertThat(handlers).as("Each global action id must have its action.").containsExactly(
-                "DocumentUndoAction: " + Messages.Action_undo, "DocumentUndoAction: " + Messages.Action_redo,
+                "SharedHistoryAction: Undo", "SharedHistoryAction: Redo",
                 "CutAction: " + Messages.Action_cut, "CopyAction: " + Messages.Action_copy,
                 "PasteAction: " + Messages.Action_paste, "DeleteAction: " + Messages.Action_delete,
                 "SelectAllAction: " + Messages.Action_selectAll);
@@ -343,19 +350,6 @@ class TablesPageActionsTest
     }
 
     @Test
-    void testActivate_whenCalled_updatesUndoAndRedoFromTheHistory() throws BadLocationException
-    {
-        final IAction undo = actions.getGlobalActionHandler(ActionFactory.UNDO.getId());
-        actions.dispose();
-        document.replace(0, 0, "<!-- -->");
-
-        actions.activate();
-
-        assertThat(undo.isEnabled()).as("Undo and redo must show the history when the page activates.")
-                .isTrue();
-    }
-
-    @Test
     void testDeactivate_afterActivate_deactivatesTheContextAndAllTheHandlers()
     {
         actions.activate();
@@ -477,133 +471,80 @@ class TablesPageActionsTest
     }
 
     @Test
-    void testUndoAndRedo_whenTheDocumentChanges_followItsHistoryWithoutAnExplicitUpdate()
-            throws BadLocationException
+    void testUndoAndRedo_whenTheSourceActionsChange_followTheirLabelToolTipAndEnablement()
     {
         final IAction undo = actions.getGlobalActionHandler(ActionFactory.UNDO.getId());
         final IAction redo = actions.getGlobalActionHandler(ActionFactory.REDO.getId());
-        final List<Boolean> initial = List.of(undo.isEnabled(), redo.isEnabled());
 
-        document.replace(0, 0, "<!-- -->");
-        final List<Boolean> afterChange = List.of(undo.isEnabled(), redo.isEnabled());
-        undo.run();
-        final List<Boolean> afterUndo = List.of(undo.isEnabled(), redo.isEnabled());
+        sourceUndo.setText("Undo Typing@");
+        sourceUndo.setEnabled(false);
+        sourceRedo.setToolTipText("Redo Typing");
 
-        assertThat(List.of(initial, afterChange, afterUndo)).as("Undo and redo must follow the history.")
-                .containsExactly(List.of(false, false), List.of(true, false), List.of(false, true));
-        assertThat(document.get()).as("Undo must restore the text.").isEqualTo("<dataset/>");
+        assertThat(List.of(undo.getText(), undo.isEnabled(), redo.getToolTipText()))
+                .as("Undo and redo must show what their own Source page actions show.")
+                .containsExactly("Undo Typing@", false, "Redo Typing");
     }
 
     @Test
-    void testUndo_whenTheDocumentChangesOnAnotherThread_isEnabledOnceTheDisplayRunsItsUpdate()
-            throws InterruptedException
+    void testUndoAndRedo_whenRun_runTheirOwnSourceActionAndBringTheModelUpToDateBeforeTheyReturn()
     {
-        final IAction undo = actions.getGlobalActionHandler(ActionFactory.UNDO.getId());
+        datasetDocument.refresh();
 
-        changeOnAnotherThread();
-        UiTestWorkspace.processEvents();
+        actions.getGlobalActionHandler(ActionFactory.UNDO.getId()).run();
+        final List<String> tablesAfterUndo = modelTableNames();
+        actions.getGlobalActionHandler(ActionFactory.REDO.getId()).run();
+        final List<String> tablesAfterRedo = modelTableNames();
 
-        assertThat(undo.isEnabled()).as("The update that another thread asks for must run on the display.")
-                .isTrue();
+        assertThat(sourceActionRuns).as("Each action must run its own Source page action.")
+                .containsExactly("undo", "redo");
+        assertThat(List.of(tablesAfterUndo, tablesAfterRedo))
+                .as("The model must show what the Source page action changed as soon as undo or redo "
+                        + "returns.")
+                .containsExactly(List.of("USERS"), List.of("ORDERS"));
     }
 
     @Test
-    void testUndo_whenTheDocumentChangesOnAnotherThreadAndThePageIsDisposedBeforeTheUpdate_updatesNothing()
-            throws InterruptedException
+    void testUndoAndRedo_whileACellEditorIsOpen_doNothing()
     {
-        final IAction undo = actions.getGlobalActionHandler(ActionFactory.UNDO.getId());
-        changeOnAnotherThread();
+        cellEditorOpen.set(true);
 
-        shell.dispose();
-        UiTestWorkspace.processEvents();
+        actions.getGlobalActionHandler(ActionFactory.UNDO.getId()).run();
+        actions.getGlobalActionHandler(ActionFactory.REDO.getId()).run();
 
-        assertThat(undo.isEnabled()).as("A disposed page must not update its actions.").isFalse();
+        assertThat(sourceActionRuns).as("Neither may run while a cell editor is open.").isEmpty();
     }
 
     @Test
-    void testUndo_whenAnotherDocumentChangesAndTheCurrentOneHasNoUndoManager_isNotUpdated()
-            throws BadLocationException
+    void testDispose_whenCalled_stopsFollowingTheSourceActions()
     {
         final IAction undo = actions.getGlobalActionHandler(ActionFactory.UNDO.getId());
-        document.replace(0, 0, "<!-- -->");
-        sourceDocument.set(new Document("<dataset/>"));
-        final Document other = new Document("<dataset/>");
-        trackChanges(other);
-        try
-        {
-            other.replace(0, 0, "<!-- -->");
-        }
-        finally
-        {
-            stopTracking(other);
-        }
-
-        assertThat(undo.isEnabled()).as("A change of another document must not update undo.").isTrue();
-    }
-
-    @Test
-    void testUndo_whenAnotherDocumentChangesAndTheCurrentOneHasItsOwnHistory_isNotUpdated()
-            throws BadLocationException
-    {
-        final IAction undo = actions.getGlobalActionHandler(ActionFactory.UNDO.getId());
-        document.replace(0, 0, "<!-- -->");
-        final Document current = new Document("<dataset/>");
-        final Document other = new Document("<dataset/>");
-        trackChanges(current);
-        trackChanges(other);
-        try
-        {
-            sourceDocument.set(current);
-            other.replace(0, 0, "<!-- -->");
-        }
-        finally
-        {
-            stopTracking(other);
-            stopTracking(current);
-        }
-
-        assertThat(undo.isEnabled()).as("An operation of another history must not update undo.").isTrue();
-    }
-
-    @Test
-    void testUpdateUndoRedoActions_afterTheDocumentChangedUnnoticed_showsTheHistory()
-            throws BadLocationException
-    {
-        final IAction undo = actions.getGlobalActionHandler(ActionFactory.UNDO.getId());
-        actions.dispose();
-        document.replace(0, 0, "<!-- -->");
-        final boolean beforeTheUpdate = undo.isEnabled();
-
-        actions.updateUndoRedoActions();
-
-        assertThat(List.of(beforeTheUpdate, undo.isEnabled()))
-                .as("The explicit update must show the history that the actions missed.")
-                .containsExactly(false, true);
-    }
-
-    @Test
-    void testDispose_whenCalled_stopsFollowingTheHistory() throws BadLocationException
-    {
-        final IAction undo = actions.getGlobalActionHandler(ActionFactory.UNDO.getId());
+        final IAction redo = actions.getGlobalActionHandler(ActionFactory.REDO.getId());
 
         actions.dispose();
-        document.replace(0, 0, "<!-- -->");
+        sourceUndo.setEnabled(false);
+        sourceRedo.setEnabled(false);
 
-        assertThat(undo.isEnabled()).as("After dispose no history event may reach the actions.").isFalse();
+        assertThat(List.of(undo.isEnabled(), redo.isEnabled()))
+                .as("After dispose no change of the Source page actions may reach the actions.")
+                .containsExactly(true, true);
     }
 
-    private void trackChanges(final IDocument tracked)
+    private Action sourceAction(final String text, final String name, final String textAfterRunning)
     {
-        DocumentUndoManagerRegistry.connect(tracked);
-        final IDocumentUndoManager manager = DocumentUndoManagerRegistry.getDocumentUndoManager(tracked);
-        manager.connect(this);
+        return new Action(text)
+        {
+            @Override
+            public void run()
+            {
+                sourceActionRuns.add(name);
+                datasetText.set(textAfterRunning);
+            }
+        };
     }
 
-    private void stopTracking(final IDocument tracked)
+    private List<String> modelTableNames()
     {
-        final IDocumentUndoManager manager = DocumentUndoManagerRegistry.getDocumentUndoManager(tracked);
-        manager.disconnect(this);
-        DocumentUndoManagerRegistry.disconnect(tracked);
+        return datasetDocument.getModel().getTables().stream().map(table -> table.getName()).toList();
     }
 
     private CTabItem addTab(final String text)
@@ -628,23 +569,6 @@ class TablesPageActionsTest
         event.x = onDisplay.x;
         event.y = onDisplay.y;
         return event;
-    }
-
-    private void changeOnAnotherThread() throws InterruptedException
-    {
-        final Thread thread = new Thread(() ->
-        {
-            try
-            {
-                document.replace(0, 0, "<!-- -->");
-            }
-            catch (final BadLocationException e)
-            {
-                throw new IllegalStateException(e);
-            }
-        });
-        thread.start();
-        thread.join();
     }
 
     private Map<String, IAction> tabMenuActions()

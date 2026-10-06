@@ -52,26 +52,18 @@ import org.dbunit.eclipse.dataset.ui.actions.SetNullAction;
 import org.dbunit.eclipse.dataset.ui.actions.ShowInSourceAction;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
-import org.eclipse.core.commands.operations.IOperationHistoryListener;
-import org.eclipse.core.commands.operations.OperationHistoryEvent;
-import org.eclipse.core.commands.operations.OperationHistoryFactory;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.action.MenuManager;
 import org.eclipse.jface.action.ToolBarManager;
 import org.eclipse.jface.commands.ActionHandler;
-import org.eclipse.jface.text.IDocument;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.Point;
-import org.eclipse.swt.widgets.Control;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.ToolBar;
-import org.eclipse.text.undo.DocumentUndoManagerRegistry;
-import org.eclipse.text.undo.IDocumentUndoManager;
 import org.eclipse.ui.actions.ActionFactory;
 import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
@@ -90,21 +82,15 @@ final class TablesPageActions
 {
     private static final String TABLES_PAGE_CONTEXT_ID = "org.dbunit.eclipse.dataset.ui.tablesPageContext";
 
-    private final Control control;
-
     private final Supplier<IServiceLocator> serviceLocator;
-
-    private final Supplier<IDocument> sourceDocument;
 
     private final Supplier<GridSelection> currentSelection;
 
     private final BooleanSupplier hasActiveCellEditor;
 
-    private final DocumentUndoAction undoAction;
+    private final SharedHistoryAction undoAction;
 
-    private final DocumentUndoAction redoAction;
-
-    private final IOperationHistoryListener operationHistoryListener;
+    private final SharedHistoryAction redoAction;
 
     private final InsertRowAboveAction insertRowAboveAction;
 
@@ -169,23 +155,20 @@ final class TablesPageActions
      *
      * @param context The context that the actions work with.
      * @param tabFolder The folder that gets the toolbar, the tab menu, and the selection listener.
-     * @param control The page's control, whose display runs the update of undo and redo that a change on
-     *                another thread asks for.
      * @param serviceLocator Returns the locator of the context service and the handler service of the
      *                       editor.
-     * @param sourceDocument Returns the document whose shared undo history undo and redo act on, which
-     *                       changes when the editor's input does.
+     * @param sourceUndoAction The Source page's undo action, which undo on this page runs.
+     * @param sourceRedoAction The Source page's redo action, which redo on this page runs.
      * @param hasActiveCellEditor Returns true while a grid cell editor is open, so undo and redo decline to
      *                            run and the key bindings of the grid commands leave its keys alone.
      * @param currentSelection Returns the selection of the grid of the selected tab.
      */
-    TablesPageActions(final DatasetGridContext context, final CTabFolder tabFolder, final Control control,
-            final Supplier<IServiceLocator> serviceLocator, final Supplier<IDocument> sourceDocument,
-            final BooleanSupplier hasActiveCellEditor, final Supplier<GridSelection> currentSelection)
+    TablesPageActions(final DatasetGridContext context, final CTabFolder tabFolder,
+            final Supplier<IServiceLocator> serviceLocator, final IAction sourceUndoAction,
+            final IAction sourceRedoAction, final BooleanSupplier hasActiveCellEditor,
+            final Supplier<GridSelection> currentSelection)
     {
-        this.control = control;
         this.serviceLocator = serviceLocator;
-        this.sourceDocument = sourceDocument;
         this.currentSelection = currentSelection;
         this.hasActiveCellEditor = hasActiveCellEditor;
 
@@ -267,16 +250,12 @@ final class TablesPageActions
         tabFolder.setMenu(tabMenuManager.createContextMenu(tabFolder));
 
         final DatasetDocument datasetDocument = context.getDatasetDocument();
-        undoAction = new DocumentUndoAction(sourceDocument, false, hasActiveCellEditor,
-                datasetDocument::refresh);
-        redoAction = new DocumentUndoAction(sourceDocument, true, hasActiveCellEditor,
-                datasetDocument::refresh);
+        undoAction = new SharedHistoryAction(sourceUndoAction, hasActiveCellEditor, datasetDocument::refresh);
+        redoAction = new SharedHistoryAction(sourceRedoAction, hasActiveCellEditor, datasetDocument::refresh);
         globalActionHandlers = Map.of(ActionFactory.UNDO.getId(), undoAction, ActionFactory.REDO.getId(),
                 redoAction, ActionFactory.CUT.getId(), cutAction, ActionFactory.COPY.getId(), copyAction,
                 ActionFactory.PASTE.getId(), pasteAction, ActionFactory.DELETE.getId(), deleteAction,
                 ActionFactory.SELECT_ALL.getId(), selectAllAction);
-        operationHistoryListener = this::handleOperationHistoryEvent;
-        OperationHistoryFactory.getOperationHistory().addOperationHistoryListener(operationHistoryListener);
     }
 
     void activate()
@@ -290,7 +269,6 @@ final class TablesPageActions
             handlers.add(handler);
             handlerActivations.add(handlerService.activateHandler(action.getActionDefinitionId(), handler));
         }
-        updateUndoRedoActions();
         updateGridActionsEnablement();
     }
 
@@ -303,7 +281,8 @@ final class TablesPageActions
 
     void dispose()
     {
-        OperationHistoryFactory.getOperationHistory().removeOperationHistoryListener(operationHistoryListener);
+        undoAction.dispose();
+        redoAction.dispose();
         if (!handlers.isEmpty())
         {
             releaseHandlers();
@@ -361,49 +340,6 @@ final class TablesPageActions
             menu.add(renameColumnAction);
             menu.add(deleteColumnAction);
         }
-    }
-
-    void updateUndoRedoActions()
-    {
-        undoAction.update();
-        redoAction.update();
-    }
-
-    private void handleOperationHistoryEvent(final OperationHistoryEvent event)
-    {
-        if (!isUndoRedoEnablementEvent(event.getEventType()))
-        {
-            return;
-        }
-        final IDocumentUndoManager manager =
-                DocumentUndoManagerRegistry.getDocumentUndoManager(sourceDocument.get());
-        if (manager == null || !event.getOperation().hasContext(manager.getUndoContext()))
-        {
-            return;
-        }
-        if (Display.getCurrent() == null)
-        {
-            control.getDisplay().asyncExec(() ->
-            {
-                if (!control.isDisposed())
-                {
-                    updateUndoRedoActions();
-                }
-            });
-        }
-        else
-        {
-            updateUndoRedoActions();
-        }
-    }
-
-    private static boolean isUndoRedoEnablementEvent(final int eventType)
-    {
-        return eventType == OperationHistoryEvent.DONE || eventType == OperationHistoryEvent.UNDONE
-                || eventType == OperationHistoryEvent.REDONE
-                || eventType == OperationHistoryEvent.OPERATION_ADDED
-                || eventType == OperationHistoryEvent.OPERATION_REMOVED
-                || eventType == OperationHistoryEvent.OPERATION_CHANGED;
     }
 
     /**
