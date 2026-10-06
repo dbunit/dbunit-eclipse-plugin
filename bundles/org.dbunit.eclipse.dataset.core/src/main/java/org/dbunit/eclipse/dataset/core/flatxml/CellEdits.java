@@ -72,6 +72,7 @@ final class CellEdits
 
         final List<FlatXmlElement> rowElements = context.index().getRowElements(tableKey);
         final CharsetEncoder encoder = context.encoder();
+        final ColumnKeys columnKeys = ColumnKeys.of(table.getColumns());
         final List<TextEdit> edits = new ArrayList<>();
         final String text = context.text();
         for (final Map.Entry<Integer, Map<String, String>> entry : changesByRow.entrySet())
@@ -87,8 +88,8 @@ final class CellEdits
                         new Object[] { columnName, rowIndex, table.getName() }));
             }
             requireRowNotEmptied(table, rowIndex, rowChanges);
-            final String rewritten = StartTagRewriter.rewrite(text, element, table.getColumns(),
-                    rowChanges, Map.of(), encoder);
+            final String rewritten =
+                    StartTagRewriter.rewrite(text, element, columnKeys, rowChanges, Map.of(), encoder);
             if (rewritten != null)
             {
                 edits.add(new ReplaceEdit(element.nameEndOffset(),

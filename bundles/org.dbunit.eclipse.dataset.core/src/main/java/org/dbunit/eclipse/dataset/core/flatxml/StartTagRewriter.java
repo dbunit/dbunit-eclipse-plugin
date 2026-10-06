@@ -23,14 +23,11 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 import java.nio.charset.CharsetEncoder;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-
-import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 
 /**
  * Rewrites one element's start tag: changed attributes and renames are applied segment by segment, so
@@ -47,7 +44,8 @@ final class StartTagRewriter
      *
      * @param text The document text the element was parsed from.
      * @param element The element to rewrite.
-     * @param columns The table's columns, used for ordering new attributes and for their display names.
+     * @param columnKeys The table's columns by key, used for ordering new attributes and for their display
+     *                   names; an edit builds it once for all of its rows.
      * @param changes Column key (upper-cased) to new value; null means NULL (the attribute is removed).
      *                A column key absent from this map is unchanged. The caller must not change a column
      *                for which element has two or more attributes differing only in letter case, because
@@ -58,39 +56,30 @@ final class StartTagRewriter
      * @return The replacement text for {@code text[element.nameEndOffset(), element.attributesEndOffset())},
      *         or null when the result equals the original text.
      */
-    static String rewrite(final String text, final FlatXmlElement element, final List<DatasetColumn> columns,
+    static String rewrite(final String text, final FlatXmlElement element, final ColumnKeys columnKeys,
             final Map<String, String> changes, final Map<String, String> renames,
             final CharsetEncoder encoder)
     {
-        final Map<String, Integer> columnIndexByKey = new HashMap<>();
-        final Map<String, String> displayNameByKey = new HashMap<>();
-        for (int index = 0; index < columns.size(); index++)
-        {
-            final String key = columns.get(index).name().toUpperCase(Locale.ENGLISH);
-            columnIndexByKey.put(key, index);
-            displayNameByKey.put(key, columns.get(index).name());
-        }
-
         final Set<String> existingKeys = existingKeys(element);
-        final List<String> additions = pendingAdditions(changes, existingKeys, columnIndexByKey);
+        final List<String> additions = pendingAdditions(changes, existingKeys, columnKeys);
 
         final StringBuilder result = new StringBuilder();
         int nextAddition = 0;
         for (final FlatXmlAttribute attribute : element.attributes())
         {
             final String key = attribute.name().toUpperCase(Locale.ENGLISH);
-            final int attributeColumnIndex = columnIndexByKey.getOrDefault(key, Integer.MAX_VALUE);
-            while (nextAddition < additions.size() && columnIndexByKey
-                    .getOrDefault(additions.get(nextAddition), Integer.MAX_VALUE) < attributeColumnIndex)
+            final int attributeColumnIndex = columnKeys.indexOf(key);
+            while (nextAddition < additions.size()
+                    && columnKeys.indexOf(additions.get(nextAddition)) < attributeColumnIndex)
             {
-                appendAddition(result, additions.get(nextAddition), changes, displayNameByKey, encoder);
+                appendAddition(result, additions.get(nextAddition), changes, columnKeys, encoder);
                 nextAddition++;
             }
             appendAttribute(result, text, attribute, key, changes, renames, encoder);
         }
         while (nextAddition < additions.size())
         {
-            appendAddition(result, additions.get(nextAddition), changes, displayNameByKey, encoder);
+            appendAddition(result, additions.get(nextAddition), changes, columnKeys, encoder);
             nextAddition++;
         }
 
@@ -110,7 +99,7 @@ final class StartTagRewriter
     }
 
     private static List<String> pendingAdditions(final Map<String, String> changes,
-            final Set<String> existingKeys, final Map<String, Integer> columnIndexByKey)
+            final Set<String> existingKeys, final ColumnKeys columnKeys)
     {
         final List<String> additions = new ArrayList<>();
         for (final Map.Entry<String, String> entry : changes.entrySet())
@@ -120,7 +109,7 @@ final class StartTagRewriter
                 additions.add(entry.getKey());
             }
         }
-        additions.sort(Comparator.comparingInt(key -> columnIndexByKey.getOrDefault(key, Integer.MAX_VALUE)));
+        additions.sort(Comparator.comparingInt(columnKeys::indexOf));
         return additions;
     }
 
@@ -165,10 +154,9 @@ final class StartTagRewriter
     }
 
     private static void appendAddition(final StringBuilder result, final String key,
-            final Map<String, String> changes, final Map<String, String> displayNameByKey,
-            final CharsetEncoder encoder)
+            final Map<String, String> changes, final ColumnKeys columnKeys, final CharsetEncoder encoder)
     {
-        result.append(' ').append(displayNameByKey.getOrDefault(key, key)).append("=\"")
+        result.append(' ').append(columnKeys.nameOf(key)).append("=\"")
                 .append(AttributeValueCodec.escape(changes.get(key), encoder)).append('"');
     }
 }

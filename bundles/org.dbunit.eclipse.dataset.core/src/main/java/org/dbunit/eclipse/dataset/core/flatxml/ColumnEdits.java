@@ -255,11 +255,12 @@ final class ColumnEdits
     {
         final CharsetEncoder encoder = context.encoder();
         final String text = context.text();
+        final ColumnKeys columnKeys = ColumnKeys.of(table.getColumns());
         final List<TextEdit> edits = new ArrayList<>();
         for (final FlatXmlElement element : rowElements)
         {
             final String rewritten =
-                    StartTagRewriter.rewrite(text, element, table.getColumns(), changes, renames, encoder);
+                    StartTagRewriter.rewrite(text, element, columnKeys, changes, renames, encoder);
             if (rewritten != null)
             {
                 edits.add(new ReplaceEdit(element.nameEndOffset(),

@@ -23,6 +23,7 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -42,8 +43,9 @@ class StartTagRewriterTest
         final List<DatasetColumn> columns = List.of(new DatasetColumn("NAME", false, true, false),
                 new DatasetColumn("ID", false, true, false));
         final Map<String, String> changes = Map.of("NAME", "Caf\u00e9 & AA", "ID", "1");
+        final ColumnKeys columnKeys = ColumnKeys.of(columns);
 
-        final String rewritten = StartTagRewriter.rewrite(text, element, columns, changes, Map.of(),
+        final String rewritten = StartTagRewriter.rewrite(text, element, columnKeys, changes, Map.of(),
                 StandardCharsets.UTF_8.newEncoder());
 
         assertThat(rewritten).as("A change to the value that the attribute holds already must write nothing.")
@@ -58,8 +60,9 @@ class StartTagRewriterTest
         final List<DatasetColumn> columns = List.of(new DatasetColumn("NAME", false, true, false),
                 new DatasetColumn("CODE", false, true, false));
         final Map<String, String> changes = Map.of("NAME", "Caf\u00e9", "CODE", "z");
+        final ColumnKeys columnKeys = ColumnKeys.of(columns);
 
-        final String rewritten = StartTagRewriter.rewrite(text, element, columns, changes, Map.of(),
+        final String rewritten = StartTagRewriter.rewrite(text, element, columnKeys, changes, Map.of(),
                 StandardCharsets.UTF_8.newEncoder());
 
         assertThat(rewritten).as("The attribute that keeps its value keeps its raw text, and the other one "
@@ -74,11 +77,30 @@ class StartTagRewriterTest
         final FlatXmlElement element = FlatXmlParser.parse(text).elements().get(0);
         final List<DatasetColumn> columns = List.of(new DatasetColumn("NAME", false, true, false));
 
-        final String rewritten = StartTagRewriter.rewrite(text, element, columns,
+        final String rewritten = StartTagRewriter.rewrite(text, element, ColumnKeys.of(columns),
                 Map.of("NAME", "Caf\u00e9"), Map.of("NAME", "LABEL"), StandardCharsets.UTF_8.newEncoder());
 
         assertThat(rewritten).as("A rename with an unchanged value must not touch the value text.")
                 .isEqualTo(" LABEL=\"Caf&#xE9;\"");
+    }
+
+    @Test
+    void testRewrite_whenSeveralAttributesAreAdded_writesThemInTheOrderOfTheColumns()
+    {
+        final String text = "<dataset><USERS ID=\"1\"/></dataset>";
+        final FlatXmlElement element = FlatXmlParser.parse(text).elements().get(0);
+        final List<DatasetColumn> columns = List.of(new DatasetColumn("ID", false, true, false),
+                new DatasetColumn("NAME", false, true, false), new DatasetColumn("CITY", false, true, false));
+        final ColumnKeys columnKeys = ColumnKeys.of(columns);
+        final Map<String, String> changes = new LinkedHashMap<>();
+        changes.put("CITY", "Springfield");
+        changes.put("NAME", "Alice");
+
+        final String rewritten = StartTagRewriter.rewrite(text, element, columnKeys, changes, Map.of(),
+                StandardCharsets.UTF_8.newEncoder());
+
+        assertThat(rewritten).as("The added attributes must follow the order of the columns, not the order "
+                + "of the changes.").isEqualTo(" ID=\"1\" NAME=\"Alice\" CITY=\"Springfield\"");
     }
 
     @Test
@@ -89,8 +111,9 @@ class StartTagRewriterTest
         final List<DatasetColumn> columns = List.of(new DatasetColumn("ID", false, true, false),
                 new DatasetColumn("NAME", false, true, false));
         final Map<String, String> changes = Map.of("CITY", "Springfield");
+        final ColumnKeys columnKeys = ColumnKeys.of(columns);
 
-        final String rewritten = StartTagRewriter.rewrite(text, element, columns, changes, Map.of(),
+        final String rewritten = StartTagRewriter.rewrite(text, element, columnKeys, changes, Map.of(),
                 StandardCharsets.UTF_8.newEncoder());
 
         assertThat(rewritten)
