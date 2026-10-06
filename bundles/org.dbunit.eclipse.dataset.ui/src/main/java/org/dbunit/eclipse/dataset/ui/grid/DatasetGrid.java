@@ -35,6 +35,7 @@ import org.eclipse.nebula.widgets.nattable.data.IDataProvider;
 import org.eclipse.nebula.widgets.nattable.edit.command.EditCellCommand;
 import org.eclipse.nebula.widgets.nattable.edit.config.DefaultEditConfiguration;
 import org.eclipse.nebula.widgets.nattable.edit.editor.ICellEditor;
+import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
 import org.eclipse.nebula.widgets.nattable.grid.data.DefaultCornerDataProvider;
 import org.eclipse.nebula.widgets.nattable.grid.data.DefaultRowHeaderDataProvider;
 import org.eclipse.nebula.widgets.nattable.grid.layer.ColumnHeaderLayer;
@@ -54,6 +55,8 @@ import org.eclipse.nebula.widgets.nattable.style.theme.DarkNatTableThemeConfigur
 import org.eclipse.nebula.widgets.nattable.style.theme.ModernNatTableThemeConfiguration;
 import org.eclipse.nebula.widgets.nattable.viewport.ViewportLayer;
 import org.eclipse.nebula.widgets.nattable.viewport.command.ShowCellInViewportCommand;
+import org.eclipse.swt.SWT;
+import org.eclipse.swt.events.MenuDetectEvent;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
@@ -84,6 +87,8 @@ public final class DatasetGrid
     private final DialogTextCellEditor dialogEditor = new DialogTextCellEditor();
 
     private DatasetTable currentTable;
+
+    private String contextMenuRegion = GridRegion.BODY;
 
     /**
      * Assembles a NatTable for one table.
@@ -141,12 +146,25 @@ public final class DatasetGrid
     {
         final MenuManager menuManager = new MenuManager();
         menuManager.setRemoveAllWhenShown(true);
-        menuManager.addMenuListener(manager ->
-        {
-            final Point cursor = natTable.toControl(natTable.getDisplay().getCursorLocation());
-            context.fillContextMenu(manager, ContextMenuTarget.regionAt(natTable, cursor.x, cursor.y));
-        });
+        menuManager.addMenuListener(manager -> context.fillContextMenu(manager, contextMenuRegion));
         natTable.setMenu(menuManager.createContextMenu(natTable));
+        natTable.addMenuDetectListener(this::recordContextMenuRegion);
+    }
+
+    /**
+     * Records which part of the grid the menu that is about to open is for. A menu that the mouse opens is
+     * for the part under the mouse, where the request was made. A menu that the keyboard opens is for the
+     * cell that has the focus, whatever part the pointer happens to be over.
+     */
+    private void recordContextMenuRegion(final MenuDetectEvent event)
+    {
+        if (event.detail == SWT.MENU_KEYBOARD)
+        {
+            contextMenuRegion = GridRegion.BODY;
+            return;
+        }
+        final Point requested = natTable.toControl(event.x, event.y);
+        contextMenuRegion = ContextMenuTarget.regionAt(natTable, requested.x, requested.y);
     }
 
     /**

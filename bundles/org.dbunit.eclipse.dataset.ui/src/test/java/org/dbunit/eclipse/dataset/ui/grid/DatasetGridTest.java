@@ -50,7 +50,9 @@ import org.eclipse.nebula.widgets.nattable.layer.command.ConfigureScalingCommand
 import org.eclipse.nebula.widgets.nattable.resize.command.ColumnResizeCommand;
 import org.eclipse.nebula.widgets.nattable.selection.SelectionLayer;
 import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
+import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Point;
+import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
@@ -164,6 +166,61 @@ class DatasetGridTest
                 multiLineLabels))
                 .as("A multi-line value must open in the dialog editor, which keeps its line breaks.")
                 .isTrue();
+    }
+
+    @Test
+    void testContextMenu_whenTheMouseOpensItOverHeadersAndTheCorner_isForThatRegion()
+    {
+        final TestContext context = new TestContext(create("<dataset><USERS ID=\"1\"/></dataset>"));
+        final DatasetGrid grid = new DatasetGrid(shell, context, "USERS");
+        shell.layout();
+        processEvents();
+
+        final List<String> regions = List.of(regionOfTheMenuAt(grid, context, 0, 0, SWT.MENU_MOUSE),
+                regionOfTheMenuAt(grid, context, 1, 0, SWT.MENU_MOUSE),
+                regionOfTheMenuAt(grid, context, 0, 1, SWT.MENU_MOUSE),
+                regionOfTheMenuAt(grid, context, 1, 1, SWT.MENU_MOUSE));
+
+        assertThat(regions).as("A menu that the mouse opens is for the part of the grid under the mouse.")
+                .containsExactly(GridRegion.CORNER, GridRegion.COLUMN_HEADER, GridRegion.ROW_HEADER,
+                        GridRegion.BODY);
+    }
+
+    @Test
+    void testContextMenu_whenTheKeyboardOpensItWithThePointerOverAHeader_isForTheBody()
+    {
+        final TestContext context = new TestContext(create("<dataset><USERS ID=\"1\"/></dataset>"));
+        final DatasetGrid grid = new DatasetGrid(shell, context, "USERS");
+        shell.layout();
+        processEvents();
+
+        final List<String> regions = List.of(regionOfTheMenuAt(grid, context, 0, 0, SWT.MENU_KEYBOARD),
+                regionOfTheMenuAt(grid, context, 1, 0, SWT.MENU_KEYBOARD),
+                regionOfTheMenuAt(grid, context, 0, 1, SWT.MENU_KEYBOARD));
+
+        assertThat(regions).as("The pointer has nothing to do with a menu that the keyboard opens, so it is "
+                + "for the cell that has the focus.")
+                .containsExactly(GridRegion.BODY, GridRegion.BODY, GridRegion.BODY);
+    }
+
+    /**
+     * Requests the context menu of a grid for the point in the middle of a cell of the grid layer, as the
+     * operating system does for a mouse click or for the menu key, and returns the region that the page
+     * was asked to fill the menu for.
+     */
+    private static String regionOfTheMenuAt(final DatasetGrid grid, final TestContext context,
+            final int columnPosition, final int rowPosition, final int detail)
+    {
+        final NatTable natTable = grid.getNatTable();
+        final Rectangle bounds = natTable.getBoundsByPosition(columnPosition, rowPosition);
+        final Point onDisplay = natTable.toDisplay(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+        final Event menuDetect = new Event();
+        menuDetect.x = onDisplay.x;
+        menuDetect.y = onDisplay.y;
+        menuDetect.detail = detail;
+        natTable.notifyListeners(SWT.MenuDetect, menuDetect);
+        natTable.getMenu().notifyListeners(SWT.Show, new Event());
+        return context.contextMenuRegion;
     }
 
     @Test
@@ -505,6 +562,8 @@ class DatasetGridTest
     {
         private final DatasetDocument datasetDocument;
 
+        private String contextMenuRegion;
+
         TestContext(final DatasetDocument datasetDocument)
         {
             this.datasetDocument = datasetDocument;
@@ -551,6 +610,7 @@ class DatasetGridTest
         @Override
         public void fillContextMenu(final IMenuManager menu, final String region)
         {
+            contextMenuRegion = region;
         }
 
         @Override
