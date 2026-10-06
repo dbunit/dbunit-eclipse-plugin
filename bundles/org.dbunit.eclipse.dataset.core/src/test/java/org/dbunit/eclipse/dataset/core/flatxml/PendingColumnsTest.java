@@ -658,12 +658,12 @@ class PendingColumnsTest
     }
 
     @Test
-    void testRecord_whenMoreThanTwoHundredSnapshotsAreRecorded_discardsTheOldest()
+    void testRecord_whenManyMoreSnapshotsAreRecordedThanTheMinimum_discardsNone()
     {
         final PendingColumns pending = new PendingColumns(() ->
         {
         });
-        for (long stamp = 1; stamp <= 201; stamp++)
+        for (long stamp = 1; stamp <= 1_000; stamp++)
         {
             pending.deleteTable("USERS");
             pending.addTable("USERS", List.of("C" + stamp));
@@ -672,11 +672,122 @@ class PendingColumnsTest
         pending.deleteTable("USERS");
 
         pending.restore(1L);
-        assertThat(pending.asMap()).as("The oldest of 201 snapshots must be gone.").isEmpty();
-        pending.restore(2L);
 
-        assertThat(pending.asMap()).as("The second oldest must still be there.")
-                .containsExactly(Map.entry("USERS", List.of("C2")));
+        assertThat(pending.asMap()).as("Recording must not discard a snapshot, only keepOnly does.")
+                .containsExactly(Map.entry("USERS", List.of("C1")));
+    }
+
+    @Test
+    void testKeepOnly_whenMoreSnapshotsExistThanAreKept_discardsTheOldestFirst()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        for (long stamp = 1; stamp <= 5; stamp++)
+        {
+            pending.deleteTable("USERS");
+            pending.addTable("USERS", List.of("C" + stamp));
+            pending.record(stamp);
+        }
+        pending.deleteTable("USERS");
+
+        pending.keepOnly(3);
+
+        pending.restore(2L);
+        assertThat(pending.asMap()).as("The two oldest of five snapshots must be gone.").isEmpty();
+        pending.restore(3L);
+        assertThat(pending.asMap()).as("The third, the oldest of the three kept, must still be there.")
+                .containsExactly(Map.entry("USERS", List.of("C3")));
+    }
+
+    @Test
+    void testKeepOnly_whenAsManySnapshotsExistAsAreKept_discardsNone()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        for (long stamp = 1; stamp <= 3; stamp++)
+        {
+            pending.deleteTable("USERS");
+            pending.addTable("USERS", List.of("C" + stamp));
+            pending.record(stamp);
+        }
+        pending.deleteTable("USERS");
+
+        pending.keepOnly(3);
+
+        pending.restore(1L);
+        assertThat(pending.asMap()).as("Three snapshots fit the three that are kept.")
+                .containsExactly(Map.entry("USERS", List.of("C1")));
+    }
+
+    @Test
+    void testKeepOnly_whenNoSnapshotIsKept_discardsAll()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        pending.addTable("USERS", List.of("C1"));
+        pending.record(1L);
+        pending.addTable("ORDERS", List.of("C2"));
+        pending.record(2L);
+        pending.deleteTable("USERS");
+        pending.deleteTable("ORDERS");
+
+        pending.keepOnly(0);
+
+        pending.restore(1L);
+        assertThat(pending.asMap()).as("With none kept, no snapshot can come back.").isEmpty();
+    }
+
+    @Test
+    void testSnapshotsToKeep_whenTheDocumentHasNoUndoManager_isTwoHundred()
+    {
+        final IDocument document = new Document("<dataset/>");
+
+        assertThat(PendingColumns.snapshotsToKeep(document))
+                .as("Without an undo history, the minimum of 200 snapshots is kept.").isEqualTo(200);
+    }
+
+    @Test
+    void testSnapshotsToKeep_whenTheUndoHistoryKeepsManySteps_isFourForEachStep() throws Exception
+    {
+        final IDocument document = new Document("<dataset/>");
+        withUndoManager(document, undoManager ->
+        {
+            undoManager.setMaximalUndoLevel(1_000);
+
+            assertThat(PendingColumns.snapshotsToKeep(document))
+                    .as("A step of the undo history may need a snapshot, and a few more come between steps.")
+                    .isEqualTo(4_000);
+        });
+    }
+
+    @Test
+    void testSnapshotsToKeep_whenTheUndoHistoryKeepsFewSteps_isTwoHundred() throws Exception
+    {
+        final IDocument document = new Document("<dataset/>");
+        withUndoManager(document, undoManager ->
+        {
+            undoManager.setMaximalUndoLevel(10);
+
+            assertThat(PendingColumns.snapshotsToKeep(document))
+                    .as("A short undo history must not lower the minimum of 200 snapshots.").isEqualTo(200);
+        });
+    }
+
+    @Test
+    void testSnapshotsToKeep_whenTheUndoHistoryIsAsLongAsCanBe_doesNotOverflow() throws Exception
+    {
+        final IDocument document = new Document("<dataset/>");
+        withUndoManager(document, undoManager ->
+        {
+            undoManager.setMaximalUndoLevel(Integer.MAX_VALUE);
+
+            assertThat(PendingColumns.snapshotsToKeep(document))
+                    .as("Four snapshots for each of that many steps must stay a positive number.")
+                    .isEqualTo(Integer.MAX_VALUE);
+        });
     }
 
     @Test

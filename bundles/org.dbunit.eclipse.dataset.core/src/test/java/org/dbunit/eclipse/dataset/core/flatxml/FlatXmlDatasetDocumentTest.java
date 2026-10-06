@@ -2344,6 +2344,65 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testSetCells_whenManyEditsFollowTheFillOfAPendingColumn_undoingAllOfThemMakesItPendingAgain()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            undoManager.setMaximalUndoLevel(1_000);
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+            datasetDocument.addColumn("USERS", "EXTRA");
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "EXTRA", "x")));
+            final int laterEdits = 250;
+            for (int edit = 0; edit < laterEdits; edit++)
+            {
+                datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Name" + edit)));
+            }
+
+            for (int step = 0; step <= laterEdits; step++)
+            {
+                undoManager.undo();
+            }
+            datasetDocument.refresh();
+
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
+                    .as("The undo of the edit that filled the column must leave it pending, however many "
+                            + "edits came after it.")
+                    .containsExactly(new DatasetColumn("ID", false, true, false),
+                            new DatasetColumn("NAME", false, true, false),
+                            new DatasetColumn("EXTRA", false, false, true));
+        });
+    }
+
+    @Test
+    void testRefresh_whenNoUndoHistoryExistsAndManyRefreshesFollow_doesNotRestoreTheOldestState()
+            throws Exception
+    {
+        final String original = "<dataset><USERS ID=\"1\"/></dataset>";
+        final Document document = new Document(original);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        datasetDocument.addColumn("USERS", "EXTRA");
+        final long oldestStamp = document.getModificationStamp();
+        for (int edit = 0; edit < 250; edit++)
+        {
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "ID", "v" + edit)));
+        }
+        datasetDocument.setCells("USERS", List.of(new CellChange(0, "EXTRA", "x")));
+
+        document.set(original, oldestStamp);
+        datasetDocument.refresh();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getColumnIndex("EXTRA"))
+                .as("Without an undo history, only the latest 200 snapshots are kept, so the column that "
+                        + "belonged to the oldest state must not come back from a snapshot.")
+                .isEqualTo(-1);
+    }
+
+    @Test
     void testRenameTable_whenUndoneAndRedoneBeforeAnyRefresh_thePendingColumnFollowsTheTable()
             throws Exception
     {

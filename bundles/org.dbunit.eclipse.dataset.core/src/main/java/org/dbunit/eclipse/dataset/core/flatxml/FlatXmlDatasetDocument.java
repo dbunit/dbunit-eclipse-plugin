@@ -572,6 +572,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
             pendingColumns.pruneMissingTables(tables);
         }
         pendingColumns.record(modificationStamp);
+        pendingColumns.keepOnly(PendingColumns.snapshotsToKeep(document));
         final List<DatasetProblem> problems = FlatXmlValidator.validate(parse, built.index(), tables,
                 dtdResolution.state(), dtdResolution.declarations(), options);
         final DatasetModel oldModel = model;

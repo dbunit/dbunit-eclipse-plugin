@@ -52,14 +52,17 @@ import org.eclipse.text.undo.IDocumentUndoManager;
  * text document's undo history of its own. Such a step keeps the columns as they were before it and as they
  * are after it, and undo and redo set those outright: the columns held now may still belong to a text state
  * that an undo of the text has left since, because nothing refreshed after that undo. A snapshot for each
- * modification stamp brings the columns back when undo or redo returns the text to an earlier state.
+ * modification stamp brings the columns back when undo or redo returns the text to an earlier state; the
+ * owner keeps as many snapshots as the undo history can still lead back to.
  * Whenever such a change is undone or redone, the owner is asked to refresh through the callback that it
  * gave. The columns that a table keeps after all its rows were deleted are recorded here too; they have no
  * step of their own, because the delete of the rows is the step, and the snapshots bring them back with it.
  */
 final class PendingColumns
 {
-    private static final int PENDING_COLUMNS_HISTORY_LIMIT = 200;
+    private static final int MINIMUM_SNAPSHOT_COUNT = 200;
+
+    private static final int SNAPSHOTS_PER_UNDO_STEP = 4;
 
     private final Map<String, List<String>> pendingColumns = new LinkedHashMap<>();
 
@@ -95,6 +98,30 @@ final class PendingColumns
             return extension.getModificationStamp();
         }
         return IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP;
+    }
+
+    /**
+     * Returns how many snapshots of the pending columns are worth keeping for a text document. Undo and redo
+     * can return the text only to a state that a step of the undo history leads to, so a snapshot is needed
+     * for each of those steps, and a few more, because a refresh may come between two steps. The editor lets
+     * the user choose how many steps the history keeps, and a number of snapshots that does not follow it
+     * loses the pending columns of the oldest steps.
+     *
+     * @param document The text document.
+     * @return Four snapshots for each step that the document's undo history keeps, and at least 200; 200
+     *         when the document has no undo manager.
+     */
+    static int snapshotsToKeep(final IDocument document)
+    {
+        final IDocumentUndoManager undoManager = DocumentUndoManagerRegistry.getDocumentUndoManager(document);
+        if (undoManager == null)
+        {
+            return MINIMUM_SNAPSHOT_COUNT;
+        }
+        final IOperationHistory history = OperationHistoryFactory.getOperationHistory();
+        final int undoSteps = history.getLimit(undoManager.getUndoContext());
+        final long snapshotCount = (long) SNAPSHOTS_PER_UNDO_STEP * undoSteps;
+        return (int) Math.max(MINIMUM_SNAPSHOT_COUNT, Math.min(Integer.MAX_VALUE, snapshotCount));
     }
 
     /**
@@ -279,16 +306,25 @@ final class PendingColumns
 
     /**
      * Records a deep copy of pendingColumns under modificationStamp, so that a later undo or redo back to
-     * this exact modification stamp can restore it, then discards the oldest recorded snapshot once there
-     * are more than {@link #PENDING_COLUMNS_HISTORY_LIMIT} of them.
+     * this exact modification stamp can restore it. The snapshots pile up until {@link #keepOnly} discards
+     * the oldest.
      */
     void record(final long modificationStamp)
     {
         pendingColumnsHistory.put(modificationStamp, copyOf(pendingColumns));
         lastRefreshModificationStamp = modificationStamp;
-        if (pendingColumnsHistory.size() > PENDING_COLUMNS_HISTORY_LIMIT)
+    }
+
+    /**
+     * Discards the oldest snapshots, the ones that were recorded first, until at most a number are left.
+     *
+     * @param snapshotCount How many snapshots to keep, as {@link #snapshotsToKeep} says.
+     */
+    void keepOnly(final int snapshotCount)
+    {
+        final Iterator<Long> oldest = pendingColumnsHistory.keySet().iterator();
+        while (pendingColumnsHistory.size() > snapshotCount && oldest.hasNext())
         {
-            final Iterator<Long> oldest = pendingColumnsHistory.keySet().iterator();
             oldest.next();
             oldest.remove();
         }
