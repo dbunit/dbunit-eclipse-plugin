@@ -20,6 +20,8 @@
  */
 package org.dbunit.eclipse.dataset.ui.grid;
 
+import java.util.function.Supplier;
+
 import org.eclipse.nebula.widgets.nattable.data.convert.DisplayConverter;
 
 /**
@@ -32,11 +34,17 @@ final class NullAwareDisplayConverter extends DisplayConverter
 {
     private static final String LINE_BREAK_DISPLAY = "⏎";
 
-    private final DatasetGridContext context;
+    private final Supplier<String> nullDisplayText;
 
-    NullAwareDisplayConverter(final DatasetGridContext context)
+    /**
+     * Creates the converter of one grid.
+     *
+     * @param nullDisplayText Supplies the text to show for NULL each time a value is converted, so that a
+     *        change of the configured text shows when the grid repaints.
+     */
+    NullAwareDisplayConverter(final Supplier<String> nullDisplayText)
     {
-        this.context = context;
+        this.nullDisplayText = nullDisplayText;
     }
 
     @Override
@@ -44,7 +52,7 @@ final class NullAwareDisplayConverter extends DisplayConverter
     {
         if (canonicalValue == null)
         {
-            return context.getNullDisplayText();
+            return nullDisplayText.get();
         }
         return canonicalValue.toString().replace("\r\n", LINE_BREAK_DISPLAY).replace("\r", LINE_BREAK_DISPLAY)
                 .replace("\n", LINE_BREAK_DISPLAY);

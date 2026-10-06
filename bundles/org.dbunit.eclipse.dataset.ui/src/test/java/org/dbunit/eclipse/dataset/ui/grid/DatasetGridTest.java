@@ -54,6 +54,7 @@ import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
 import org.eclipse.nebula.widgets.nattable.style.IStyle;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Color;
+import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.FillLayout;
@@ -534,6 +535,23 @@ class DatasetGridTest
     }
 
     @Test
+    void testTableChanged_whenAValueHasALineBreak_givesItsColumnAWidthThatFitsTheTextTheGridPaints()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS NOTE=\"first line&#10;second line\"/></dataset>");
+        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(datasetDocument), "USERS");
+
+        grid.tableChanged(datasetDocument.getModel().findTable("USERS").orElseThrow());
+        shell.layout();
+        processEvents();
+
+        assertThat(grid.getSelectionLayer().getColumnWidthByPosition(0))
+                .as("The column must be at least as wide as the text that the grid paints in its cell, which "
+                        + "shows the line break as a glyph.")
+                .isGreaterThanOrEqualTo(textWidth(grid, displayText(grid, 1, 1)));
+    }
+
+    @Test
     void testSelectRegion_reachingBeyondTheTable_selectsTheBlockClampedToTheTable()
     {
         final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"A\"/>"
@@ -601,6 +619,21 @@ class DatasetGridTest
         final NatTable natTable = grid.getNatTable();
         final ILayerCell cell = natTable.getCellByPosition(columnPosition, rowPosition);
         return CellDisplayConversionUtils.convertDataType(cell, natTable.getConfigRegistry());
+    }
+
+    private static int textWidth(final DatasetGrid grid, final String text)
+    {
+        final NatTable natTable = grid.getNatTable();
+        final GC gc = new GC(natTable);
+        try
+        {
+            gc.setFont(natTable.getFont());
+            return gc.textExtent(text).x;
+        }
+        finally
+        {
+            gc.dispose();
+        }
     }
 
     private static FlatXmlDatasetDocument create(final String content)

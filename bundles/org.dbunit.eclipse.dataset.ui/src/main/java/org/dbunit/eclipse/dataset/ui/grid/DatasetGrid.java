@@ -82,7 +82,7 @@ public final class DatasetGrid
 
     private final ColumnHeaderTooltip columnHeaderTooltip;
 
-    private final ColumnWidths columnWidths = new ColumnWidths();
+    private final ColumnWidths columnWidths;
 
     private final DialogTextCellEditor dialogEditor = new DialogTextCellEditor();
 
@@ -102,6 +102,9 @@ public final class DatasetGrid
     public DatasetGrid(final Composite parent, final DatasetGridContext context, final String tableKey)
     {
         bodyDataProvider = new TableBodyDataProvider(context, tableKey);
+        final NullAwareDisplayConverter bodyDisplayConverter =
+                new NullAwareDisplayConverter(context::getNullDisplayText);
+        columnWidths = new ColumnWidths(bodyDisplayConverter);
         bodyDataLayer = new DataLayer(bodyDataProvider);
         cellLabels = new DatasetCellLabels(bodyDataProvider);
         bodyDataLayer.setConfigLabelAccumulator(cellLabels);
@@ -133,7 +136,7 @@ public final class DatasetGrid
 
         natTable = new CellEditorAwareNatTable(parent, NatTable.DEFAULT_STYLE_OPTIONS, gridLayer, false);
         natTable.addConfiguration(new DefaultNatTableStyleConfiguration());
-        natTable.addConfiguration(new GridEditConfiguration(context, dialogEditor));
+        natTable.addConfiguration(new GridEditConfiguration(context, dialogEditor, bodyDisplayConverter));
         natTable.addConfiguration(new SpreadsheetEditBindings(selectionLayer));
         natTable.addConfiguration(new GridStyleConfiguration());
         natTable.configure();

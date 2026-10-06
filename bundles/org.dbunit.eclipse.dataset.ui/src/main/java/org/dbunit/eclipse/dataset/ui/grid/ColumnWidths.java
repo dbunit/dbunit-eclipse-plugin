@@ -25,6 +25,7 @@ import java.util.Map;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.nebula.widgets.nattable.NatTable;
+import org.eclipse.nebula.widgets.nattable.data.convert.IDisplayConverter;
 import org.eclipse.nebula.widgets.nattable.layer.DataLayer;
 import org.eclipse.swt.graphics.GC;
 
@@ -35,6 +36,11 @@ import org.eclipse.swt.graphics.GC;
  * The widths are kept as the data layer stores them, unscaled. The layer displays them multiplied by the
  * scaling factor of the display, so reading the displayed width back would apply the factor again at every
  * refresh.
+ * </p>
+ * <p>
+ * A column that has no width yet gets one that fits its name and the text that the grid paints in its first
+ * rows. That text is the display text of each value, so a NULL cell counts as the NULL display text and a
+ * line break counts as the glyph that stands for it.
  * </p>
  *
  * @since 1.0.0
@@ -48,6 +54,19 @@ final class ColumnWidths
     private static final int SAMPLE_ROW_LIMIT = 200;
 
     private final Map<String, Integer> widthsByColumnKey = new HashMap<>();
+
+    private final IDisplayConverter displayConverter;
+
+    /**
+     * Creates the widths of one grid.
+     *
+     * @param displayConverter Turns the value of a cell into the text that the grid paints in it, which is
+     *        what the automatic widths are measured with.
+     */
+    ColumnWidths(final IDisplayConverter displayConverter)
+    {
+        this.displayConverter = displayConverter;
+    }
 
     /**
      * Records the current width of every column of a table that has been given one, so it survives a
@@ -85,8 +104,7 @@ final class ColumnWidths
         }
     }
 
-    private static int computeAutoWidth(final NatTable natTable, final DatasetTable table,
-            final int columnIndex)
+    private int computeAutoWidth(final NatTable natTable, final DatasetTable table, final int columnIndex)
     {
         final GC gc = new GC(natTable);
         try
@@ -97,10 +115,9 @@ final class ColumnWidths
             for (int row = 0; row < rowLimit; row++)
             {
                 final String value = table.getEffectiveValue(row, columnIndex);
-                if (value != null)
-                {
-                    width = Math.max(width, gc.textExtent(value).x + 12);
-                }
+                final Object displayValue = displayConverter.canonicalToDisplayValue(value);
+                final String text = String.valueOf(displayValue);
+                width = Math.max(width, gc.textExtent(text).x + 12);
             }
             return Math.max(MINIMUM_WIDTH, Math.min(MAXIMUM_WIDTH, width));
         }

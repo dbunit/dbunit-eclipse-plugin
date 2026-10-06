@@ -24,6 +24,7 @@ import org.eclipse.nebula.widgets.nattable.config.AbstractRegistryConfiguration;
 import org.eclipse.nebula.widgets.nattable.config.CellConfigAttributes;
 import org.eclipse.nebula.widgets.nattable.config.EditableRule;
 import org.eclipse.nebula.widgets.nattable.config.IConfigRegistry;
+import org.eclipse.nebula.widgets.nattable.data.convert.IDisplayConverter;
 import org.eclipse.nebula.widgets.nattable.edit.EditConfigAttributes;
 import org.eclipse.nebula.widgets.nattable.edit.config.DialogErrorHandling;
 import org.eclipse.nebula.widgets.nattable.edit.editor.TextCellEditor;
@@ -41,10 +42,14 @@ final class GridEditConfiguration extends AbstractRegistryConfiguration
 
     private final DialogTextCellEditor dialogEditor;
 
-    GridEditConfiguration(final DatasetGridContext context, final DialogTextCellEditor dialogEditor)
+    private final IDisplayConverter bodyDisplayConverter;
+
+    GridEditConfiguration(final DatasetGridContext context, final DialogTextCellEditor dialogEditor,
+            final IDisplayConverter bodyDisplayConverter)
     {
         this.context = context;
         this.dialogEditor = dialogEditor;
+        this.bodyDisplayConverter = bodyDisplayConverter;
     }
 
     @Override
@@ -77,8 +82,8 @@ final class GridEditConfiguration extends AbstractRegistryConfiguration
         configRegistry.registerConfigAttribute(EditConfigAttributes.ACTIVATE_EDITOR_ON_TRAVERSAL, Boolean.FALSE);
         configRegistry.registerConfigAttribute(EditConfigAttributes.SUPPORT_MULTI_EDIT, Boolean.FALSE);
         // Only body cells hold dataset values; the headers and the corner keep NatTable's default converter.
-        configRegistry.registerConfigAttribute(CellConfigAttributes.DISPLAY_CONVERTER,
-                new NullAwareDisplayConverter(context), DisplayMode.NORMAL, GridRegion.BODY);
+        configRegistry.registerConfigAttribute(CellConfigAttributes.DISPLAY_CONVERTER, bodyDisplayConverter,
+                DisplayMode.NORMAL, GridRegion.BODY);
         // Without a region: Edit Cell in Dialog edits a selection layer cell, which carries no region label,
         // and NatTable's default converter would turn its empty string into NULL.
         configRegistry.registerConfigAttribute(CellConfigAttributes.DISPLAY_CONVERTER,

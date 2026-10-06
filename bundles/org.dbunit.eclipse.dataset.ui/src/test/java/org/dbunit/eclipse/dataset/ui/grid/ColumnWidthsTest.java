@@ -58,6 +58,11 @@ class ColumnWidthsTest
 
     private static final int USER_WIDTH = 300;
 
+    private static final String NULL_DISPLAY_TEXT = "(this cell has no value at all)";
+
+    private static final String NOTE_DECLARED_BY_DTD = "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n"
+            + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #IMPLIED NOTE CDATA #IMPLIED>\n]>\n";
+
     private Shell shell;
 
     private NatTable natTable;
@@ -101,7 +106,7 @@ class ColumnWidthsTest
         final DatasetTable before = table("<dataset><USERS NAME=\"Alice\"/></dataset>");
         final DatasetTable after = table("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
         final DataLayer bodyLayer = bodyLayer(before, ENLARGED_DPI);
-        final ColumnWidths columnWidths = new ColumnWidths();
+        final ColumnWidths columnWidths = newColumnWidths();
         columnWidths.applyTo(before, bodyLayer, natTable);
         bodyLayer.doCommand(new ColumnResizeCommand(bodyLayer, 0, USER_WIDTH, true));
 
@@ -119,8 +124,8 @@ class ColumnWidthsTest
         final DatasetTable table = table("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
         final DataLayer bodyLayer = bodyLayer(table, UNSCALED_DPI);
         final DataLayer referenceLayer = bodyLayer(table, UNSCALED_DPI);
-        new ColumnWidths().applyTo(table, referenceLayer, natTable);
-        final ColumnWidths columnWidths = new ColumnWidths();
+        newColumnWidths().applyTo(table, referenceLayer, natTable);
+        final ColumnWidths columnWidths = newColumnWidths();
 
         columnWidths.remember(table, bodyLayer);
         columnWidths.applyTo(table, bodyLayer, natTable);
@@ -131,11 +136,64 @@ class ColumnWidthsTest
                 .isEqualTo(displayedWidths(referenceLayer, table));
     }
 
+    @Test
+    void testApplyTo_whenEveryValueOfAColumnIsNull_givesItTheWidthOfTheNullDisplayText()
+    {
+        final DatasetTable nullNotes =
+                table(NOTE_DECLARED_BY_DTD + "<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>");
+        final DatasetTable notesThatSpellOutTheNullText = table(NOTE_DECLARED_BY_DTD
+                + "<dataset><USERS ID=\"1\" NOTE=\"" + NULL_DISPLAY_TEXT + "\"/><USERS ID=\"2\" NOTE=\""
+                + NULL_DISPLAY_TEXT + "\"/></dataset>");
+
+        assertThat(automaticWidths(nullNotes))
+                .as("A column of NULL cells must be as wide as the NULL display text that the grid paints in "
+                        + "them.")
+                .isEqualTo(automaticWidths(notesThatSpellOutTheNullText));
+    }
+
+    @Test
+    void testApplyTo_whenAValueHasALineFeed_givesItTheWidthOfTheLineBreakGlyph()
+    {
+        final DatasetTable lineFeed =
+                table("<dataset><USERS NOTE=\"first line&#10;second line\"/></dataset>");
+        final DatasetTable glyph = table("<dataset><USERS NOTE=\"first line⏎second line\"/></dataset>");
+
+        assertThat(automaticWidths(lineFeed))
+                .as("A value with a line feed must be as wide as the text that the grid paints, with the "
+                        + "glyph in place of the line break.")
+                .isEqualTo(automaticWidths(glyph));
+    }
+
+    @Test
+    void testApplyTo_whenAValueHasACarriageReturnAndALineFeed_givesItTheWidthOfOneLineBreakGlyph()
+    {
+        final DatasetTable carriageReturnAndLineFeed =
+                table("<dataset><USERS NOTE=\"first line&#13;&#10;second line\"/></dataset>");
+        final DatasetTable glyph = table("<dataset><USERS NOTE=\"first line⏎second line\"/></dataset>");
+
+        assertThat(automaticWidths(carriageReturnAndLineFeed))
+                .as("A carriage return and a line feed must count as one line break glyph, as the grid "
+                        + "paints them.")
+                .isEqualTo(automaticWidths(glyph));
+    }
+
+    private List<Integer> automaticWidths(final DatasetTable table)
+    {
+        final DataLayer bodyLayer = bodyLayer(table, UNSCALED_DPI);
+        newColumnWidths().applyTo(table, bodyLayer, natTable);
+        return displayedWidths(bodyLayer, table);
+    }
+
+    private static ColumnWidths newColumnWidths()
+    {
+        return new ColumnWidths(new NullAwareDisplayConverter(() -> NULL_DISPLAY_TEXT));
+    }
+
     private void assertDisplayedWidthsSurviveRefreshesAt(final int dpi)
     {
         final DatasetTable table = table("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");
         final DataLayer bodyLayer = bodyLayer(table, dpi);
-        final ColumnWidths columnWidths = new ColumnWidths();
+        final ColumnWidths columnWidths = newColumnWidths();
         columnWidths.applyTo(table, bodyLayer, natTable);
         final List<Integer> firstLayout = displayedWidths(bodyLayer, table);
 
