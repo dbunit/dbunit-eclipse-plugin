@@ -475,10 +475,26 @@ final class TablesPage implements DatasetGridContext
             editor.showOnSourcePage(problem.offset(), problem.length());
             return;
         }
-        final int columnIndex = problem.columnName() == null ? -1
-                : datasetDocument.getModel().findTable(problem.tableKey())
-                        .map(table -> table.getColumnIndex(problem.columnName())).orElse(-1);
+        final int columnIndex = columnIndexOf(problem);
         tabs.selectCell(new CellAddress(problem.tableKey(), Math.max(problem.rowIndex(), 0), columnIndex));
+        if (columnIndex < 0 && problem.offset() >= 0)
+        {
+            editor.showOnSourcePage(problem.offset(), problem.length());
+        }
+    }
+
+    /**
+     * Returns the index of the column that a problem names, or -1 when it names none, or one that its table
+     * does not have.
+     */
+    private int columnIndexOf(final DatasetProblem problem)
+    {
+        if (problem.columnName() == null)
+        {
+            return -1;
+        }
+        return datasetDocument.getModel().findTable(problem.tableKey())
+                .map(table -> table.getColumnIndex(problem.columnName())).orElse(-1);
     }
 
     private IRegion sourceSelectionRegion()

@@ -27,7 +27,9 @@ import java.util.List;
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
+import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.eclipse.core.resources.IFile;
+import org.eclipse.jface.text.ITextSelection;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -75,6 +77,34 @@ class ProblemDisplayTest
                     .as("With no problems, the problems section must hide again.").isFalse();
             assertThat(tablesPage.getTabFolder().getItem(0).getImage())
                     .as("With no problems, the tab image must clear.").isNull();
+        }
+    }
+
+    @Test
+    void testSelectProblem_whenTheProblemHasATableButNoColumn_revealsItsTextOnTheSourcePage()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final String text = "<dataset><ORDERS ID=\"1\"/><USERS ID=\"1\"/><USERS/></dataset>";
+            final IFile file = workspace.createFile("dataset.xml", text);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final DatasetProblem problem = editor.getDatasetDocument().getModel().getProblems().get(0);
+
+            tablesPage.selectProblem(problem);
+            UiTestWorkspace.processEvents();
+
+            final ITextSelection selection =
+                    (ITextSelection) editor.getSourceEditor().getSelectionProvider().getSelection();
+            assertThat(List.of(problem.code(), editor.isSourcePageActive(),
+                    tablesPage.getTabFolder().getSelection().getText(), selection.getOffset(),
+                    selection.getLength()))
+                    .as("A redundant empty element has a table and no column, so double-clicking it must "
+                            + "show its text on the Source page, with its table's tab selected for the way "
+                            + "back.")
+                    .containsExactly(ProblemCode.REDUNDANT_EMPTY_ELEMENT, true, "USERS",
+                            text.indexOf("<USERS/>"), "<USERS/>".length());
         }
     }
 

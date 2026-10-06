@@ -333,7 +333,8 @@ The editor warns about both.
 It follows how dbUnit 3.5.0 and later read a dataset; <<dbunit-versions>> lists where earlier versions differ.
 It shows problems as icons on the sheet tabs and column headers, with the messages in the column header tooltips,
 and lists them all in the Problems section below the grid.
-Double-click a problem there to select its cell or column, or its text on the Source page.
+Double-click a problem there to select its cell or column, or, when it belongs to no cell or column,
+to show its text on the Source page.
 
 [cols="4,5", options="header"]
 |===
