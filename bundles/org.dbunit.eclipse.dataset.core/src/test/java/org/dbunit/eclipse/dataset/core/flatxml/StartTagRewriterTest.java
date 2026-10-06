@@ -35,6 +35,53 @@ import org.junit.jupiter.api.Test;
 class StartTagRewriterTest
 {
     @Test
+    void testRewrite_whenAChangeSetsTheValueThatTheAttributeHas_returnsNullAndLeavesItsRawText()
+    {
+        final String text = "<dataset><USERS NAME=\"Caf&#xE9; &amp; A&#65;\" ID='1'/></dataset>";
+        final FlatXmlElement element = FlatXmlParser.parse(text).elements().get(0);
+        final List<DatasetColumn> columns = List.of(new DatasetColumn("NAME", false, true, false),
+                new DatasetColumn("ID", false, true, false));
+        final Map<String, String> changes = Map.of("NAME", "Caf\u00e9 & AA", "ID", "1");
+
+        final String rewritten = StartTagRewriter.rewrite(text, element, columns, changes, Map.of(),
+                StandardCharsets.UTF_8.newEncoder());
+
+        assertThat(rewritten).as("A change to the value that the attribute holds already must write nothing.")
+                .isNull();
+    }
+
+    @Test
+    void testRewrite_whenOneChangeKeepsTheValueAndAnotherChangesIt_rewritesOnlyTheChangedAttribute()
+    {
+        final String text = "<dataset><USERS NAME=\"Caf&#xE9;\" CODE='a&#x62;'/></dataset>";
+        final FlatXmlElement element = FlatXmlParser.parse(text).elements().get(0);
+        final List<DatasetColumn> columns = List.of(new DatasetColumn("NAME", false, true, false),
+                new DatasetColumn("CODE", false, true, false));
+        final Map<String, String> changes = Map.of("NAME", "Caf\u00e9", "CODE", "z");
+
+        final String rewritten = StartTagRewriter.rewrite(text, element, columns, changes, Map.of(),
+                StandardCharsets.UTF_8.newEncoder());
+
+        assertThat(rewritten).as("The attribute that keeps its value keeps its raw text, and the other one "
+                + "gets the new value in its own quotes.")
+                .isEqualTo(" NAME=\"Caf&#xE9;\" CODE='z'");
+    }
+
+    @Test
+    void testRewrite_whenAChangeKeepsTheValueOfARenamedAttribute_keepsItsRawValueUnderTheNewName()
+    {
+        final String text = "<dataset><USERS NAME=\"Caf&#xE9;\"/></dataset>";
+        final FlatXmlElement element = FlatXmlParser.parse(text).elements().get(0);
+        final List<DatasetColumn> columns = List.of(new DatasetColumn("NAME", false, true, false));
+
+        final String rewritten = StartTagRewriter.rewrite(text, element, columns,
+                Map.of("NAME", "Caf\u00e9"), Map.of("NAME", "LABEL"), StandardCharsets.UTF_8.newEncoder());
+
+        assertThat(rewritten).as("A rename with an unchanged value must not touch the value text.")
+                .isEqualTo(" LABEL=\"Caf&#xE9;\"");
+    }
+
+    @Test
     void testRewrite_whenAnAddedAttributesColumnIsNotInColumns_sortsItLastInsteadOfThrowing()
     {
         final String text = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";

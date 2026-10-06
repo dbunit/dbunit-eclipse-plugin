@@ -142,15 +142,26 @@ final class StartTagRewriter
         result.append(text, attribute.segmentOffset(), attribute.nameOffset());
         result.append(rename != null ? rename : attribute.name());
         result.append(text, attribute.nameOffset() + attribute.name().length(), attribute.valueOffset());
-        if (hasChange)
-        {
-            result.append(AttributeValueCodec.escape(changes.get(key), encoder));
-        }
-        else
+        appendValue(result, text, attribute, changes.get(key), encoder);
+        result.append(attribute.quote());
+    }
+
+    /**
+     * Appends the text of an attribute's value: the new value, escaped, or the text as it was when there is
+     * no new value, or when the new value is the one that the attribute holds, which the text may spell with
+     * character references, so that the edit shows only what changed.
+     */
+    private static void appendValue(final StringBuilder result, final String text,
+            final FlatXmlAttribute attribute, final String newValue, final CharsetEncoder encoder)
+    {
+        if (newValue == null || newValue.equals(attribute.value()))
         {
             result.append(text, attribute.valueOffset(), attribute.valueEndOffset());
         }
-        result.append(attribute.quote());
+        else
+        {
+            result.append(AttributeValueCodec.escape(newValue, encoder));
+        }
     }
 
     private static void appendAddition(final StringBuilder result, final String key,

@@ -1843,6 +1843,41 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testSetCells_whenEveryChangeKeepsTheValueOfItsCell_changesNoTextAndAddsNoUndoStep() throws Exception
+    {
+        final String original =
+                "<dataset><USERS ID=\"1\" NAME=\"&#65;B\"/><USERS ID=\"2\" NAME='a&amp;b'/></dataset>";
+        final IDocument document = new Document(original);
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.setCells("USERS",
+                    List.of(new CellChange(0, "NAME", "AB"), new CellChange(1, "NAME", "a&b")));
+
+            assertThat(document.get())
+                    .as("Setting a cell to the value that it has must not rewrite its text.")
+                    .isEqualTo(original);
+            assertThat(undoManager.undoable()).as("Nothing changed, so there is nothing to undo.").isFalse();
+        });
+    }
+
+    @Test
+    void testSetCells_whenOneChangeKeepsTheValueAndAnotherChangesIt_rewritesOnlyTheChangedCell()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NAME=\"&#65;B\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.setCells("USERS",
+                List.of(new CellChange(0, "NAME", "AB"), new CellChange(0, "ID", "7")));
+
+        assertThat(document.get()).as("The cell that keeps its value keeps its text.")
+                .isEqualTo("<dataset><USERS ID=\"7\" NAME=\"&#65;B\"/></dataset>");
+    }
+
+    @Test
     void testAddColumn_whenColumnDoesNotExist_addsAPendingColumnWithoutChangingText()
     {
         final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
