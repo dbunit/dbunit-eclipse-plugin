@@ -61,6 +61,16 @@ final class MessageDialogDriver implements AutoCloseable
      */
     static final int CLOSE_BUTTON_OF_DELETED_FILE_DIALOG = 1;
 
+    /**
+     * The position of Replace in the dialog that an editor shows when its file changed outside the workbench.
+     */
+    static final int REPLACE_BUTTON_OF_CHANGED_FILE_DIALOG = 0;
+
+    /**
+     * The position of Ignore in the dialog that an editor shows when its file changed outside the workbench.
+     */
+    static final int IGNORE_BUTTON_OF_CHANGED_FILE_DIALOG = 1;
+
     private static final int POLL_MILLIS = 20;
 
     private final Display display;

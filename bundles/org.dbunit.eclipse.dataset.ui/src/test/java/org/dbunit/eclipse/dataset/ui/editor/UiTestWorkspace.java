@@ -26,6 +26,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -50,6 +51,8 @@ import org.eclipse.ui.ide.IDE;
  */
 final class UiTestWorkspace implements AutoCloseable
 {
+    private static final long MODIFICATION_STEP_MILLIS = 2000;
+
     private final IProject project;
 
     private final List<IEditorPart> openedEditors = new ArrayList<>();
@@ -102,16 +105,54 @@ final class UiTestWorkspace implements AutoCloseable
      */
     IEditorPart openReadOnlyExternalFile(final String content) throws IOException, PartInitException
     {
+        final Path file = createExternalFile(content);
+        file.toFile().setReadOnly();
+        return openExternalFile(file);
+    }
+
+    /**
+     * Creates a file outside the workspace, which is deleted when this workspace is closed.
+     */
+    Path createExternalFile(final String content) throws IOException
+    {
         final Path file = Files.createTempFile("dataset-editor-test-", ".xml");
         externalFiles.add(file);
         Files.writeString(file, content);
-        file.toFile().setReadOnly();
+        return file;
+    }
+
+    /**
+     * Opens a file outside the workspace in the dataset editor, as File > Open File does.
+     */
+    IEditorPart openExternalFile(final Path file) throws PartInitException
+    {
         final IFileStore fileStore = EFS.getLocalFileSystem().getStore(file.toUri());
         final IEditorPart editor = activePage().openEditor(new FileStoreEditorInput(fileStore),
                 FlatXmlDatasetEditor.ID);
         openedEditors.add(editor);
         processEvents();
         return editor;
+    }
+
+    /**
+     * Replaces the content of a workspace file the way a program outside Eclipse does, without telling the
+     * workspace.
+     */
+    static void changeOnDisk(final IFile file, final String content) throws IOException
+    {
+        changeOnDisk(file.getLocation().toFile().toPath(), content);
+    }
+
+    /**
+     * Replaces the content of a file and moves its modification time on, so that the change shows even
+     * when the clock is too coarse to tell it from the file's creation.
+     */
+    static void changeOnDisk(final Path file, final String content) throws IOException
+    {
+        final FileTime before = Files.getLastModifiedTime(file);
+        Files.writeString(file, content);
+        final FileTime after = FileTime.fromMillis(before.toMillis() + MODIFICATION_STEP_MILLIS);
+        Files.setLastModifiedTime(file, after);
     }
 
     static void processEvents()

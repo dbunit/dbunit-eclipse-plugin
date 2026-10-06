@@ -71,8 +71,8 @@ public class FlatXmlSourceEditor extends TextEditor
 
     /**
      * Checks whether the editor input changed or was deleted outside the workbench, prompting to reload
-     * or save as needed. The multi-page editor calls this on the nested editor's behalf, because a nested
-     * editor never receives part activation notifications directly.
+     * or save as needed. The multi-page editor calls this when it or its window is activated, so that the
+     * check does not depend on how the inherited editor follows the activation of the part that holds it.
      */
     public void checkExternalModification()
     {

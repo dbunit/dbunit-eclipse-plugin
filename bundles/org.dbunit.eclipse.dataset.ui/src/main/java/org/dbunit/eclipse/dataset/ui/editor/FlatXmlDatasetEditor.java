@@ -47,6 +47,7 @@ import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.editors.text.IEncodingSupport;
 import org.eclipse.ui.ide.IGotoMarker;
 import org.eclipse.ui.part.MultiPageEditorPart;
+import org.eclipse.ui.texteditor.AbstractTextEditor;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 /**
@@ -268,6 +269,14 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         }
         if (adapterClass == ITextEditor.class)
         {
+            return adapterClass.cast(sourceEditor);
+        }
+        if (adapterClass == AbstractTextEditor.class)
+        {
+            // A text editor asks whether its file changed on disk only after the part that holds it was
+            // activated, which it counts only when that part answers with the editor. The inherited answer
+            // is the editor of the page that is shown, so the Source editor would never ask on the Tables
+            // page. The zoom commands of the workbench ask the same question, so they are enabled there too.
             return adapterClass.cast(sourceEditor);
         }
         if (adapterClass == IFindReplaceTarget.class)

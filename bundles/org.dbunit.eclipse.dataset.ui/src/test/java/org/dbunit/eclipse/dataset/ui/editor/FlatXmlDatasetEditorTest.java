@@ -24,16 +24,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
+import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
 import org.dbunit.eclipse.dataset.ui.preferences.PreferenceKeys;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IMarker;
+import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.core.runtime.preferences.IEclipsePreferences;
+import org.eclipse.core.runtime.preferences.InstanceScope;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.ITextSelection;
@@ -51,19 +56,26 @@ import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.ide.IGotoMarker;
+import org.eclipse.ui.texteditor.AbstractTextEditor;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
  * Tests {@link FlatXmlDatasetEditor} against the Editor Structure lifecycle rules and its reaction to
- * preference changes.
+ * preference changes and to a file that changed outside the workbench.
  */
 class FlatXmlDatasetEditorTest
 {
     private static final int TABLES_PAGE_INDEX = 0;
 
     private static final int SOURCE_PAGE_INDEX = 1;
+
+    private static final String SAVED_USERS = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
+
+    private static final String CHANGED_USERS = "<dataset><USERS ID=\"1\" NAME=\"Zed\"/></dataset>";
+
+    private static final String OTHER_DATASET = "<dataset><ORDERS ID=\"1\"/></dataset>";
 
     @AfterEach
     void restoreDefaultPreferences()
@@ -72,6 +84,9 @@ class FlatXmlDatasetEditorTest
         store.setToDefault(PreferenceKeys.NULL_DISPLAY_TEXT);
         store.setToDefault(PreferenceKeys.ASSUME_COLUMN_SENSING);
         store.setToDefault(PreferenceKeys.CASE_SENSITIVE_TABLE_NAMES);
+        final IEclipsePreferences resourcePreferences =
+                InstanceScope.INSTANCE.getNode(ResourcesPlugin.PI_RESOURCES);
+        resourcePreferences.remove(ResourcesPlugin.PREF_LIGHTWEIGHT_AUTO_REFRESH);
     }
 
     @Test
@@ -266,6 +281,206 @@ class FlatXmlDatasetEditorTest
     }
 
     @Test
+    void testFileChanged_whenEditorIsDirtyOnTheTablesPageAndTheUserChoosesReplace_replacesTheText()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IWorkbenchPage page = activePage();
+            workspace.open(workspace.createFile("other.xml", OTHER_DATASET));
+            makeDirty(editor);
+            UiTestWorkspace.changeOnDisk(file, CHANGED_USERS);
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.REPLACE_BUTTON_OF_CHANGED_FILE_DIALOG);
+
+            page.activate(editor);
+            UiTestWorkspace.processEvents();
+
+            assertThat(dialogDriver.hasHandledDialog())
+                    .as("Activating an editor with unsaved changes whose file changed on disk must ask "
+                            + "whether to replace the text, although the Tables page is shown.")
+                    .isTrue();
+            assertThat(dialogDriver.unexpectedDialogTitles())
+                    .as("Choosing Replace must not lead to another dialog.").isEmpty();
+            assertThat(documentText(editor)).as("Replace must give the editor the text of the file.")
+                    .isEqualTo(CHANGED_USERS);
+            assertThat(editor.isDirty()).as("An editor with the text of its file is not dirty.").isFalse();
+            assertThat(nameOfFirstUser(editor)).as("The grid must show the file's change.")
+                    .isEqualTo("Zed");
+        }
+    }
+
+    @Test
+    void testFileChanged_whenEditorIsDirtyOnTheTablesPageAndTheUserChoosesIgnore_keepsTheTextAndAsksOnlyOnce()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IWorkbenchPage page = activePage();
+            final IEditorPart other = workspace.open(workspace.createFile("other.xml", OTHER_DATASET));
+            makeDirty(editor);
+            final String unsavedText = documentText(editor);
+            UiTestWorkspace.changeOnDisk(file, CHANGED_USERS);
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.IGNORE_BUTTON_OF_CHANGED_FILE_DIALOG);
+
+            page.activate(editor);
+            UiTestWorkspace.processEvents();
+
+            assertThat(dialogDriver.hasHandledDialog())
+                    .as("Activating an editor with unsaved changes whose file changed on disk must ask "
+                            + "whether to replace the text.")
+                    .isTrue();
+            assertThat(documentText(editor)).as("Ignoring the change must keep the unsaved text.")
+                    .isEqualTo(unsavedText);
+            assertThat(editor.isDirty()).as("Ignoring the change must keep the unsaved changes.").isTrue();
+
+            dialogDriver.expectNoDialog();
+            page.activate(other);
+            page.activate(editor);
+            UiTestWorkspace.processEvents();
+
+            assertThat(dialogDriver.unexpectedDialogTitles())
+                    .as("An ignored change must not be asked about again at the next activation.").isEmpty();
+        }
+    }
+
+    @Test
+    void testFileChanged_whenEditorIsDirtyOnTheSourcePageAndTheUserChoosesReplace_asksOnceAndReplacesTheText()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IWorkbenchPage page = activePage();
+            final IEditorPart other = workspace.open(workspace.createFile("other.xml", OTHER_DATASET));
+            editor.showOnSourcePage(0, 0);
+            page.activate(editor);
+            UiTestWorkspace.processEvents();
+            page.activate(other);
+            makeDirty(editor);
+            UiTestWorkspace.changeOnDisk(file, CHANGED_USERS);
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.REPLACE_BUTTON_OF_CHANGED_FILE_DIALOG);
+
+            page.activate(editor);
+            UiTestWorkspace.processEvents();
+
+            assertThat(dialogDriver.hasHandledDialog())
+                    .as("Activating an editor with unsaved changes whose file changed on disk must ask "
+                            + "whether to replace the text on the Source page too.")
+                    .isTrue();
+            assertThat(dialogDriver.unexpectedDialogTitles())
+                    .as("The change must be asked about once, not by two checks.").isEmpty();
+            assertThat(documentText(editor)).as("Replace must give the editor the text of the file.")
+                    .isEqualTo(CHANGED_USERS);
+        }
+    }
+
+    @Test
+    void testFileChanged_whenEditorIsCleanAndItsFileIsOutsideTheWorkspace_asksAndReplacesTheText()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final Path file = workspace.createExternalFile(SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.openExternalFile(file);
+            final IWorkbenchPage page = activePage();
+            workspace.open(workspace.createFile("other.xml", OTHER_DATASET));
+            UiTestWorkspace.changeOnDisk(file, CHANGED_USERS);
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.REPLACE_BUTTON_OF_CHANGED_FILE_DIALOG);
+
+            page.activate(editor);
+            UiTestWorkspace.processEvents();
+
+            assertThat(dialogDriver.hasHandledDialog())
+                    .as("The workspace does not refresh a file outside it, so activating its editor must "
+                            + "ask whether to replace the text with the changed file's.")
+                    .isTrue();
+            assertThat(documentText(editor)).as("Replace must give the editor the text of the file.")
+                    .isEqualTo(CHANGED_USERS);
+            assertThat(nameOfFirstUser(editor)).as("The grid must show the file's change.")
+                    .isEqualTo("Zed");
+        }
+    }
+
+    @Test
+    void testFileChanged_whenEditorIsCleanAndTheWorkspaceRefreshesItsFiles_doesNotAsk() throws Exception
+    {
+        setLightweightAutoRefresh(true);
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IWorkbenchPage page = activePage();
+            workspace.open(workspace.createFile("other.xml", OTHER_DATASET));
+            UiTestWorkspace.changeOnDisk(file, CHANGED_USERS);
+            dialogDriver.expectNoDialog();
+
+            page.activate(editor);
+            UiTestWorkspace.processEvents();
+
+            assertThat(dialogDriver.unexpectedDialogTitles())
+                    .as("The workspace reloads the clean editor of one of its files by itself, so "
+                            + "activating the editor must not ask.")
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void testFileChanged_whenEditorIsCleanAndTheWorkspaceDoesNotRefreshItsFiles_asksAndReplacesTheText()
+            throws Exception
+    {
+        setLightweightAutoRefresh(false);
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IWorkbenchPage page = activePage();
+            workspace.open(workspace.createFile("other.xml", OTHER_DATASET));
+            UiTestWorkspace.changeOnDisk(file, CHANGED_USERS);
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.REPLACE_BUTTON_OF_CHANGED_FILE_DIALOG);
+
+            page.activate(editor);
+            UiTestWorkspace.processEvents();
+
+            assertThat(dialogDriver.hasHandledDialog())
+                    .as("Nothing reloads the clean editor of a file that the workspace does not refresh, "
+                            + "so activating the editor must ask whether to replace the text.")
+                    .isTrue();
+            assertThat(documentText(editor)).as("Replace must give the editor the text of the file.")
+                    .isEqualTo(CHANGED_USERS);
+        }
+    }
+
+    @Test
+    void testGetAdapter_forAbstractTextEditorOnTheTablesPage_returnsTheSourceEditor() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            assertThat(editor.getActivePage()).as("An editable dataset must start on the Tables page.")
+                    .isEqualTo(TABLES_PAGE_INDEX);
+
+            final AbstractTextEditor textEditor = editor.getAdapter(AbstractTextEditor.class);
+
+            assertThat(textEditor)
+                    .as("The Source editor treats the part that answers with it as its own when it checks "
+                            + "its file for changes, so the dataset editor must answer on every page.")
+                    .isSameAs(editor.getSourceEditor());
+        }
+    }
+
+    @Test
     void testGetAdapter_forIGotoMarker_leavesTheTablesPageActive() throws Exception
     {
         try (UiTestWorkspace workspace = new UiTestWorkspace())
@@ -417,6 +632,31 @@ class FlatXmlDatasetEditorTest
                 "<!--edited-->");
         UiTestWorkspace.processEvents();
         assertThat(editor.isDirty()).as("A source edit must make the editor dirty.").isTrue();
+    }
+
+    private static void setLightweightAutoRefresh(final boolean enabled)
+    {
+        final IEclipsePreferences resourcePreferences =
+                InstanceScope.INSTANCE.getNode(ResourcesPlugin.PI_RESOURCES);
+        resourcePreferences.putBoolean(ResourcesPlugin.PREF_LIGHTWEIGHT_AUTO_REFRESH, enabled);
+    }
+
+    private static String documentText(final FlatXmlDatasetEditor editor)
+    {
+        final ITextEditor sourceEditor = editor.getSourceEditor();
+        return sourceEditor.getDocumentProvider().getDocument(sourceEditor.getEditorInput()).get();
+    }
+
+    private static String nameOfFirstUser(final FlatXmlDatasetEditor editor)
+    {
+        final DatasetTable users = editor.getDatasetDocument().getModel().getTables().get(0);
+        final int nameColumn = users.getColumnIndex("NAME");
+        return users.getEffectiveValue(0, nameColumn);
+    }
+
+    private static IWorkbenchPage activePage()
+    {
+        return PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
     }
 
     private static IPreferenceStore preferenceStore()

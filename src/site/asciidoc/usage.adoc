@@ -143,6 +143,17 @@ Every command is one undo step, however many cells it changes; so is a paste.
 *File > Revert* works on both pages.
 It discards every change since the last save, including a value that you are still typing into a cell.
 
+[[external-changes]]
+=== Changes Made Outside Eclipse
+
+When a file changes outside Eclipse, for example in a version control checkout,
+an editor with unsaved changes asks, whichever page is shown, whether to replace its contents with the file's.
+*Replace editor content* discards the unsaved changes on both pages, and *Ignore file change* keeps them.
+An editor without unsaved changes loads the change by itself when Eclipse refreshes the file,
+which it does automatically for a file in the workspace unless *Refresh using native hooks or polling* is off in
+*Preferences > General > Workspace*.
+When the file is not refreshed, as for a file outside the workspace, the editor asks as well.
+
 [[rows-columns-tables]]
 == Rows, Columns, and Tables
 
