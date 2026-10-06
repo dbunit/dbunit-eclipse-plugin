@@ -45,6 +45,8 @@ final class TextEditApplier
 {
     private static final int JOIN_EDITS_THRESHOLD = 50;
 
+    private static final int MAX_JOINED_GAP = 64 * 1024;
+
     private int batchDepth;
 
     /**
@@ -87,8 +89,8 @@ final class TextEditApplier
      */
     void apply(final IDocument document, final List<TextEdit> edits)
     {
-        final TextEdit change =
-                edits.size() > JOIN_EDITS_THRESHOLD ? joinEdits(document, edits) : combineEdits(edits);
+        final TextEdit change = edits.size() > JOIN_EDITS_THRESHOLD ? joinNearbyEdits(document, edits)
+                : combineEdits(edits);
         final boolean outermost = batchDepth == 0;
         final IDocumentUndoManager undoManager =
                 DocumentUndoManagerRegistry.getDocumentUndoManager(document);
@@ -132,20 +134,50 @@ final class TextEditApplier
     }
 
     /**
-     * Joins edits into one replacement of the text from the first edit to the last, which keeps the text
-     * between the edits as it is. The document changes once, however many edits there are: each edit
-     * that widens the text store's gap past its limit makes the store copy the whole text, so applying
-     * many scattered edits one by one takes time in proportion to their number times the document's
-     * length.
+     * Joins edits into one replacement of the text from the first edit to the last of each run of nearby
+     * edits, which keeps the text between the edits of a run as it is. A run ends where the text that no
+     * edit changes is longer than {@link #MAX_JOINED_GAP}, so that the replacements do not span the text
+     * between far apart edits, whose positions and undo record they would take with them. The document
+     * changes once for each run: each edit that widens the text store's gap past its limit makes the store
+     * copy the whole text, so applying many scattered edits one by one takes time in proportion to their
+     * number times the document's length.
      *
      * @param document The text document that the edits apply to.
      * @param edits The edits to join; they must not overlap.
-     * @return The replacement.
+     * @return The replacements, as one edit.
      */
-    private ReplaceEdit joinEdits(final IDocument document, final List<TextEdit> edits)
+    private TextEdit joinNearbyEdits(final IDocument document, final List<TextEdit> edits)
     {
         final List<TextEdit> ordered = new ArrayList<>(edits);
         ordered.sort(Comparator.comparingInt(TextEdit::getOffset));
+        final MultiTextEdit replacements = new MultiTextEdit();
+        int runStart = 0;
+        for (int index = 1; index <= ordered.size(); index++)
+        {
+            if (index == ordered.size() || isFarFromPrevious(ordered, index))
+            {
+                replacements.addChild(joinRun(document, ordered.subList(runStart, index)));
+                runStart = index;
+            }
+        }
+        return replacements;
+    }
+
+    private static boolean isFarFromPrevious(final List<TextEdit> ordered, final int index)
+    {
+        final int gap = ordered.get(index).getOffset() - ordered.get(index - 1).getExclusiveEnd();
+        return gap > MAX_JOINED_GAP;
+    }
+
+    /**
+     * Joins the edits of one run into one replacement of the text from the first edit to the last.
+     *
+     * @param document The text document that the edits apply to.
+     * @param ordered The edits of the run, in the order of their offsets; they must not overlap.
+     * @return The replacement.
+     */
+    private ReplaceEdit joinRun(final IDocument document, final List<TextEdit> ordered)
+    {
         final int start = ordered.get(0).getOffset();
         final int end = ordered.get(ordered.size() - 1).getExclusiveEnd();
         final String original;

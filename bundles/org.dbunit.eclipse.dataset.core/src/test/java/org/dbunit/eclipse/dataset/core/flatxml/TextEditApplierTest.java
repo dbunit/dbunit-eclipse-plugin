@@ -61,6 +61,8 @@ class TextEditApplierTest
     {
         private int count;
 
+        private final List<Integer> replacedLengths = new ArrayList<>();
+
         @Override
         public void documentAboutToBeChanged(final DocumentEvent event)
         {
@@ -71,6 +73,7 @@ class TextEditApplierTest
         public void documentChanged(final DocumentEvent event)
         {
             count++;
+            replacedLengths.add(event.getLength());
         }
     }
 
@@ -163,6 +166,58 @@ class TextEditApplierTest
         assertThat(document.get()).as("Joining the edits must not change the result.")
                 .isEqualTo(textWithADashBeforeEachOffsetFromZeroTo(text, 50));
         assertThat(changes.count).as("More than fifty edits must change the document once.").isEqualTo(1);
+    }
+
+    @Test
+    void testApply_whenMoreThanFiftyEditsAreFarApart_changesOnlyTheTextOfEachRunOfNearbyEdits()
+    {
+        final String text = "a".repeat(300_000);
+        final IDocument document = new Document(text);
+        final DocumentChangeCounter changes = new DocumentChangeCounter();
+        document.addDocumentListener(changes);
+        final List<TextEdit> edits = new ArrayList<>();
+        final StringBuilder expected = new StringBuilder(text);
+        for (int offset = 250_050; offset >= 250_000; offset--)
+        {
+            expected.insert(offset, '-');
+        }
+        for (int offset = 50; offset >= 0; offset--)
+        {
+            expected.insert(offset, '-');
+        }
+        for (int offset = 0; offset <= 50; offset++)
+        {
+            edits.add(new InsertEdit(offset, "-"));
+            edits.add(new InsertEdit(250_000 + offset, "-"));
+        }
+
+        new TextEditApplier().apply(document, edits);
+
+        assertThat(document.get()).as("Splitting the edits into runs must not change the result.")
+                .isEqualTo(expected.toString());
+        assertThat(changes.replacedLengths)
+                .as("The two runs of edits must each replace a short span, not the 250000 characters "
+                        + "between them.")
+                .hasSize(2).allMatch(length -> length <= 60);
+    }
+
+    @Test
+    void testApply_whenMoreThanFiftyEditsAreSeparatedByAShortGap_changesTheDocumentOnce()
+    {
+        final String text = "a".repeat(100_000);
+        final IDocument document = new Document(text);
+        final DocumentChangeCounter changes = new DocumentChangeCounter();
+        document.addDocumentListener(changes);
+        final List<TextEdit> edits = new ArrayList<>();
+        for (int index = 0; index <= 50; index++)
+        {
+            edits.add(new InsertEdit(index * 1_000, "-"));
+        }
+
+        new TextEditApplier().apply(document, edits);
+
+        assertThat(changes.count).as("Edits that are close together are joined into one change.")
+                .isEqualTo(1);
     }
 
     @Test
