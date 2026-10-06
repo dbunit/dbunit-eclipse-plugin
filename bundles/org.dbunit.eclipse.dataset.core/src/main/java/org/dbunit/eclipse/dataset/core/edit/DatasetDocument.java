@@ -71,14 +71,6 @@ public interface DatasetDocument
     void removeModelListener(DatasetModelListener listener);
 
     /**
-     * Runs several operations as one undoable change. Batches may nest; only the outermost batch begins
-     * and ends the undoable change.
-     *
-     * @param operations The operations to run.
-     */
-    void batch(Runnable operations);
-
-    /**
      * Changes one or more cells of a table.
      *
      * @param tableKey The key of the table.
@@ -109,8 +101,8 @@ public interface DatasetDocument
 
     /**
      * Changes cells of existing rows and appends rows after a table's last row, as pasting a block that
-     * reaches past the last row does. Unlike a batch of {@link #setCells} and {@link #insertRows}, it
-     * rebuilds the model only once.
+     * reaches past the last row does. Unlike {@link #setCells} followed by {@link #insertRows}, it is one
+     * change of the text, and it rebuilds the model only once.
      *
      * @param tableKey The key of the table.
      * @param changes The changes to existing rows' cells; may be empty.

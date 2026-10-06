@@ -36,10 +36,10 @@ import org.eclipse.text.undo.DocumentUndoManagerRegistry;
 import org.eclipse.text.undo.IDocumentUndoManager;
 
 /**
- * Applies the text edits of a dataset document to its text document, each operation's edits as one change,
- * and groups the changes of several operations into one step of the text document's undo history. Only the
- * nesting depth of the running batches is state: the text document is given with each call, so a dataset
- * document that is bound to another text document keeps a batch that is running.
+ * Applies the text edits of a dataset document to its text document, each operation's edits as one change
+ * of the text and, when the text document has an undo manager, as one step of its undo history. It has no
+ * state: the text document is given with each call, so a dataset document that is bound to another text
+ * document can go on using it.
  */
 final class TextEditApplier
 {
@@ -47,41 +47,8 @@ final class TextEditApplier
 
     private static final int MAX_JOINED_GAP = 64 * 1024;
 
-    private int batchDepth;
-
     /**
-     * Runs operations so that all the edits they apply form one compound change in the undo history of the
-     * document. Batches nest: only the outermost one starts and ends the compound change.
-     *
-     * @param document The text document that the operations edit.
-     * @param operations The operations to run.
-     */
-    void batch(final IDocument document, final Runnable operations)
-    {
-        final IDocumentUndoManager undoManager = DocumentUndoManagerRegistry.getDocumentUndoManager(document);
-        final boolean outermost = batchDepth == 0;
-        batchDepth++;
-        if (outermost && undoManager != null)
-        {
-            undoManager.beginCompoundChange();
-        }
-        try
-        {
-            operations.run();
-        }
-        finally
-        {
-            batchDepth--;
-            if (batchDepth == 0 && undoManager != null)
-            {
-                undoManager.endCompoundChange();
-            }
-        }
-    }
-
-    /**
-     * Applies edits to the document as one change of it, and, outside a batch, as one step of its undo
-     * history.
+     * Applies edits to the document as one change of it, and as one step of its undo history.
      *
      * @param document The text document to change.
      * @param edits The edits to apply; they must not overlap and must fit the document.
@@ -91,10 +58,9 @@ final class TextEditApplier
     {
         final TextEdit change = edits.size() > JOIN_EDITS_THRESHOLD ? joinNearbyEdits(document, edits)
                 : combineEdits(edits);
-        final boolean outermost = batchDepth == 0;
         final IDocumentUndoManager undoManager =
                 DocumentUndoManagerRegistry.getDocumentUndoManager(document);
-        if (outermost && undoManager != null)
+        if (undoManager != null)
         {
             undoManager.beginCompoundChange();
         }
@@ -104,7 +70,7 @@ final class TextEditApplier
         }
         finally
         {
-            if (outermost && undoManager != null)
+            if (undoManager != null)
             {
                 undoManager.endCompoundChange();
             }

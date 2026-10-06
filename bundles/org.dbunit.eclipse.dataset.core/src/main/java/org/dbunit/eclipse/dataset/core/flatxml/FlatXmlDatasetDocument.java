@@ -186,12 +186,6 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     }
 
     @Override
-    public void batch(final Runnable operations)
-    {
-        applier.batch(document, operations);
-    }
-
-    @Override
     public void setCells(final String tableKey, final List<CellChange> changes)
     {
         final DatasetTable table = editableTable(tableKey);

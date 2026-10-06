@@ -42,7 +42,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests {@link TextEditApplier} on plain {@link Document}s: how edits are applied, joined, and rejected,
- * and how batches group changes into undo steps.
+ * and how each call becomes a step of the undo history.
  */
 class TextEditApplierTest
 {
@@ -284,7 +284,7 @@ class TextEditApplierTest
     }
 
     @Test
-    void testApply_whenNotInABatch_isOneUndoStepPerCall() throws Exception
+    void testApply_whenCalledTwice_isOneUndoStepPerCall() throws Exception
     {
         final IDocument document = new Document(DIGITS);
         withUndoManager(document, undoManager ->
@@ -315,85 +315,4 @@ class TextEditApplierTest
         });
     }
 
-    @Test
-    void testBatch_whenAppliedTwiceInside_isOneUndoStep() throws Exception
-    {
-        final IDocument document = new Document(DIGITS);
-        withUndoManager(document, undoManager ->
-        {
-            final TextEditApplier applier = new TextEditApplier();
-
-            applier.batch(document, () ->
-            {
-                applier.apply(document, List.of(new InsertEdit(0, "a")));
-                applier.apply(document, List.of(new InsertEdit(0, "b")));
-            });
-
-            assertThat(document.get()).as("Both calls inside the batch must be applied.")
-                    .isEqualTo("ba" + DIGITS);
-            undoManager.undo();
-            assertThat(document.get()).as("One undo must revert the whole batch.").isEqualTo(DIGITS);
-        });
-    }
-
-    @Test
-    void testBatch_whenNested_isOneUndoStepAndTheNextCallStartsItsOwn() throws Exception
-    {
-        final IDocument document = new Document(DIGITS);
-        withUndoManager(document, undoManager ->
-        {
-            final TextEditApplier applier = new TextEditApplier();
-
-            applier.batch(document, () ->
-            {
-                applier.apply(document, List.of(new InsertEdit(0, "a")));
-                applier.batch(document, () -> applier.apply(document, List.of(new InsertEdit(0, "b"))));
-                applier.apply(document, List.of(new InsertEdit(0, "c")));
-            });
-            applier.apply(document, List.of(new InsertEdit(0, "d")));
-
-            undoManager.undo();
-            assertThat(document.get()).as("The call after the batch must be a step of its own.")
-                    .isEqualTo("cba" + DIGITS);
-            undoManager.undo();
-            assertThat(document.get()).as("An inner batch must not end the outer one.").isEqualTo(DIGITS);
-        });
-    }
-
-    @Test
-    void testBatch_whenTheOperationsThrow_endsTheBatchAndRethrows() throws Exception
-    {
-        final IDocument document = new Document(DIGITS);
-        withUndoManager(document, undoManager ->
-        {
-            final TextEditApplier applier = new TextEditApplier();
-
-            assertThatThrownBy(() -> applier.batch(document, () ->
-            {
-                applier.apply(document, List.of(new InsertEdit(0, "a")));
-                throw new IllegalArgumentException("failed");
-            })).as("The exception of the operations must reach the caller.")
-                    .isInstanceOf(IllegalArgumentException.class);
-            applier.apply(document, List.of(new InsertEdit(0, "b")));
-
-            undoManager.undo();
-            assertThat(document.get()).as("After a failed batch, the next call must be a step of its own.")
-                    .isEqualTo("a" + DIGITS);
-            undoManager.undo();
-            assertThat(document.get()).as("The failed batch's change must be one step too.")
-                    .isEqualTo(DIGITS);
-        });
-    }
-
-    @Test
-    void testBatch_whenNoUndoManagerIsConnected_runsTheOperations()
-    {
-        final IDocument document = new Document(DIGITS);
-        final TextEditApplier applier = new TextEditApplier();
-
-        applier.batch(document, () -> applier.apply(document, List.of(new InsertEdit(0, "a"))));
-
-        assertThat(document.get()).as("The operations must run without an undo manager.")
-                .isEqualTo("a" + DIGITS);
-    }
 }

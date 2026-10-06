@@ -801,31 +801,7 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
-    void testBatch_whenHoldingTwoSetCellsCalls_isOneUndoStep() throws Exception
-    {
-        final IDocument document = new Document(
-                "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
-        final String original = document.get();
-        withUndoManager(document, undoManager ->
-        {
-            final FlatXmlDatasetDocument datasetDocument = create(document);
-            datasetDocument.refresh();
-
-            datasetDocument.batch(() ->
-            {
-                datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Alicia")));
-                datasetDocument.setCells("USERS", List.of(new CellChange(1, "NAME", "Robert")));
-            });
-
-            assertThat(document.get()).as("Both calls inside the batch must be applied.").isEqualTo(
-                    "<dataset><USERS ID=\"1\" NAME=\"Alicia\"/><USERS ID=\"2\" NAME=\"Robert\"/></dataset>");
-            undoManager.undo();
-            assertThat(document.get()).as("One undo must revert the whole batch.").isEqualTo(original);
-        });
-    }
-
-    @Test
-    void testBatch_whenHoldingASetCellsOfMoreThan50RowsAndAnother_changesTheDocumentOncePerCall()
+    void testSetCells_whenChangingMoreThan50Rows_changesTheDocumentOnceWithoutARewriteSession()
             throws Exception
     {
         final StringBuilder xml = new StringBuilder("<dataset>");
@@ -835,8 +811,8 @@ class FlatXmlDatasetDocumentTest
             xml.append("<USERS ID=\"").append(i).append("\" NAME=\"Name").append(i).append("\"/>");
             expected.append("<USERS ID=\"").append(i).append("\" NAME=\"Changed").append(i).append("\"/>");
         }
-        xml.append("<ORDERS ID=\"1\" TOTAL=\"5\"/></dataset>");
-        expected.append("<ORDERS ID=\"1\" TOTAL=\"9\"/></dataset>");
+        xml.append("</dataset>");
+        expected.append("</dataset>");
         final IDocument document = new Document(xml.toString());
         final String original = document.get();
 
@@ -854,19 +830,15 @@ class FlatXmlDatasetDocumentTest
                 manyChanges.add(new CellChange(i, "NAME", "Changed" + i));
             }
 
-            datasetDocument.batch(() ->
-            {
-                datasetDocument.setCells("USERS", manyChanges);
-                datasetDocument.setCells("ORDERS", List.of(new CellChange(0, "TOTAL", "9")));
-            });
+            datasetDocument.setCells("USERS", manyChanges);
 
             assertThat(document.get()).as("All changes must be applied.").isEqualTo(expected.toString());
-            assertThat(changes.count).as("Each call must change the document once, however many rows it "
-                    + "changes.").isEqualTo(2);
-            assertThat(sessionEvents).as("A batch must start no rewrite session, because a text viewer "
+            assertThat(changes.count).as("The call must change the document once, however many rows it "
+                    + "changes.").isEqualTo(1);
+            assertThat(sessionEvents).as("The call must start no rewrite session, because a text viewer "
                     + "redraws its whole document when a session stops.").isEmpty();
             undoManager.undo();
-            assertThat(document.get()).as("A batch's changes must be one undo step.").isEqualTo(original);
+            assertThat(document.get()).as("The change must be one undo step.").isEqualTo(original);
         });
     }
 
@@ -1851,7 +1823,7 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
-    void testDeleteRows_whenDeletingAllRowsAndInsertingARowInOneBatch_undoAndRedoKeepTheColumnsRight()
+    void testDeleteRows_whenDeletingAllRowsAndThenInsertingARow_undoAndRedoKeepTheColumnsRight()
             throws Exception
     {
         final IDocument document = new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Bob\"/>\n"
@@ -1861,29 +1833,28 @@ class FlatXmlDatasetDocumentTest
         {
             final FlatXmlDatasetDocument datasetDocument = create(document);
             datasetDocument.refresh();
-            datasetDocument.batch(() ->
-            {
-                datasetDocument.deleteRows("USERS", new int[] { 0, 1 });
-                datasetDocument.insertBlankRow("USERS", 0);
-            });
+            datasetDocument.deleteRows("USERS", new int[] { 0, 1 });
+            datasetDocument.insertBlankRow("USERS", 0);
 
+            undoManager.undo();
             undoManager.undo();
             datasetDocument.refresh();
 
-            assertThat(document.get()).as("One undo must undo the whole batch.").isEqualTo(original);
+            assertThat(document.get()).as("Two undos must undo both steps.").isEqualTo(original);
             assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
                     .as("Undo must leave no pending column.")
                     .containsExactly(new DatasetColumn("ID", false, true, false),
                             new DatasetColumn("NAME", false, true, false));
 
             undoManager.redo();
+            undoManager.redo();
             datasetDocument.refresh();
 
-            assertThat(document.get()).as("Redo must apply the whole batch again.")
+            assertThat(document.get()).as("Two redos must apply both steps again.")
                     .isEqualTo("<dataset>\n    <USERS ID=\"\"/>\n</dataset>\n");
             assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
                     .as("The column that the new row gave a value is a data column, and the other is "
-                            + "still pending, whichever intermediate state the redo passes through.")
+                            + "still pending.")
                     .containsExactly(new DatasetColumn("ID", false, true, false),
                             new DatasetColumn("NAME", false, false, true));
         });
@@ -2481,37 +2452,6 @@ class FlatXmlDatasetDocumentTest
             assertThat(datasetDocument.getModel().findTable("CUSTOMERS").orElseThrow().getColumns())
                     .as("The redo of the rename must leave the pending column with the renamed table.")
                     .containsExactly(new DatasetColumn("ID", false, true, false),
-                            new DatasetColumn("EXTRA", false, false, true));
-        });
-    }
-
-    @Test
-    void testBatch_whenUndoneAndRedoneWithAPendingColumnInTheTable_theColumnStaysPending() throws Exception
-    {
-        final IDocument document = new Document(
-                "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
-        withUndoManager(document, undoManager ->
-        {
-            final FlatXmlDatasetDocument datasetDocument = create(document);
-            datasetDocument.refresh();
-            datasetDocument.addColumn("USERS", "EXTRA");
-            datasetDocument.batch(() ->
-            {
-                datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Alicia")));
-                datasetDocument.setCells("USERS", List.of(new CellChange(1, "NAME", "Robert")));
-            });
-
-            undoManager.undo();
-            undoManager.redo();
-            datasetDocument.refresh();
-
-            assertThat(document.get()).as("The redo must bring back both changes of the batch.").isEqualTo(
-                    "<dataset><USERS ID=\"1\" NAME=\"Alicia\"/><USERS ID=\"2\" NAME=\"Robert\"/></dataset>");
-            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns())
-                    .as("The pending column must stay, whichever intermediate state the redo passes "
-                            + "through.")
-                    .containsExactly(new DatasetColumn("ID", false, true, false),
-                            new DatasetColumn("NAME", false, true, false),
                             new DatasetColumn("EXTRA", false, false, true));
         });
     }
