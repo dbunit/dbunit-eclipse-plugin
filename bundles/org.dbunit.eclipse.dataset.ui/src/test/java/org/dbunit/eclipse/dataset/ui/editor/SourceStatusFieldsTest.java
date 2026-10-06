@@ -250,6 +250,7 @@ class SourceStatusFieldsTest
     {
         final FlatXmlDatasetEditor editor =
                 (FlatXmlDatasetEditor) workspace.open(workspace.createFile(fileName, DATASET));
+        editor.showOnSourcePage(0, 0);
         return editor.getSourceEditor();
     }
 }

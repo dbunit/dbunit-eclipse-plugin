@@ -156,7 +156,8 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
     @Override
     protected void createPages()
     {
-        sourceEditor = new FlatXmlSourceEditor(this::cancelActiveCellEditor, this::closeEditor);
+        sourceEditor = new FlatXmlSourceEditor(this::cancelActiveCellEditor, this::closeEditor,
+                this::showSourcePage);
         final int sourcePageIndex;
         try
         {
@@ -265,7 +266,6 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
 
     void showOnSourcePage(final int offset, final int length)
     {
-        setActivePage(SOURCE_PAGE_INDEX);
         sourceEditor.selectAndReveal(offset, length);
     }
 
@@ -366,6 +366,19 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
             return true;
         }
         return tablesPage.commitActiveCellEditor();
+    }
+
+    /**
+     * Brings the Source page forward, unless it is shown already or the pages are not all created yet, as
+     * when the Source editor selects text while it is set up.
+     */
+    void showSourcePage()
+    {
+        final boolean pagesExist = getPageCount() > SOURCE_PAGE_INDEX;
+        if (pagesExist && getActivePage() != SOURCE_PAGE_INDEX)
+        {
+            setActivePage(SOURCE_PAGE_INDEX);
+        }
     }
 
     private void cancelActiveCellEditor()

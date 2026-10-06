@@ -281,6 +281,7 @@ Switching pages keeps your place:
 the value of the selected cell (or, for a NULL cell, the name of its element) is selected in the XML text,
 and when you switch back, the cell at the text cursor is selected.
 *Show in Source* (*F3*) switches to the Source page with the selected cell's value selected.
+So does anything else that selects text in the file, such as a search result or a link in the Console.
 
 *File > Print* prints the XML text; the Tables page has nothing to print.
 

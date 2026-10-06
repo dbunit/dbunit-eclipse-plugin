@@ -36,8 +36,9 @@ import org.eclipse.ui.themes.IThemeManager;
 /**
  * The Source page of {@link FlatXmlDatasetEditor}: a text editor over the same document that colors the
  * XML syntax, with the additions the multi-page editor needs: to detect changes made outside the
- * workbench, to let the Tables page drop a cell edit in progress before the document is reverted, and to
- * close the whole dataset editor when it is asked to close itself.
+ * workbench, to let the Tables page drop a cell edit in progress before the document is reverted, to
+ * close the whole dataset editor when it is asked to close itself, and to bring its page forward when
+ * text in it is selected.
  *
  * @since 1.0.0
  */
@@ -49,6 +50,8 @@ public class FlatXmlSourceEditor extends TextEditor
 
     private final Consumer<Boolean> closeDatasetEditor;
 
+    private final Runnable showPage;
+
     /**
      * Creates the Source page editor, which colors the XML syntax with the current theme's colors.
      *
@@ -57,11 +60,15 @@ public class FlatXmlSourceEditor extends TextEditor
      *                           into the reverted document.
      * @param closeDatasetEditor Closes the dataset editor that holds this page, saving its changes first
      *                           when it is given true.
+     * @param showPage           Brings this page forward in the dataset editor, so that text that is
+     *                           selected from outside, such as a search result, is in view.
      */
-    public FlatXmlSourceEditor(final Runnable beforeRevert, final Consumer<Boolean> closeDatasetEditor)
+    public FlatXmlSourceEditor(final Runnable beforeRevert, final Consumer<Boolean> closeDatasetEditor,
+            final Runnable showPage)
     {
         this.beforeRevert = beforeRevert;
         this.closeDatasetEditor = closeDatasetEditor;
+        this.showPage = showPage;
         final IThemeManager themeManager = PlatformUI.getWorkbench().getThemeManager();
         tokenColors = new XmlTokenColors(themeManager, this::redrawSyntaxColors);
         setSourceViewerConfiguration(new XmlSourceViewerConfiguration(getPreferenceStore(), tokenColors));
@@ -77,6 +84,21 @@ public class FlatXmlSourceEditor extends TextEditor
     public void checkExternalModification()
     {
         safelySanityCheckState(getEditorInput());
+    }
+
+    /**
+     * Brings this page forward, then selects and reveals the range. Code that selects text in a text editor,
+     * such as a search result or a link in the console, reaches this editor through the dataset editor, and
+     * would otherwise select text on a page that is not shown.
+     *
+     * @param start The offset of the range.
+     * @param length The length of the range.
+     */
+    @Override
+    public void selectAndReveal(final int start, final int length)
+    {
+        showPage.run();
+        super.selectAndReveal(start, length);
     }
 
     /**

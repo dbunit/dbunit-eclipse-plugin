@@ -21,6 +21,7 @@
 package org.dbunit.eclipse.dataset.ui.editor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -704,6 +705,59 @@ class FlatXmlDatasetEditorTest
             assertThat(editor.getActivePage())
                     .as("Getting the IGotoMarker adapter must not switch pages by itself.")
                     .isEqualTo(TABLES_PAGE_INDEX);
+        }
+    }
+
+    @Test
+    void testSelectAndReveal_throughTheTextEditorAdapterOnTheTablesPage_showsTheSourcePageAndSelectsTheRange()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final ITextEditor textEditor = editor.getAdapter(ITextEditor.class);
+            final int offset = SAVED_USERS.indexOf("USERS");
+
+            textEditor.selectAndReveal(offset, "USERS".length());
+            UiTestWorkspace.processEvents();
+
+            assertThat(editor.getActivePage())
+                    .as("A search result or a console link that selects text through the text editor "
+                            + "adapter must show it, so the Source page must come forward.")
+                    .isEqualTo(SOURCE_PAGE_INDEX);
+            final ITextSelection selection =
+                    (ITextSelection) editor.getSourceEditor().getSelectionProvider().getSelection();
+            assertThat(selection.getText()).as("The requested range must be the selection.")
+                    .isEqualTo("USERS");
+        }
+    }
+
+    @Test
+    void testShowSourcePage_beforeThePagesAreCreated_doesNothing()
+    {
+        final FlatXmlDatasetEditor editor = new FlatXmlDatasetEditor();
+
+        assertThatCode(editor::showSourcePage)
+                .as("Text that is selected while the editor is set up has no page to bring forward yet.")
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void testSelectAndReveal_whenTheSourcePageIsActive_keepsItActive() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            editor.showOnSourcePage(0, 0);
+            final ITextEditor textEditor = editor.getAdapter(ITextEditor.class);
+
+            textEditor.selectAndReveal(1, 7);
+            UiTestWorkspace.processEvents();
+
+            assertThat(editor.getActivePage()).as("The Source page stays the active page.")
+                    .isEqualTo(SOURCE_PAGE_INDEX);
         }
     }
 
