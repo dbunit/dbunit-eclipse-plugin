@@ -216,9 +216,7 @@ public final class AttributeValueCodec
     private static void appendLiteralOrCharacterReference(final StringBuilder result, final int codePoint,
             final CharsetEncoder encoder)
     {
-        final boolean encodable =
-                encoder == null || encoder.canEncode(new String(Character.toChars(codePoint)));
-        if (encodable)
+        if (isEncodable(codePoint, encoder))
         {
             result.appendCodePoint(codePoint);
         }
@@ -227,6 +225,23 @@ public final class AttributeValueCodec
             result.append("&#x").append(Integer.toHexString(codePoint).toUpperCase(Locale.ROOT))
                     .append(';');
         }
+    }
+
+    /**
+     * Tells whether the encoder can encode a code point. A character of the basic plane is asked about as a
+     * char, which builds nothing, because this is asked for every character that is written.
+     */
+    private static boolean isEncodable(final int codePoint, final CharsetEncoder encoder)
+    {
+        if (encoder == null)
+        {
+            return true;
+        }
+        if (Character.isBmpCodePoint(codePoint))
+        {
+            return encoder.canEncode((char) codePoint);
+        }
+        return encoder.canEncode(new String(Character.toChars(codePoint)));
     }
 
     private static int decodeReference(final CharSequence raw, final int ampersandOffset,

@@ -23,7 +23,10 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.CharsetEncoder;
+import java.nio.charset.CoderResult;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -263,6 +266,33 @@ class AttributeValueCodecTest
     }
 
     @Test
+    void testEscape_whenThereIsNoEncoder_keepsEveryCharacterLiteral()
+    {
+        final String emoji = new String(Character.toChars(0x1F600));
+
+        assertThat(AttributeValueCodec.escape("abc€" + emoji, null))
+                .as("Without an encoder every character is encodable, so none becomes a reference.")
+                .isEqualTo("abc€" + emoji);
+    }
+
+    @Test
+    void testEscape_whenGivenCharactersOfTheBasicPlane_asksTheEncoderAboutEachAsACharNotAString()
+    {
+        final RecordingEncoder encoder = new RecordingEncoder(StandardCharsets.ISO_8859_1.newEncoder());
+        final String emoji = new String(Character.toChars(0x1F600));
+
+        final String escaped = AttributeValueCodec.escape("ab€" + emoji, encoder);
+
+        assertThat(escaped).as("The text must be escaped as before.").isEqualTo("ab&#x20AC;&#x1F600;");
+        assertThat(encoder.charQuestions)
+                .as("A character of the basic plane is one char, which asks without building a string.")
+                .containsExactly('a', 'b', (char) 0x20AC);
+        assertThat(encoder.textQuestions)
+                .as("Only a supplementary character is two chars, which the encoder gets as text.")
+                .containsExactly(emoji);
+    }
+
+    @Test
     void testEscape_whenValueContainsANonXmlCharacter_throwsDatasetEditException()
     {
         final DatasetEditException exception = catchThrowableOfType(
@@ -312,6 +342,45 @@ class AttributeValueCodecTest
             result[i] = pool.get(i);
         }
         return result;
+    }
+
+    /**
+     * A charset encoder that writes down what it is asked whether it can encode, and answers as the encoder
+     * that it wraps does. It never encodes anything itself.
+     */
+    private static final class RecordingEncoder extends CharsetEncoder
+    {
+        private final CharsetEncoder delegate;
+
+        private final List<Character> charQuestions = new ArrayList<>();
+
+        private final List<String> textQuestions = new ArrayList<>();
+
+        RecordingEncoder(final CharsetEncoder delegate)
+        {
+            super(delegate.charset(), delegate.averageBytesPerChar(), delegate.maxBytesPerChar());
+            this.delegate = delegate;
+        }
+
+        @Override
+        protected CoderResult encodeLoop(final CharBuffer in, final ByteBuffer out)
+        {
+            throw new UnsupportedOperationException("The encoder only records what it is asked.");
+        }
+
+        @Override
+        public boolean canEncode(final char c)
+        {
+            charQuestions.add(c);
+            return delegate.canEncode(c);
+        }
+
+        @Override
+        public boolean canEncode(final CharSequence text)
+        {
+            textQuestions.add(text.toString());
+            return delegate.canEncode(text);
+        }
     }
 
     private static String randomString(final int[] pool, final Random random)
