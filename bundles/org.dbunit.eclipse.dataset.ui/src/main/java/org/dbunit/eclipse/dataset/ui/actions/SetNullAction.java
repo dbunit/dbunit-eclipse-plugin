@@ -72,11 +72,7 @@ public final class SetNullAction extends GridAction
         final GridSelection selection = context.getSelection();
         final DatasetTable table = context.getDatasetDocument().requireTable(selection.tableKey());
         final List<Point> cells = context.getSelectedCellPositions();
-        final List<CellChange> changes = new ArrayList<>();
-        for (final Point cell : cells)
-        {
-            changes.add(new CellChange(cell.y, table.getColumns().get(cell.x).name(), null));
-        }
+        final List<CellChange> changes = CellValueChanges.setting(cells, table, null);
         final boolean edited = context
                 .executeEdit(() -> context.getDatasetDocument().setCells(selection.tableKey(), changes));
         if (edited)

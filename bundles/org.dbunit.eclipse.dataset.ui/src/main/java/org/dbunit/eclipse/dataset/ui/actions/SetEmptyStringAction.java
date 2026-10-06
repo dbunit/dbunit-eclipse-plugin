@@ -20,7 +20,6 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
@@ -28,7 +27,6 @@ import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.grid.DatasetGridContext;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
-import org.eclipse.swt.graphics.Point;
 
 /**
  * Sets every selected cell to the empty string.
@@ -53,11 +51,8 @@ public final class SetEmptyStringAction extends GridAction
     {
         final GridSelection selection = context.getSelection();
         final DatasetTable table = context.getDatasetDocument().requireTable(selection.tableKey());
-        final List<CellChange> changes = new ArrayList<>();
-        for (final Point cell : context.getSelectedCellPositions())
-        {
-            changes.add(new CellChange(cell.y, table.getColumns().get(cell.x).name(), ""));
-        }
+        final List<CellChange> changes =
+                CellValueChanges.setting(context.getSelectedCellPositions(), table, "");
         context.executeEdit(() -> context.getDatasetDocument().setCells(selection.tableKey(), changes));
     }
 

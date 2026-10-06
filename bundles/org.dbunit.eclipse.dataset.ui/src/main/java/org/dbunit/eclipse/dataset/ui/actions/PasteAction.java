@@ -84,11 +84,7 @@ public final class PasteAction extends GridAction
             final DatasetTable table, final String value)
     {
         final List<Point> selectedCells = context.getSelectedCellPositions();
-        final List<CellChange> changes = new ArrayList<>();
-        for (final Point cell : selectedCells)
-        {
-            changes.add(new CellChange(cell.y, table.getColumns().get(cell.x).name(), value));
-        }
+        final List<CellChange> changes = CellValueChanges.setting(selectedCells, table, value);
         context.executeMultiCellEdit(Messages.Action_paste,
                 () -> context.getDatasetDocument().setCells(selection.tableKey(), changes));
     }
