@@ -53,6 +53,7 @@ import org.eclipse.nebula.widgets.nattable.selection.command.SelectRegionCommand
 import org.eclipse.nebula.widgets.nattable.selection.event.ISelectionEvent;
 import org.eclipse.nebula.widgets.nattable.style.theme.DarkNatTableThemeConfiguration;
 import org.eclipse.nebula.widgets.nattable.style.theme.ModernNatTableThemeConfiguration;
+import org.eclipse.nebula.widgets.nattable.style.theme.ThemeConfiguration;
 import org.eclipse.nebula.widgets.nattable.viewport.ViewportLayer;
 import org.eclipse.nebula.widgets.nattable.viewport.command.ShowCellInViewportCommand;
 import org.eclipse.swt.SWT;
@@ -89,6 +90,8 @@ public final class DatasetGrid
     private DatasetTable currentTable;
 
     private String contextMenuRegion = GridRegion.BODY;
+
+    private boolean darkTheme;
 
     /**
      * Assembles a NatTable for one table.
@@ -135,8 +138,8 @@ public final class DatasetGrid
         natTable.addConfiguration(new SpreadsheetEditBindings(selectionLayer));
         natTable.addConfiguration(new GridStyleConfiguration());
         natTable.configure();
-        natTable.setTheme(context.isDarkTheme() ? new DarkNatTableThemeConfiguration()
-                : new ModernNatTableThemeConfiguration());
+        darkTheme = context.isDarkTheme();
+        natTable.setTheme(themeOf(darkTheme));
         natTable.addDisposeListener(event -> dialogEditor.cancelDialog());
         columnHeaderTooltip = new ColumnHeaderTooltip(natTable, bodyDataProvider);
         wireContextMenu(context);
@@ -328,6 +331,27 @@ public final class DatasetGrid
         final LabelStack labels = new LabelStack();
         columnHeaderLabels.accumulateConfigLabels(labels, columnIndex, 0);
         return labels;
+    }
+
+    /**
+     * Applies the theme of the workbench again when it changed from light to dark, or back, since the grid
+     * took its theme, for example after the user switched the theme of the workbench in the preferences.
+     */
+    public void updateTheme()
+    {
+        final boolean dark = bodyDataProvider.getContext().isDarkTheme();
+        if (dark == darkTheme)
+        {
+            return;
+        }
+        darkTheme = dark;
+        natTable.setTheme(themeOf(dark));
+        natTable.refresh(false);
+    }
+
+    private static ThemeConfiguration themeOf(final boolean dark)
+    {
+        return dark ? new DarkNatTableThemeConfiguration() : new ModernNatTableThemeConfiguration();
     }
 
     /**

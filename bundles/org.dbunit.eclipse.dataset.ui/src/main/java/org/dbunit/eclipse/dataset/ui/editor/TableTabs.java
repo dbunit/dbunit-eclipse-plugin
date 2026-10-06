@@ -148,6 +148,17 @@ final class TableTabs
         expectedNewTableKey = null;
     }
 
+    /**
+     * Has every grid apply the theme of the workbench again when it changed.
+     */
+    void updateThemes()
+    {
+        for (final DatasetGrid grid : gridsByKey.values())
+        {
+            grid.updateTheme();
+        }
+    }
+
     DatasetGrid activeGrid()
     {
         final CTabItem selected = tabFolder.getSelection();

@@ -572,11 +572,12 @@ final class TablesPage implements DatasetGridContext
     }
 
     /**
-     * Brings the editable state, the banner, and the buttons up to date with the input of the editor, which
-     * can change with no change of the text, for example when the read-only attribute of its file is set or
-     * cleared outside the editor.
+     * Brings what depends on the surroundings of the editor up to date: the editable state, the banner, and
+     * the buttons follow the input of the editor, which can change with no change of the text, for example
+     * when the read-only attribute of its file is set or cleared, and the grids follow the theme of the
+     * workbench.
      */
-    void refreshInputState()
+    void refreshExternalState()
     {
         if (control.isDisposed())
         {
@@ -586,6 +587,7 @@ final class TablesPage implements DatasetGridContext
         updateEditable(model);
         updateBanner(model);
         actions.updateGridActionsEnablement();
+        tabs.updateThemes();
     }
 
     private void updateBanner(final DatasetModel model)

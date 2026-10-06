@@ -49,8 +49,11 @@ import org.eclipse.nebula.widgets.nattable.layer.cell.ILayerCell;
 import org.eclipse.nebula.widgets.nattable.layer.command.ConfigureScalingCommand;
 import org.eclipse.nebula.widgets.nattable.resize.command.ColumnResizeCommand;
 import org.eclipse.nebula.widgets.nattable.selection.SelectionLayer;
+import org.eclipse.nebula.widgets.nattable.style.CellStyleAttributes;
 import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
+import org.eclipse.nebula.widgets.nattable.style.IStyle;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.FillLayout;
@@ -166,6 +169,57 @@ class DatasetGridTest
                 multiLineLabels))
                 .as("A multi-line value must open in the dialog editor, which keeps its line breaks.")
                 .isTrue();
+    }
+
+    @Test
+    void testUpdateTheme_whenTheWorkbenchTurnsDarkAndLightAgain_appliesTheThemeEachTime()
+    {
+        final TestContext context = new TestContext(create("<dataset><USERS ID=\"1\"/></dataset>"));
+        final DatasetGrid grid = new DatasetGrid(shell, context, "USERS");
+        final boolean darkAtFirst = isDark(bodyBackground(grid));
+
+        context.dark = true;
+        grid.updateTheme();
+        final boolean darkAfterTheSwitch = isDark(bodyBackground(grid));
+        context.dark = false;
+        grid.updateTheme();
+        final boolean darkAfterTheSwitchBack = isDark(bodyBackground(grid));
+
+        assertThat(List.of(darkAtFirst, darkAfterTheSwitch, darkAfterTheSwitchBack))
+                .as("A grid that is open when the workbench changes its theme must follow it, in both "
+                        + "directions.")
+                .containsExactly(false, true, false);
+    }
+
+    @Test
+    void testUpdateTheme_whenTheThemeIsTheSame_keepsTheStyleObjects()
+    {
+        final TestContext context = new TestContext(create("<dataset><USERS ID=\"1\"/></dataset>"));
+        final DatasetGrid grid = new DatasetGrid(shell, context, "USERS");
+        final IStyle before = bodyStyle(grid);
+
+        grid.updateTheme();
+
+        assertThat(bodyStyle(grid)).as("A grid whose theme did not change must not apply its theme again.")
+                .isSameAs(before);
+    }
+
+    private static IStyle bodyStyle(final DatasetGrid grid)
+    {
+        return grid.getNatTable().getConfigRegistry().getConfigAttribute(CellConfigAttributes.CELL_STYLE,
+                DisplayMode.NORMAL);
+    }
+
+    private static Color bodyBackground(final DatasetGrid grid)
+    {
+        return bodyStyle(grid).getAttributeValue(CellStyleAttributes.BACKGROUND_COLOR);
+    }
+
+    private static boolean isDark(final Color color)
+    {
+        final double luminance =
+                (0.2126 * color.getRed() + 0.7152 * color.getGreen() + 0.0722 * color.getBlue()) / 255.0;
+        return luminance < 0.5;
     }
 
     @Test
@@ -564,6 +618,8 @@ class DatasetGridTest
 
         private String contextMenuRegion;
 
+        private boolean dark;
+
         TestContext(final DatasetDocument datasetDocument)
         {
             this.datasetDocument = datasetDocument;
@@ -590,7 +646,7 @@ class DatasetGridTest
         @Override
         public boolean isDarkTheme()
         {
-            return false;
+            return dark;
         }
 
         @Override

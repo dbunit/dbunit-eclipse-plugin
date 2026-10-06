@@ -40,10 +40,15 @@ import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.nebula.widgets.nattable.NatTable;
+import org.eclipse.nebula.widgets.nattable.config.CellConfigAttributes;
 import org.eclipse.nebula.widgets.nattable.edit.command.EditSelectionCommand;
+import org.eclipse.nebula.widgets.nattable.style.CellStyleAttributes;
+import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
+import org.eclipse.nebula.widgets.nattable.style.IStyle;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
+import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
@@ -369,6 +374,49 @@ class TablesPageTest
                     .as("A file that became read-only must show the banner and refuse edits at once.")
                     .containsExactly(true, false, true);
         }
+    }
+
+    @Test
+    void testTablesPage_whenTheWorkbenchTurnsDarkWhileTheEditorIsOpen_darkensItsGridsOnActivation()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final NatTable natTable = (NatTable) tablesPage.getTabFolder().getSelection().getControl();
+            final Color black = new Color(natTable.getDisplay(), 0, 0, 0);
+            try
+            {
+                final Color backgroundBefore = bodyBackground(natTable);
+                tablesPage.getControl().setBackground(black);
+
+                editor.handleWindowActivated(editor.getEditorSite().getWorkbenchWindow());
+
+                final Color backgroundAfter = bodyBackground(natTable);
+                assertThat(List.of(brightness(backgroundBefore) > 128, brightness(backgroundAfter) < 128))
+                        .as("The grid of an open editor must take the dark theme of the workbench when the "
+                                + "editor is activated again.")
+                        .containsExactly(true, true);
+            }
+            finally
+            {
+                black.dispose();
+            }
+        }
+    }
+
+    private static Color bodyBackground(final NatTable natTable)
+    {
+        final IStyle style = natTable.getConfigRegistry().getConfigAttribute(CellConfigAttributes.CELL_STYLE,
+                DisplayMode.NORMAL);
+        return style.getAttributeValue(CellStyleAttributes.BACKGROUND_COLOR);
+    }
+
+    private static int brightness(final Color color)
+    {
+        return (color.getRed() + color.getGreen() + color.getBlue()) / 3;
     }
 
     @Test

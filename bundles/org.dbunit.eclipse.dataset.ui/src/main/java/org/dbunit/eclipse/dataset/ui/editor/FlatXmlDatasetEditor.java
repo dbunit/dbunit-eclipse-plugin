@@ -381,7 +381,7 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
     {
         sourceEditor.checkExternalModification();
         datasetDocument.reloadDtd();
-        tablesPage.refreshInputState();
+        tablesPage.refreshExternalState();
     }
 
     private void preferenceChanged(final String property)
