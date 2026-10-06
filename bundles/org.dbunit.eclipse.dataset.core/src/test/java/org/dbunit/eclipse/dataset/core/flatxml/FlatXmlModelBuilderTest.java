@@ -21,22 +21,36 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.dbunit.dataset.ITable;
+import org.dbunit.dataset.NoSuchColumnException;
+import org.dbunit.dataset.xml.FlatXmlDataSetBuilder;
+import org.dbunit.eclipse.dataset.core.TestDatasets;
 import org.dbunit.eclipse.dataset.core.dtd.DtdDeclarations;
 import org.dbunit.eclipse.dataset.core.dtd.DtdReader;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Tests {@link FlatXmlModelBuilder} against the table and column grouping rules of the Model Builder and
- * Mapping sections of the flat XML specification.
+ * Mapping sections of the flat XML specification, and against real dbUnit 3.5.2: it compares the model built
+ * from each "parity" fixture with the dataset that dbUnit loads from the same file, so that the editor shows
+ * exactly what dbUnit would read.
  */
 class FlatXmlModelBuilderTest
 {
@@ -480,5 +494,78 @@ class FlatXmlModelBuilderTest
             values.add(table.getEffectiveValue(rowIndex, columnIndex));
         }
         return values;
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "flatXmlDataSetTest.xml", "flatXmlDataSetDuplicateTest.xml",
+            "flatXmlDataSetDuplicateMultipleCaseTest.xml", "editor-sample.xml", "column-sensing.xml",
+            "special-characters.xml", "column-name-case.xml" })
+    void testBuild_whenFixtureHasNoDoctype_matchesDbUnitOnEveryColumn(final String fixtureName)
+            throws Exception
+    {
+        final File file = DbUnitParity.datasetsFile(fixtureName);
+
+        DbUnitParity.assertParity(TestDatasets.read(fixtureName), file, true, true);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "flatXmlTableTest.xml", "flatXmlDataSetDtdDifferentCaseTest.xml",
+            "internal-subset.xml", "column-name-case-dtd.xml", "dtd-defaults-internal.xml",
+            "dtd-defaults-external.xml", "dtd-parameter-entity.xml", "doctype-root-name.xml",
+            "content-model-both.xml" })
+    void testBuild_whenFixtureHasADoctype_matchesDbUnitOnDeclaredColumns(final String fixtureName)
+            throws Exception
+    {
+        final File file = DbUnitParity.datasetsFile(fixtureName);
+
+        DbUnitParity.assertParity(TestDatasets.read(fixtureName), file, false, false);
+    }
+
+    @Test
+    void testBuild_whenTheIso88591FixtureIsRead_matchesDbUnitOnEveryColumn() throws Exception
+    {
+        final String text = TestDatasets.read("iso-8859-1.xml", StandardCharsets.ISO_8859_1);
+
+        DbUnitParity.assertParity(text, DbUnitParity.datasetsFile("iso-8859-1.xml"), true, true);
+    }
+
+    @Test
+    void testBuild_whenEditorSampleIsRewrittenWithCrLf_matchesDbUnitOnEveryColumn(
+            @TempDir final Path tempDir) throws Exception
+    {
+        final String crlfText = TestDatasets.read("editor-sample.xml").replace("\n", "\r\n");
+        final Path crlfFile = tempDir.resolve("crlf.xml");
+        Files.writeString(crlfFile, crlfText, StandardCharsets.UTF_8);
+
+        DbUnitParity.assertParity(crlfText, crlfFile.toFile(), true, true);
+    }
+
+    @Test
+    void testDbUnit_whenTheFirstRowLacksAColumnTheOtherRowsHave_ignoresTheColumnWithoutColumnSensing(
+            @TempDir final Path tempDir) throws Exception
+    {
+        final Path file = tempDir.resolve("sparse-first-row.xml");
+        Files.writeString(file, "<dataset>\n    <T ID=\"\"/>\n    <T ID=\"1\" NAME=\"a\"/>\n</dataset>\n",
+                StandardCharsets.UTF_8);
+
+        final ITable withoutSensing =
+                new FlatXmlDataSetBuilder().setColumnSensing(false).build(file.toFile()).getTable("T");
+        final ITable withSensing =
+                new FlatXmlDataSetBuilder().setColumnSensing(true).build(file.toFile()).getTable("T");
+
+        assertThat(List.of(DbUnitParity.columnNames(withoutSensing), DbUnitParity.columnNames(withSensing)))
+                .as("Without column sensing dbUnit takes the columns from the first row, which is why the "
+                        + "editor keeps every column of the old first row on a new first row.")
+                .containsExactly(List.of("ID"), List.of("ID", "NAME"));
+    }
+
+    @Test
+    void testBuild_whenInternalSubsetIsLoadedWithColumnSensing_dbUnitThrowsNoSuchColumnException()
+    {
+        assertThatThrownBy(() -> new FlatXmlDataSetBuilder().setColumnSensing(true)
+                .build(DbUnitParity.datasetsFile("internal-subset.xml"))).as(
+                        "An attribute the DTD does not declare, loaded with column sensing, must fail, "
+                                + "the case the validator reports as an ERROR.")
+                .isInstanceOf(NoSuchColumnException.class);
     }
 }

@@ -21,11 +21,14 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
+import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -37,6 +40,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
 
+import org.dbunit.dataset.Column;
+import org.dbunit.dataset.DataSetException;
+import org.dbunit.dataset.IDataSet;
+import org.dbunit.dataset.ITable;
+import org.dbunit.dataset.xml.FlatXmlDataSetBuilder;
 import org.dbunit.eclipse.dataset.core.TestDatasets;
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
@@ -61,13 +69,21 @@ import org.eclipse.jface.text.IRegion;
 import org.eclipse.text.undo.DocumentUndoManagerRegistry;
 import org.eclipse.text.undo.IDocumentUndoManager;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Tests {@link FlatXmlDatasetDocument} against the staleness, refresh, and navigation rules of the Edit
- * Engine specification, using a plain {@link Document} (no workbench needed).
+ * Engine specification, using a plain {@link Document} (no workbench needed). It also checks the problems
+ * that a refresh reports and the text that an edit writes against real dbUnit 3.5.2, which must still load
+ * what the editor writes and fail where the model reports a problem.
  */
 class FlatXmlDatasetDocumentTest
 {
+    private static final String CASE_VARIANT_TABLES_DATASET = "<!DOCTYPE dataset [\n"
+            + "<!ELEMENT dataset (users*, USERS*)>\n"
+            + "<!ELEMENT users EMPTY>\n<!ATTLIST users A CDATA #IMPLIED>\n"
+            + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS B CDATA #IMPLIED>\n]>\n<dataset/>\n";
+
     @Test
     void testDocumentChanged_whenTheDocumentChanges_marksTheModelStaleWithoutRefreshing()
             throws Exception
@@ -3765,5 +3781,160 @@ class FlatXmlDatasetDocumentTest
         {
             count++;
         }
+    }
+
+    @Test
+    void testRefresh_whenTheContentModelIsEmpty_dbUnitFailsToLoadTheDatasetAndTheModelReportsIt(
+            @TempDir final Path tempDir) throws Exception
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ELEMENT dataset EMPTY>\n]>\n<dataset/>\n";
+        final Path file = tempDir.resolve("empty-content-model.xml");
+        Files.writeString(file, text, StandardCharsets.UTF_8);
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(new Document(text),
+                DtdSource.NONE, FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> new FlatXmlDataSetBuilder().build(file.toFile()))
+                .as("dbUnit must fail to load a dataset whose DTD declares the dataset element EMPTY.")
+                .isInstanceOf(DataSetException.class);
+        assertThat(datasetDocument.getModel().getProblems()).extracting(DatasetProblem::code)
+                .as("The model must report the failure, and not as a table named EMPTY.")
+                .containsExactly(ProblemCode.DTD_EMPTY_CONTENT_MODEL);
+        assertThat(datasetDocument.getModel().getTables()).as("The keyword EMPTY is no table.").isEmpty();
+    }
+
+    @Test
+    void testRefresh_whenTheDtdListsTwoSpellingsOfATable_dbUnitFailsToLoadTheDatasetAndTheModelReportsIt(
+            @TempDir final Path tempDir) throws Exception
+    {
+        final Path file = tempDir.resolve("table-name-case-variants.xml");
+        Files.writeString(file, CASE_VARIANT_TABLES_DATASET, StandardCharsets.UTF_8);
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(
+                new Document(CASE_VARIANT_TABLES_DATASET), DtdSource.NONE, FlatXmlOptions.DBUNIT_DEFAULTS,
+                () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> new FlatXmlDataSetBuilder().build(file.toFile()))
+                .as("dbUnit must fail to load a DTD that lists two spellings of one table.")
+                .isInstanceOf(DataSetException.class);
+        assertThat(datasetDocument.getModel().getProblems()).extracting(DatasetProblem::code)
+                .as("The model must report the failure.")
+                .containsExactly(ProblemCode.DTD_TABLE_NAME_CASE_VARIANTS);
+        assertThat(datasetDocument.getModel().getTables()).extracting(DatasetTable::getName)
+                .as("The two spellings are one table, as in dbUnit.").containsExactly("users");
+    }
+
+    @Test
+    void testRefresh_whenTheDtdListsTwoSpellingsOfATableAndNamesAreCaseSensitive_dbUnitStillFailsToLoadIt(
+            @TempDir final Path tempDir) throws Exception
+    {
+        final Path file = tempDir.resolve("table-name-case-variants.xml");
+        Files.writeString(file, CASE_VARIANT_TABLES_DATASET, StandardCharsets.UTF_8);
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(
+                new Document(CASE_VARIANT_TABLES_DATASET), DtdSource.NONE, new FlatXmlOptions(true, false),
+                () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(
+                () -> new FlatXmlDataSetBuilder().setCaseSensitiveTableNames(true).build(file.toFile()))
+                .as("dbUnit keeps the tables of a DTD in a map that ignores letter case.")
+                .isInstanceOf(DataSetException.class);
+        assertThat(datasetDocument.getModel().getProblems()).extracting(DatasetProblem::code)
+                .as("The model must report the failure whatever the case sensitivity of table names.")
+                .containsExactly(ProblemCode.DTD_TABLE_NAME_CASE_VARIANTS);
+    }
+
+    @Test
+    void testRefresh_whenTheDtdDeclaresOnlyAnotherNameThanTheDoctypesAsRoot_dbUnitFailsToLoadTheRows(
+            @TempDir final Path tempDir) throws Exception
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ELEMENT DATASET (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                + "<!ATTLIST USERS ID CDATA #IMPLIED>\n]>\n<dataset><USERS ID=\"1\"/></dataset>\n";
+        final Path file = tempDir.resolve("other-root-name.xml");
+        Files.writeString(file, text, StandardCharsets.UTF_8);
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(new Document(text),
+                DtdSource.NONE, FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> new FlatXmlDataSetBuilder().build(file.toFile()))
+                .as("dbUnit takes the name of the DOCTYPE for the root, and finds no tables in the DTD.")
+                .isInstanceOf(DataSetException.class);
+        assertThat(datasetDocument.getModel().getProblems()).extracting(DatasetProblem::code)
+                .as("The model must report that the DTD does not list the table, as dbUnit finds it.")
+                .containsExactly(ProblemCode.TABLE_NOT_DECLARED_IN_DTD);
+    }
+
+    @Test
+    void testInsertBlankRow_aboveTheFirstRow_leavesDbUnitLoadingEveryColumn(
+            @TempDir final Path tempDir) throws Exception
+    {
+        final IDocument document =
+                new Document("<dataset>\n    <USERS ID=\"1\" NAME=\"Alice\"/>\n</dataset>\n");
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, DtdSource.NONE,
+                FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+
+        datasetDocument.insertBlankRow("USERS", 0);
+
+        final Path file = tempDir.resolve("blank-row.xml");
+        Files.writeString(file, document.get(), StandardCharsets.UTF_8);
+        DbUnitParity.assertParity(document.get(), file.toFile(), false, true);
+        final ITable dbUnitTable =
+                new FlatXmlDataSetBuilder().setColumnSensing(false).build(file.toFile()).getTable("USERS");
+        assertThat(dbUnitTable.getValue(1, "NAME"))
+                .as("dbUnit must still load the name of the old first row.").isEqualTo("Alice");
+    }
+
+    @Test
+    void testRenameTable_whenTheInternalSubsetDeclaresTheTable_leavesDbUnitLoadingTheRenamedTable(
+            @TempDir final Path tempDir) throws Exception
+    {
+        final File file = renameInFixture(tempDir, "dtd-defaults-internal.xml", "USERS", "ACCOUNTS");
+
+        final String text = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        DbUnitParity.assertParity(text, file, false, false);
+        final IDataSet dbUnitDataSet = new FlatXmlDataSetBuilder().setColumnSensing(false).build(file);
+        assertThat(dbUnitDataSet.getTableNames())
+                .as("dbUnit must find the renamed table, which its DTD still declares.")
+                .containsExactly("ACCOUNTS", "ORDERS", "AUDIT");
+        assertThat(dbUnitDataSet.getTable("ACCOUNTS").getValue(0, "STATUS"))
+                .as("dbUnit must still apply the default that the renamed table's ATTLIST declares.")
+                .isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void testRenameTable_whenOnlyTheLetterCaseChanges_leavesDbUnitApplyingTheDtdDefaults(
+            @TempDir final Path tempDir) throws Exception
+    {
+        final File file = renameInFixture(tempDir, "dtd-defaults-internal.xml", "USERS", "Users");
+
+        final String text = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        DbUnitParity.assertParity(text, file, false, false);
+        final ITable dbUnitTable =
+                new FlatXmlDataSetBuilder().setColumnSensing(false).build(file).getTable("Users");
+        assertThat(dbUnitTable.getValue(0, "STATUS")).as(
+                "dbUnit gives a DTD's defaults only to elements spelled like the DTD's element, so the "
+                        + "DTD must have taken the new spelling too.")
+                .isEqualTo("ACTIVE");
+    }
+
+    /**
+     * Renames a table of a fixture through a dataset document and saves the resulting text to a file, so
+     * that dbUnit can load what the editor wrote.
+     */
+    private static File renameInFixture(final Path tempDir, final String fixtureName,
+            final String tableKey, final String newTableName)
+            throws Exception
+    {
+        final IDocument document = new Document(TestDatasets.read(fixtureName));
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(document, DtdSource.NONE,
+                FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+
+        datasetDocument.renameTable(tableKey, newTableName);
+
+        final Path file = tempDir.resolve("renamed-table.xml");
+        Files.writeString(file, document.get(), StandardCharsets.UTF_8);
+        return file.toFile();
     }
 }
