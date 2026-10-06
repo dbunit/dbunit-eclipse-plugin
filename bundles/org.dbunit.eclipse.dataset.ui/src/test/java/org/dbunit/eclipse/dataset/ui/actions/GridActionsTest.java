@@ -341,7 +341,7 @@ class GridActionsTest
     }
 
     @Test
-    void testUpdate_reflectsWhetherThePageIsEditable()
+    void testUpdate_whenThePageGoesFromEditableToReadOnly_enablesThenDisablesTheAction()
     {
         final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
         final TestContext context = new TestContext(datasetDocument, "USERS");
@@ -1406,7 +1406,7 @@ class GridActionsTest
     }
 
     @Test
-    void testDelete_setsTheSelectedCellsToNull()
+    void testDelete_ofSelectedCells_setsThemToNull()
     {
         final FlatXmlDatasetDocument datasetDocument =
                 create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
@@ -1636,7 +1636,7 @@ class GridActionsTest
     }
 
     @Test
-    void testSetEmptyString_setsTheSelectedCellsToTheEmptyString()
+    void testSetEmptyString_ofSelectedCells_setsThemToTheEmptyString()
     {
         final FlatXmlDatasetDocument datasetDocument =
                 create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>");

@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Test;
 class DatasetPreferenceInitializerTest
 {
     @Test
-    void testInitializeDefaultPreferences_setsEveryDocumentedDefault()
+    void testInitializeDefaultPreferences_whenRun_setsEveryDocumentedDefault()
     {
         new DatasetPreferenceInitializer().initializeDefaultPreferences();
 
