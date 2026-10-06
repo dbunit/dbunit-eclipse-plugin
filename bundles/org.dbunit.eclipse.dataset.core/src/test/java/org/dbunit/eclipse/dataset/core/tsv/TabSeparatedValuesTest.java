@@ -113,7 +113,7 @@ class TabSeparatedValuesTest
     }
 
     @Test
-    void testParse_acceptsCrLfLfAndCrLineEnds()
+    void testParse_whenRowsEndWithCrLfLfOrCr_acceptsAllThreeLineEnds()
     {
         final List<List<String>> rows = TabSeparatedValues.parse("a\r\nb\nc\rd");
 

@@ -64,7 +64,7 @@ class DatasetColumnTest
     }
 
     @Test
-    void testKey_returnsTheKeyOfTheName()
+    void testKey_whenTheNameHasLowerCaseLetters_returnsTheKeyOfTheName()
     {
         final DatasetColumn column = new DatasetColumn("Name", false, true, false);
 

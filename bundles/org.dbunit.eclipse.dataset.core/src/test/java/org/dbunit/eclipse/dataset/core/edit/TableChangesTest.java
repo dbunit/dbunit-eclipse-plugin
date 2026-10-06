@@ -295,7 +295,7 @@ class TableChangesTest
     }
 
     @Test
-    void testNone_hasNoRenamedAndNoAddedTable()
+    void testNone_whenRead_hasNoRenamedAndNoAddedTable()
     {
         assertThat(List.of(TableChanges.NONE.renamedKeys().size(), TableChanges.NONE.addedKeys().size()))
                 .as("NONE must have no renames and no added tables.").containsExactly(0, 0);
