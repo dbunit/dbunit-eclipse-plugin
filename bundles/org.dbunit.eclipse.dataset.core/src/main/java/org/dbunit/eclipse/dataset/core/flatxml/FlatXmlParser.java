@@ -24,11 +24,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 import org.dbunit.eclipse.dataset.core.Messages;
+import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.eclipse.osgi.util.NLS;
 
@@ -316,7 +316,7 @@ final class FlatXmlParser
             final String value = decodeValue(rawValue, valueOffset);
             lexer.advance(1); // consume the closing quote
             final String key =
-                    keysByName.computeIfAbsent(name, spelling -> spelling.toUpperCase(Locale.ENGLISH));
+                    keysByName.computeIfAbsent(name, DatasetColumn::keyOf);
             return new FlatXmlAttribute(name, key, value, segmentOffset, nameOffset, valueOffset,
                     valueEndOffset, quote);
         }

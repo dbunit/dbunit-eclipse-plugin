@@ -20,6 +20,8 @@
  */
 package org.dbunit.eclipse.dataset.core.model;
 
+import java.util.Locale;
+
 /**
  * One column of a dataset table.
  *
@@ -49,6 +51,29 @@ public record DatasetColumn(String name, boolean declared, boolean hasValues, bo
             final boolean pending)
     {
         this(name, declared, hasValues, pending, null);
+    }
+
+    /**
+     * Returns the key that identifies a column among the columns of a table: its name in upper case, with
+     * Locale.ENGLISH so that the key does not depend on the language of the user. Two names with one key
+     * name one column, as dbUnit matches the names of columns without regard to letter case.
+     *
+     * @param columnName The name of a column, in any letter case.
+     * @return The key of the column.
+     */
+    public static String keyOf(final String columnName)
+    {
+        return columnName.toUpperCase(Locale.ENGLISH);
+    }
+
+    /**
+     * Returns the key of this column.
+     *
+     * @return The key of the name of this column, as {@link #keyOf} gives it.
+     */
+    public String key()
+    {
+        return keyOf(name);
     }
 
     /**

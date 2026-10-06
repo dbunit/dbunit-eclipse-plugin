@@ -22,7 +22,6 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
@@ -58,7 +57,7 @@ final class ColumnKeys
         for (int index = 0; index < columns.size(); index++)
         {
             final String name = columns.get(index).name();
-            final String key = name.toUpperCase(Locale.ENGLISH);
+            final String key = DatasetColumn.keyOf(name);
             indexByKey.put(key, index);
             nameByKey.put(key, name);
         }

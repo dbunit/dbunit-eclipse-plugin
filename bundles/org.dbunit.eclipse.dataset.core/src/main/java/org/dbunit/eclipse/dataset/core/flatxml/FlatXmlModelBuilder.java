@@ -25,7 +25,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -96,7 +95,7 @@ final class FlatXmlModelBuilder
             {
                 // Two spellings of one table, which dbUnit rejects, keep the first one's declaration, as a
                 // table that has no rows does.
-                byKey.putIfAbsent(tableKey(table.name(), options), table);
+                byKey.putIfAbsent(options.tableKey(table.name()), table);
             }
         }
         return byKey;
@@ -113,7 +112,7 @@ final class FlatXmlModelBuilder
         {
             for (final String name : dtd.externalElementNames())
             {
-                keys.add(tableKey(name, options));
+                keys.add(options.tableKey(name));
             }
         }
         return keys;
@@ -125,7 +124,7 @@ final class FlatXmlModelBuilder
         final Map<String, TableGroup> groups = new LinkedHashMap<>();
         for (final FlatXmlElement element : elements)
         {
-            final String key = tableKey(element.name(), options);
+            final String key = options.tableKey(element.name());
             final TableGroup group = groups.computeIfAbsent(key, unused -> new TableGroup(element.name()));
             if (isRow(element, dtdTablesByKey.get(key)))
             {
@@ -158,7 +157,8 @@ final class FlatXmlModelBuilder
             for (final String declaredName : dtdTable.columns())
             {
                 final String defaultValue = dtdTable.defaults().get(declaredName);
-                columns.put(columnKey(declaredName), new ColumnInfo(declaredName, true, false, defaultValue));
+                columns.put(DatasetColumn.keyOf(declaredName),
+                        new ColumnInfo(declaredName, true, false, defaultValue));
             }
         }
         for (final FlatXmlElement row : rowElements)
@@ -173,7 +173,8 @@ final class FlatXmlModelBuilder
         }
         for (final String pendingName : pendingNames)
         {
-            columns.putIfAbsent(columnKey(pendingName), new ColumnInfo(pendingName, false, true, null));
+            columns.putIfAbsent(DatasetColumn.keyOf(pendingName),
+                    new ColumnInfo(pendingName, false, true, null));
         }
         return List.copyOf(columns.values());
     }
@@ -184,7 +185,7 @@ final class FlatXmlModelBuilder
         final Map<String, Integer> columnIndexByKey = new LinkedHashMap<>();
         for (int index = 0; index < columns.size(); index++)
         {
-            columnIndexByKey.put(columnKey(columns.get(index).displayName()), index);
+            columnIndexByKey.put(DatasetColumn.keyOf(columns.get(index).displayName()), index);
         }
         final boolean[] hasValues = new boolean[columns.size()];
         final List<DatasetRow> rows = new ArrayList<>();
@@ -233,7 +234,7 @@ final class FlatXmlModelBuilder
         final Set<String> addedKeys = new HashSet<>();
         for (final DtdTable dtdTable : dtd.tables())
         {
-            final String key = tableKey(dtdTable.name(), options);
+            final String key = options.tableKey(dtdTable.name());
             if (groups.containsKey(key) || !addedKeys.add(key))
             {
                 continue;
@@ -261,16 +262,6 @@ final class FlatXmlModelBuilder
         }
         return new FlatXmlIndex(parse.root(), parse.doctype(), text, parse.elements(), displayNames,
                 rowElementsByKey, markerElementsByKey);
-    }
-
-    private static String tableKey(final String name, final FlatXmlOptions options)
-    {
-        return options.caseSensitiveTableNames() ? name : name.toUpperCase(Locale.ENGLISH);
-    }
-
-    private static String columnKey(final String name)
-    {
-        return name.toUpperCase(Locale.ENGLISH);
     }
 
     /**

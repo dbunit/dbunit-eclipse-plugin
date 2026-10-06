@@ -81,10 +81,22 @@ public final class DatasetTable
     }
 
     /**
+     * Returns the key that identifies a table across refreshes.
+     *
+     * @param tableName The name of a table, as its first element spells it.
+     * @param caseSensitive True when table names are case-sensitive.
+     * @return The exact name when table names are case-sensitive, otherwise the name in upper case, with
+     *         Locale.ENGLISH so that the key does not depend on the language of the user.
+     */
+    public static String keyOf(final String tableName, final boolean caseSensitive)
+    {
+        return caseSensitive ? tableName : tableName.toUpperCase(Locale.ENGLISH);
+    }
+
+    /**
      * Returns the identity of the table across refreshes.
      *
-     * @return The upper-cased name (Locale.ENGLISH), or the exact name when table names are
-     *         case-sensitive.
+     * @return The key of the table, as {@link #keyOf} gives it.
      */
     public String getKey()
     {
@@ -124,18 +136,17 @@ public final class DatasetTable
     /**
      * Finds the index of a column by name.
      *
-     * @param columnName The column name to look up. A column matches when its name and this name are equal
-     *            after upper-casing them with Locale.ENGLISH, which is how the rest of the plugin keys
-     *            columns.
+     * @param columnName The column name to look up. A column matches when it has the same key as this
+     *            name, see {@link DatasetColumn#keyOf}.
      * @return The index of the first matching column, or -1 when no column matches.
      */
     public int getColumnIndex(final String columnName)
     {
-        final String columnKey = columnName.toUpperCase(Locale.ENGLISH);
+        final String columnKey = DatasetColumn.keyOf(columnName);
         for (int index = 0; index < columns.size(); index++)
         {
             final DatasetColumn column = columns.get(index);
-            if (column.name().toUpperCase(Locale.ENGLISH).equals(columnKey))
+            if (column.key().equals(columnKey))
             {
                 return index;
             }

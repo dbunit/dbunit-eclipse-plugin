@@ -21,10 +21,10 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 import org.dbunit.eclipse.dataset.core.model.CellAddress;
+import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.jface.text.IRegion;
@@ -103,7 +103,7 @@ final class CellLocator
         {
             return Optional.empty();
         }
-        final String key = tableKey(element.name());
+        final String key = options.tableKey(element.name());
         final List<FlatXmlElement> rowElements = index.getRowElements(key);
         final int rowIndex = rowElements.indexOf(element);
         if (rowIndex < 0)
@@ -159,7 +159,7 @@ final class CellLocator
 
     private static FlatXmlAttribute findAttribute(final FlatXmlElement element, final String columnName)
     {
-        final String columnKey = columnName.toUpperCase(Locale.ENGLISH);
+        final String columnKey = DatasetColumn.keyOf(columnName);
         FlatXmlAttribute found = null;
         for (final FlatXmlAttribute attribute : element.attributes())
         {
@@ -169,10 +169,5 @@ final class CellLocator
             }
         }
         return found;
-    }
-
-    private String tableKey(final String name)
-    {
-        return options.caseSensitiveTableNames() ? name : name.toUpperCase(Locale.ENGLISH);
     }
 }

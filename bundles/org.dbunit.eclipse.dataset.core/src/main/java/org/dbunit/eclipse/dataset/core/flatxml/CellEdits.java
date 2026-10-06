@@ -25,13 +25,13 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
+import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetRow;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.osgi.util.NLS;
@@ -64,7 +64,7 @@ final class CellEdits
         final Map<Integer, Map<String, String>> changesByRow = new LinkedHashMap<>();
         for (final CellChange change : changes)
         {
-            final String columnKey = change.columnName().toUpperCase(Locale.ENGLISH);
+            final String columnKey = DatasetColumn.keyOf(change.columnName());
             changesByRow.computeIfAbsent(change.rowIndex(), unused -> new LinkedHashMap<>())
                     .put(columnKey, change.value());
         }
@@ -156,7 +156,7 @@ final class CellEdits
     private static boolean hasValueInOtherRow(final DatasetTable table,
             final Map<Integer, Map<String, String>> changesByRow, final int columnIndex)
     {
-        final String columnKey = table.getColumns().get(columnIndex).name().toUpperCase(Locale.ENGLISH);
+        final String columnKey = table.getColumns().get(columnIndex).key();
         for (int rowIndex = 1; rowIndex < table.getRows().size(); rowIndex++)
         {
             final Map<String, String> rowChanges = changesByRow.getOrDefault(rowIndex, Map.of());
@@ -189,7 +189,7 @@ final class CellEdits
         final DatasetRow row = table.getRows().get(rowIndex);
         for (int columnIndex = 0; columnIndex < table.getColumns().size(); columnIndex++)
         {
-            final String columnKey = table.getColumns().get(columnIndex).name().toUpperCase(Locale.ENGLISH);
+            final String columnKey = table.getColumns().get(columnIndex).key();
             final String value = rowChanges.containsKey(columnKey) ? rowChanges.get(columnKey)
                     : row.getValue(columnIndex);
             if (value != null)

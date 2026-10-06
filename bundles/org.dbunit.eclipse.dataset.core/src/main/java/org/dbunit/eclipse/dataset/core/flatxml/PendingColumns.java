@@ -26,7 +26,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -409,8 +408,8 @@ final class PendingColumns
         {
             return;
         }
-        final String columnKey = columnName.toUpperCase(Locale.ENGLISH);
-        pending.removeIf(name -> name.toUpperCase(Locale.ENGLISH).equals(columnKey));
+        final String columnKey = DatasetColumn.keyOf(columnName);
+        pending.removeIf(name -> DatasetColumn.keyOf(name).equals(columnKey));
         if (pending.isEmpty())
         {
             columns.remove(tableKey);
@@ -450,10 +449,10 @@ final class PendingColumns
 
     private static int indexOfColumn(final List<String> names, final String name)
     {
-        final String columnKey = name.toUpperCase(Locale.ENGLISH);
+        final String columnKey = DatasetColumn.keyOf(name);
         for (int i = 0; i < names.size(); i++)
         {
-            if (names.get(i).toUpperCase(Locale.ENGLISH).equals(columnKey))
+            if (DatasetColumn.keyOf(names.get(i)).equals(columnKey))
             {
                 return i;
             }

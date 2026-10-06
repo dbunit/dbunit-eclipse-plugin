@@ -20,6 +20,8 @@
  */
 package org.dbunit.eclipse.dataset.core.flatxml;
 
+import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+
 /**
  * The options that change how a flat XML document is read, matching dbUnit's
  * {@code FlatXmlDataSetBuilder}.
@@ -35,4 +37,16 @@ public record FlatXmlOptions(boolean caseSensitiveTableNames, boolean columnSens
      * dbUnit's own defaults: case-insensitive table names and no column sensing.
      */
     public static final FlatXmlOptions DBUNIT_DEFAULTS = new FlatXmlOptions(false, false);
+
+    /**
+     * Returns the key of a table, which identifies it across refreshes: its name, as these options match
+     * the names of tables.
+     *
+     * @param tableName The name of the table, as its first element spells it.
+     * @return The key, as {@link DatasetTable#keyOf} gives it for these options.
+     */
+    public String tableKey(final String tableName)
+    {
+        return DatasetTable.keyOf(tableName, caseSensitiveTableNames);
+    }
 }

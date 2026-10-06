@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -98,7 +97,7 @@ final class FlatXmlValidator
         {
             for (final DtdTable dtdTable : dtd.tables())
             {
-                keys.add(tableKey(dtdTable.name(), options));
+                keys.add(options.tableKey(dtdTable.name()));
             }
         }
         return keys;
@@ -296,7 +295,7 @@ final class FlatXmlValidator
         {
             final String name = dtdTable.name();
             final String firstSpelling =
-                    firstSpellingByKey.putIfAbsent(name.toUpperCase(Locale.ENGLISH), name);
+                    firstSpellingByKey.putIfAbsent(DatasetTable.keyOf(name, false), name);
             if (firstSpelling != null)
             {
                 final String message =
@@ -350,16 +349,6 @@ final class FlatXmlValidator
                 : 0;
     }
 
-    private static String tableKey(final String name, final FlatXmlOptions options)
-    {
-        return options.caseSensitiveTableNames() ? name : name.toUpperCase(Locale.ENGLISH);
-    }
-
-    private static String columnKey(final String name)
-    {
-        return name.toUpperCase(Locale.ENGLISH);
-    }
-
     /**
      * Where a column first has a value.
      *
@@ -399,7 +388,7 @@ final class FlatXmlValidator
             final Map<String, String> columnNamesByKey = new HashMap<>();
             for (final DatasetColumn column : table.getColumns())
             {
-                columnNamesByKey.put(columnKey(column.name()), column.name());
+                columnNamesByKey.put(DatasetColumn.keyOf(column.name()), column.name());
             }
             final ColumnOccurrences occurrences = new ColumnOccurrences();
             final Map<String, FlatXmlAttribute> rowAttributesByKey = new LinkedHashMap<>();
@@ -457,7 +446,7 @@ final class FlatXmlValidator
          */
         Occurrence firstValue(final String columnName)
         {
-            return firstValues.get(columnKey(columnName));
+            return firstValues.get(DatasetColumn.keyOf(columnName));
         }
 
         /**
@@ -468,7 +457,7 @@ final class FlatXmlValidator
          */
         FlatXmlAttribute firstSpellingVariant(final String columnName)
         {
-            return firstSpellingVariants.get(columnKey(columnName));
+            return firstSpellingVariants.get(DatasetColumn.keyOf(columnName));
         }
 
         /**

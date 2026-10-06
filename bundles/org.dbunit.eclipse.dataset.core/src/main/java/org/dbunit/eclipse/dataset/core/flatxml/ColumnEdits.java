@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -120,7 +119,7 @@ final class ColumnEdits
     {
         requireRenamableColumn(table, column);
 
-        final String key = columnName.toUpperCase(Locale.ENGLISH);
+        final String key = DatasetColumn.keyOf(columnName);
         final List<FlatXmlElement> rowElements = context.index().getRowElements(tableKey);
         requireNoRowSpellsTheColumnInTwoWays(table, column, rowElements, key);
         final Map<String, String> renames = new LinkedHashMap<>();
@@ -142,7 +141,7 @@ final class ColumnEdits
     List<TextEdit> deleteEdits(final String tableKey, final DatasetTable table, final DatasetColumn column,
             final String columnName)
     {
-        final String key = columnName.toUpperCase(Locale.ENGLISH);
+        final String key = DatasetColumn.keyOf(columnName);
         final List<FlatXmlElement> rowElements = context.index().getRowElements(tableKey);
         requireNoRowLeftEmpty(table, column, rowElements, key);
 
@@ -157,7 +156,7 @@ final class ColumnEdits
         for (final String columnName : columnNames)
         {
             requireValidColumnName(columnName);
-            final String columnKey = columnName.toUpperCase(Locale.ENGLISH);
+            final String columnKey = DatasetColumn.keyOf(columnName);
             if (!seenColumnKeys.add(columnKey))
             {
                 throw new DatasetEditException(NLS.bind(Messages.Edit_columnExists, tableName, columnName));

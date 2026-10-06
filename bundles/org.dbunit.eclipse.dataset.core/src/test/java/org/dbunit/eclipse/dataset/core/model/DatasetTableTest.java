@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 
@@ -35,6 +36,36 @@ class DatasetTableTest
     private static final DatasetColumn ID_COLUMN = new DatasetColumn("ID", true, true, false);
 
     private static final DatasetColumn NAME_COLUMN = new DatasetColumn("NAME", true, true, false);
+
+    @Test
+    void testKeyOf_whenTableNamesAreNotCaseSensitive_returnsTheNameInUpperCase()
+    {
+        assertThat(DatasetTable.keyOf("Users", false)).as("A table is keyed by its upper-cased name.")
+                .isEqualTo("USERS");
+    }
+
+    @Test
+    void testKeyOf_whenTableNamesAreCaseSensitive_returnsTheNameAsItIs()
+    {
+        assertThat(DatasetTable.keyOf("Users", true)).as("The exact name is the key of a table whose name "
+                + "is case-sensitive.").isEqualTo("Users");
+    }
+
+    @Test
+    void testKeyOf_whenTheDefaultLocaleUpperCasesIDifferently_doesNotFollowIt()
+    {
+        final Locale defaultLocale = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr"));
+        try
+        {
+            assertThat(DatasetTable.keyOf("titles", false))
+                    .as("The key must not depend on the language of the user.").isEqualTo("TITLES");
+        }
+        finally
+        {
+            Locale.setDefault(defaultLocale);
+        }
+    }
 
     @Test
     void testGetColumnIndex_whenNameMatchesIgnoringCase_returnsTheIndex()
