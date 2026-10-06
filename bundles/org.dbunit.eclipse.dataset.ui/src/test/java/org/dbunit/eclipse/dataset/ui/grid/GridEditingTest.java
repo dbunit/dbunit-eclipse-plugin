@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
@@ -847,6 +848,60 @@ class GridEditingTest
                 .as("An arrow key must not match.").isFalse();
         assertThat(matcher.matches(keyEvent((char) 0, SWT.F2, SWT.NONE)))
                 .as("A function key must not match.").isFalse();
+    }
+
+    @Test
+    void testAddCellEditorListener_whenAnEditorOpensAndIsCommitted_reportsTheEditorStateAtEachStep()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(new Document(FOUR_USERS));
+        final DatasetGrid grid = openGrid(datasetDocument, "USERS");
+        final NatTable natTable = grid.getNatTable();
+        final List<Boolean> editorOpenAtEachCall = new ArrayList<>();
+        grid.addCellEditorListener(() -> editorOpenAtEachCall.add(natTable.getActiveCellEditor() != null));
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 2, false, false));
+
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+        natTable.commitAndCloseActiveCellEditor();
+
+        assertThat(editorOpenAtEachCall)
+                .as("A listener must find the editor active when it opens and gone when it closes.")
+                .containsExactly(true, false);
+    }
+
+    @Test
+    void testAddCellEditorListener_whenAnEditorOpensAndIsCancelled_reportsTheEditorStateAtEachStep()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(new Document(FOUR_USERS));
+        final DatasetGrid grid = openGrid(datasetDocument, "USERS");
+        final NatTable natTable = grid.getNatTable();
+        final List<Boolean> editorOpenAtEachCall = new ArrayList<>();
+        grid.addCellEditorListener(() -> editorOpenAtEachCall.add(natTable.getActiveCellEditor() != null));
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 2, false, false));
+
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+        grid.cancelActiveCellEditor();
+
+        assertThat(editorOpenAtEachCall)
+                .as("A listener must find the editor active when it opens and gone when it is cancelled.")
+                .containsExactly(true, false);
+    }
+
+    @Test
+    void testAddCellEditorListener_whenTheGridIsDisposedWithAnOpenEditor_reportsNoClosing()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(new Document(FOUR_USERS));
+        final DatasetGrid grid = openGrid(datasetDocument, "USERS");
+        final NatTable natTable = grid.getNatTable();
+        final List<Boolean> editorOpenAtEachCall = new ArrayList<>();
+        grid.addCellEditorListener(() -> editorOpenAtEachCall.add(natTable.getActiveCellEditor() != null));
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 2, false, false));
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+
+        natTable.dispose();
+
+        assertThat(editorOpenAtEachCall)
+                .as("An editor that goes away with its grid must not be reported, as the grid is gone.")
+                .containsExactly(true);
     }
 
     private KeyEvent keyEvent(final char character, final int keyCode, final int stateMask)

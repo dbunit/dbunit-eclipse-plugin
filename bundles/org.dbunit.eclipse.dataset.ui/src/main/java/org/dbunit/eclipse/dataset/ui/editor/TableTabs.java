@@ -61,7 +61,7 @@ final class TableTabs
 
     private final ResourceManager resources;
 
-    private final Runnable selectionChanged;
+    private final Runnable gridStateChanged;
 
     private final Map<String, CTabItem> tabsByKey = new LinkedHashMap<>();
 
@@ -79,15 +79,16 @@ final class TableTabs
      * @param tabFolder The folder that holds the tabs.
      * @param context The context that each grid works with.
      * @param resources The manager that owns the fonts of the tabs and disposes them with the page.
-     * @param selectionChanged Runs when the selected tab changes and when the selection of a grid changes.
+     * @param gridStateChanged Runs when the selected tab changes, when the selection of a grid changes, and
+     *                         when a cell editor of a grid opens or closes.
      */
     TableTabs(final CTabFolder tabFolder, final DatasetGridContext context, final ResourceManager resources,
-            final Runnable selectionChanged)
+            final Runnable gridStateChanged)
     {
         this.tabFolder = tabFolder;
         this.context = context;
         this.resources = resources;
-        this.selectionChanged = selectionChanged;
+        this.gridStateChanged = gridStateChanged;
     }
 
     /**
@@ -170,7 +171,7 @@ final class TableTabs
         if (item != null)
         {
             tabFolder.setSelection(item);
-            selectionChanged.run();
+            gridStateChanged.run();
         }
         final DatasetGrid grid = gridsByKey.get(address.tableKey());
         if (grid == null || address.columnIndex() < 0)
@@ -271,7 +272,8 @@ final class TableTabs
     {
         final DatasetGrid grid = new DatasetGrid(tabFolder, context, key);
         grid.selectCell(0, 0);
-        grid.addSelectionListener(selectionChanged);
+        grid.addSelectionListener(gridStateChanged);
+        grid.addCellEditorListener(gridStateChanged);
         gridsByKey.put(key, grid);
         final CTabItem item = new CTabItem(tabFolder, SWT.NONE, index);
         item.setControl(grid.getControl());

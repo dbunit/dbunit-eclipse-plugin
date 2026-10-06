@@ -31,6 +31,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -106,6 +107,8 @@ class TablesPageActionsTest
 
     private AtomicInteger selectionReads;
 
+    private AtomicBoolean cellEditorOpen;
+
     private RecordingServices services;
 
     private TablesPageActions actions;
@@ -122,12 +125,13 @@ class TablesPageActionsTest
         sourceDocument = new AtomicReference<>(document);
         selection = new AtomicReference<>(GridSelection.NONE);
         selectionReads = new AtomicInteger();
+        cellEditorOpen = new AtomicBoolean();
         services = new RecordingServices();
         final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(new Document("<dataset/>"),
                 DtdSource.NONE, FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
         final StubGridContext context = new StubGridContext(datasetDocument);
         actions = new TablesPageActions(context, tabFolder, shell, () -> services, sourceDocument::get,
-                () -> false, () ->
+                cellEditorOpen::get, () ->
                 {
                     selectionReads.incrementAndGet();
                     return selection.get();
@@ -375,6 +379,64 @@ class TablesPageActionsTest
         assertThat(services.calls).as("The activations of the first cycle must be forgotten.")
                 .containsExactly("deactivateContext 1", "deactivateHandlers "
                         + indexes(GRID_COMMAND_IDS.size(), 2 * GRID_COMMAND_IDS.size()));
+    }
+
+    @Test
+    void testUpdateGridActionsEnablement_whenACellEditorOpensAndCloses_takesAndGivesBackTheKeyBindings()
+    {
+        actions.activate();
+        services.calls.clear();
+
+        cellEditorOpen.set(true);
+        actions.updateGridActionsEnablement();
+        actions.updateGridActionsEnablement();
+        cellEditorOpen.set(false);
+        actions.updateGridActionsEnablement();
+        actions.updateGridActionsEnablement();
+
+        assertThat(services.calls)
+                .as("The context must be deactivated once while the editor is open, and activated once "
+                        + "when it closes.")
+                .containsExactly("deactivateContext 0", "activateContext " + TABLES_PAGE_CONTEXT_ID);
+    }
+
+    @Test
+    void testUpdateGridActionsEnablement_whenThePageIsNotActive_activatesNoContext()
+    {
+        actions.updateGridActionsEnablement();
+
+        assertThat(services.calls).as("An inactive page must not take the key bindings.").isEmpty();
+    }
+
+    @Test
+    void testDeactivate_whileACellEditorIsOpen_doesNotDeactivateTheContextAgain()
+    {
+        actions.activate();
+        cellEditorOpen.set(true);
+        actions.updateGridActionsEnablement();
+        services.calls.clear();
+
+        actions.deactivate();
+
+        assertThat(services.calls).as("Only the handlers are left to deactivate.")
+                .containsExactly("deactivateHandlers " + indexes(0, GRID_COMMAND_IDS.size()));
+    }
+
+    @Test
+    void testActivate_whenTheCellEditorIsStillOpen_leavesTheContextInactiveUntilItCloses()
+    {
+        cellEditorOpen.set(true);
+
+        actions.activate();
+
+        assertThat(services.calls).as("The handlers are active, and the key bindings wait for the editor.")
+                .doesNotContain("activateContext " + TABLES_PAGE_CONTEXT_ID);
+
+        cellEditorOpen.set(false);
+        actions.updateGridActionsEnablement();
+
+        assertThat(services.calls).as("Closing the editor must activate the context.")
+                .contains("activateContext " + TABLES_PAGE_CONTEXT_ID);
     }
 
     @Test

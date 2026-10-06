@@ -71,7 +71,7 @@ public final class DatasetGrid
 
     private final SelectionLayer selectionLayer;
 
-    private final NatTable natTable;
+    private final CellEditorAwareNatTable natTable;
 
     private final DatasetCellLabels cellLabels;
 
@@ -124,7 +124,7 @@ public final class DatasetGrid
                 new GridLayer(viewportLayer, columnHeaderLayer, rowHeaderLayer, cornerLayer, false);
         gridLayer.addConfiguration(new DefaultEditConfiguration());
 
-        natTable = new NatTable(parent, NatTable.DEFAULT_STYLE_OPTIONS, gridLayer, false);
+        natTable = new CellEditorAwareNatTable(parent, NatTable.DEFAULT_STYLE_OPTIONS, gridLayer, false);
         natTable.addConfiguration(new DefaultNatTableStyleConfiguration());
         natTable.addConfiguration(new GridEditConfiguration(context, dialogEditor));
         natTable.addConfiguration(new SpreadsheetEditBindings(selectionLayer));
@@ -238,6 +238,18 @@ public final class DatasetGrid
                 listener.run();
             }
         });
+    }
+
+    /**
+     * Notifies a listener whenever a cell editor opens in this grid, and whenever one closes while the grid
+     * stays; an editor that goes away with the grid is not reported. When the listener runs, the grid reports
+     * the editor as it is, so the listener may ask whether a cell editor is active.
+     *
+     * @param listener The listener to notify; it is not told which editor changed.
+     */
+    public void addCellEditorListener(final Runnable listener)
+    {
+        natTable.addCellEditorListener(listener);
     }
 
     /**

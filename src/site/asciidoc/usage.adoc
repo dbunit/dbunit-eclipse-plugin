@@ -464,6 +464,9 @@ Tables whose names differ only in case then become separate sheets.
 
 On macOS, use Command instead of Ctrl.
 
+While a cell is being edited, the commands of the grid are off, so that their keys, such as Ctrl+Delete,
+reach the cell editor.
+
 With the mouse, click to select a cell, Shift+click to extend the selection, Ctrl+click to add a cell,
 and drag to select a range.
 Click a row number or a column header to select the row or column.

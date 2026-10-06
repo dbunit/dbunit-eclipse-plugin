@@ -98,6 +98,8 @@ final class TablesPageActions
 
     private final Supplier<GridSelection> currentSelection;
 
+    private final BooleanSupplier hasActiveCellEditor;
+
     private final DocumentUndoAction undoAction;
 
     private final DocumentUndoAction redoAction;
@@ -156,6 +158,8 @@ final class TablesPageActions
 
     private final List<IHandlerActivation> handlerActivations = new ArrayList<>();
 
+    private boolean active;
+
     private IContextActivation contextActivation;
 
     /**
@@ -170,7 +174,7 @@ final class TablesPageActions
      * @param sourceDocument Returns the document whose shared undo history undo and redo act on, which
      *                       changes when the editor's input does.
      * @param hasActiveCellEditor Returns true while a grid cell editor is open, so undo and redo decline to
-     *                            run.
+     *                            run and the key bindings of the grid commands leave its keys alone.
      * @param currentSelection Returns the selection of the grid of the selected tab.
      */
     TablesPageActions(final DatasetGridContext context, final CTabFolder tabFolder, final Control control,
@@ -181,6 +185,7 @@ final class TablesPageActions
         this.serviceLocator = serviceLocator;
         this.sourceDocument = sourceDocument;
         this.currentSelection = currentSelection;
+        this.hasActiveCellEditor = hasActiveCellEditor;
 
         tabFolder.addSelectionListener(
                 SelectionListener.widgetSelectedAdapter(event -> updateGridActionsEnablement()));
@@ -274,8 +279,8 @@ final class TablesPageActions
 
     void activate()
     {
-        final IContextService contextService = serviceLocator.get().getService(IContextService.class);
-        contextActivation = contextService.activateContext(TABLES_PAGE_CONTEXT_ID);
+        active = true;
+        updateKeyBindingContext();
         final IHandlerService handlerService = serviceLocator.get().getService(IHandlerService.class);
         for (final GridAction action : gridActions)
         {
@@ -288,9 +293,8 @@ final class TablesPageActions
 
     void deactivate()
     {
-        final IContextService contextService = serviceLocator.get().getService(IContextService.class);
-        contextService.deactivateContext(contextActivation);
-        contextActivation = null;
+        active = false;
+        updateKeyBindingContext();
         final IHandlerService handlerService = serviceLocator.get().getService(IHandlerService.class);
         handlerService.deactivateHandlers(handlerActivations);
         handlerActivations.clear();
@@ -380,8 +384,13 @@ final class TablesPageActions
                 || eventType == OperationHistoryEvent.OPERATION_CHANGED;
     }
 
+    /**
+     * Refreshes the enablement of the grid actions from the current selection, and keeps the key bindings of
+     * the grid commands active only while no cell editor is open.
+     */
     void updateGridActionsEnablement()
     {
+        updateKeyBindingContext();
         final GridSelection selection = currentSelection.get();
         for (final GridAction action : gridActions)
         {
@@ -390,6 +399,32 @@ final class TablesPageActions
         for (final GridAction action : retargetableActions)
         {
             action.update(selection);
+        }
+    }
+
+    /**
+     * Activates the context of the grid's key bindings while the page is active and no cell editor is open.
+     * The key binding dispatcher consumes the key of a command that has an active handler even when the
+     * handler is disabled, so with the context active the keys of the open cell editor itself, such as
+     * Ctrl+Delete to delete a word, would never reach it.
+     */
+    private void updateKeyBindingContext()
+    {
+        final boolean wanted = active && !hasActiveCellEditor.getAsBoolean();
+        final boolean activated = contextActivation != null;
+        if (wanted == activated)
+        {
+            return;
+        }
+        final IContextService contextService = serviceLocator.get().getService(IContextService.class);
+        if (wanted)
+        {
+            contextActivation = contextService.activateContext(TABLES_PAGE_CONTEXT_ID);
+        }
+        else
+        {
+            contextService.deactivateContext(contextActivation);
+            contextActivation = null;
         }
     }
 

@@ -62,6 +62,8 @@ import org.junit.jupiter.api.Test;
  */
 class TablesPageTest
 {
+    private static final String TABLES_PAGE_CONTEXT_ID = "org.dbunit.eclipse.dataset.ui.tablesPageContext";
+
     @Test
     void testTablesPage_whenOpened_showsOneTabPerTableInModelOrder() throws Exception
     {
@@ -413,7 +415,7 @@ class TablesPageTest
 
             assertThat(contextService.getActiveContextIds())
                     .as("Opening on the Tables page must activate its context.")
-                    .contains("org.dbunit.eclipse.dataset.ui.tablesPageContext");
+                    .contains(TABLES_PAGE_CONTEXT_ID);
             assertThatCode(() -> handlerService.executeCommand(DatasetCommandIds.INSERT_ROW_ABOVE, null))
                     .as("The Tables page's command handlers must be active.")
                     .doesNotThrowAnyException();
@@ -423,7 +425,7 @@ class TablesPageTest
 
             assertThat(contextService.getActiveContextIds())
                     .as("Switching to the Source page must deactivate the Tables page's context.")
-                    .doesNotContain("org.dbunit.eclipse.dataset.ui.tablesPageContext");
+                    .doesNotContain(TABLES_PAGE_CONTEXT_ID);
         }
     }
 
@@ -729,6 +731,41 @@ class TablesPageTest
                     .as("A Fill Down that is already queued behind an undo must act on the rows that the "
                             + "undo left, not copy the value of the row that it removed.")
                     .containsExactly(List.of("1", "Alice"), List.of("2", "Alice"), List.of("3", "Carol"));
+        }
+    }
+
+    @Test
+    void testTablesPage_whileACellEditorIsOpen_leavesTheKeysOfTheGridCommandsToTheEditor() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\" NAME=\"A\"/><USERS ID=\"2\" NAME=\"B\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final Composite page = (Composite) tablesPage.getControl();
+            page.setSize(800, 600);
+            page.layout(true, true);
+            UiTestWorkspace.processEvents();
+            final NatTable natTable = (NatTable) tablesPage.getTabFolder().getSelection().getControl();
+            final IContextService contextService = editor.getEditorSite().getService(IContextService.class);
+            tablesPage.selectRegion(1, 1, 1, 1);
+            final boolean activeBeforeEditing =
+                    contextService.getActiveContextIds().contains(TABLES_PAGE_CONTEXT_ID);
+
+            natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+            final boolean activeWhileEditing =
+                    contextService.getActiveContextIds().contains(TABLES_PAGE_CONTEXT_ID);
+            natTable.commitAndCloseActiveCellEditor();
+            final boolean activeAfterEditing =
+                    contextService.getActiveContextIds().contains(TABLES_PAGE_CONTEXT_ID);
+
+            assertThat(tablesPage.hasActiveCellEditor()).as("The editor must be closed again.").isFalse();
+            assertThat(List.of(activeBeforeEditing, activeWhileEditing, activeAfterEditing))
+                    .as("The key bindings of the grid commands must be active, give way to an open cell "
+                            + "editor, which would not get Ctrl+Delete and the other keys that they use "
+                            + "otherwise, and come back when it closes.")
+                    .containsExactly(true, false, true);
         }
     }
 
