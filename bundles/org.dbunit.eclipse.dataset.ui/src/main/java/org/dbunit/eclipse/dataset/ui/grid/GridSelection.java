@@ -121,6 +121,18 @@ public record GridSelection(String tableKey, int rowCount, int columnCount, int 
     }
 
     /**
+     * Returns whether more than one cell is selected. A selected row holds a selected cell, and so does a
+     * selected column, so this is so exactly when the selection spans several rows or several columns, which
+     * the snapshot knows without a list of the selected cells.
+     *
+     * @return True when at least two cells are selected.
+     */
+    public boolean hasMultipleCells()
+    {
+        return rowIndexes.size() > 1 || columnIndexes.size() > 1;
+    }
+
+    /**
      * Returns the number of columns from the first selected column to the last.
      *
      * @return The width of the selection's bounding rectangle, or 0 when no column is selected.

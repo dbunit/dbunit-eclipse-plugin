@@ -1913,6 +1913,92 @@ class GridActionsTest
     }
 
     @Test
+    void testPaste_ofASingleValueOntoAMultiCellSelection_listsTheSelectedCellsOnce()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0, 1);
+        context.columnIndexes = List.of(1);
+        context.selectedCellPositions = List.of(new Point(1, 0), new Point(1, 1));
+        context.clipboardText = "X";
+
+        new PasteAction(context).run();
+
+        assertThat(context.selectedCellPositionReads)
+                .as("The cells to fill are listed once, to fill them, and not again to find out that there "
+                        + "are several.")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void testPaste_ofASingleValueOntoTwoCellsOfOneRow_fillsBothCells()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(1);
+        context.columnIndexes = List.of(0, 1);
+        context.selectedCellPositions = List.of(new Point(0, 1), new Point(1, 1));
+        context.clipboardText = "X";
+
+        new PasteAction(context).run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows()).extracting(row -> row.getValues())
+                .as("Two selected cells in one row are several cells, so the value must fill both of them "
+                        + "and leave the other row alone.")
+                .containsExactly(List.of("1", "Alice"), List.of("X", "X"));
+    }
+
+    @Test
+    void testPaste_ofASingleValueOntoOneCell_pastesItWithoutListingTheSelectedCells()
+    {
+        final FlatXmlDatasetDocument datasetDocument =
+                create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(1);
+        context.columnIndexes = List.of(1);
+        context.selectedCellPositions = List.of(new Point(1, 1));
+        context.clipboardText = "X";
+
+        new PasteAction(context).run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows()).extracting(row -> row.getValues())
+                .as("The value must go into the one selected cell.")
+                .containsExactly(List.of("1", "Alice"), List.of("2", "X"));
+        assertThat(context.selectedCellPositionReads)
+                .as("One cell is the anchor of a block, and the snapshot of the selection says so, so "
+                        + "the paste must not list the selected cells.")
+                .isZero();
+    }
+
+    @Test
+    void testPaste_ofABlockOntoAMultiCellSelection_pastesItAtTheAnchorWithoutListingTheSelectedCells()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carol\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.rowIndexes = List.of(0, 1, 2);
+        context.columnIndexes = List.of(0, 1);
+        context.selectedCellPositions = List.of(new Point(0, 0), new Point(0, 1), new Point(0, 2),
+                new Point(1, 0), new Point(1, 1), new Point(1, 2));
+        context.clipboardText = "10\tX\n20\tY\n";
+
+        new PasteAction(context).run();
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getRows()).extracting(row -> row.getValues())
+                .as("The block must go in at the top-left cell of the selection, and the third row stays.")
+                .containsExactly(List.of("10", "X"), List.of("20", "Y"), List.of("3", "Carol"));
+        assertThat(context.selectedCellPositionReads)
+                .as("A block goes in at the anchor, so the paste must read the snapshot of the selection "
+                        + "and not list every selected cell, which is a million for a big table.")
+                .isZero();
+    }
+
+    @Test
     void testPaste_withMorePastedColumnsThanFit_ignoresThemWithAStatusMessage()
     {
         final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");

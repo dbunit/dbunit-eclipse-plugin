@@ -46,17 +46,7 @@ class GridSelectionTest
     {
         final int rowCount = 100_000;
         final int columnCount = 3;
-        final SelectionLayer selectionLayer = new SelectionLayer(new DataLayer(new FixedSizeDataProvider(
-                rowCount, columnCount)))
-        {
-            @Override
-            public PositionCoordinate[] getSelectedCellPositions()
-            {
-                throw new AssertionError(
-                        "GridSelection must compute bounds and row indexes without calling "
-                                + "getSelectedCellPositions().");
-            }
-        };
+        final SelectionLayer selectionLayer = selectionLayerThatRefusesToListCells(rowCount, columnCount);
         selectionLayer.doCommand(new SelectAllCommand());
 
         final GridSelection selection =
@@ -107,6 +97,102 @@ class GridSelectionTest
     }
 
     @Test
+    void testHasMultipleCells_whenNothingIsSelected_isFalse()
+    {
+        final SelectionLayer selectionLayer =
+                new SelectionLayer(new DataLayer(new FixedSizeDataProvider(3, 3)));
+
+        final GridSelection selection = GridSelection.compute("USERS", 3, 3, selectionLayer);
+
+        assertThat(selection.hasMultipleCells()).as("No cell is selected, so not several.").isFalse();
+        assertThat(selectionLayer.getSelectedCellPositions()).as("NatTable lists no cell either.").isEmpty();
+    }
+
+    @Test
+    void testHasMultipleCells_whenOneCellIsSelected_isFalse()
+    {
+        final SelectionLayer selectionLayer =
+                new SelectionLayer(new DataLayer(new FixedSizeDataProvider(3, 3)));
+        selectionLayer.doCommand(new SelectCellCommand(selectionLayer, 1, 1, false, false));
+
+        final GridSelection selection = GridSelection.compute("USERS", 3, 3, selectionLayer);
+
+        assertThat(selection.hasMultipleCells()).as("One cell is not several.").isFalse();
+        assertThat(selectionLayer.getSelectedCellPositions()).as("NatTable lists the one cell.").hasSize(1);
+    }
+
+    @Test
+    void testHasMultipleCells_whenTwoCellsOfOneColumnAreSelected_isTrue()
+    {
+        final SelectionLayer selectionLayer =
+                new SelectionLayer(new DataLayer(new FixedSizeDataProvider(3, 3)));
+        selectionLayer.doCommand(new SelectCellCommand(selectionLayer, 1, 0, false, false));
+        selectionLayer.doCommand(new SelectCellCommand(selectionLayer, 1, 2, false, true));
+
+        final GridSelection selection = GridSelection.compute("USERS", 3, 3, selectionLayer);
+
+        assertThat(selection.hasMultipleCells()).as("Two rows of one column are two cells.").isTrue();
+        assertThat(selectionLayer.getSelectedCellPositions()).as("NatTable lists the two cells.")
+                .hasSize(2);
+    }
+
+    @Test
+    void testHasMultipleCells_whenTwoCellsOfOneRowAreSelected_isTrue()
+    {
+        final SelectionLayer selectionLayer =
+                new SelectionLayer(new DataLayer(new FixedSizeDataProvider(3, 3)));
+        selectionLayer.doCommand(new SelectCellCommand(selectionLayer, 0, 1, false, false));
+        selectionLayer.doCommand(new SelectCellCommand(selectionLayer, 2, 1, false, true));
+
+        final GridSelection selection = GridSelection.compute("USERS", 3, 3, selectionLayer);
+
+        assertThat(selection.hasMultipleCells()).as("Two columns of one row are two cells.").isTrue();
+        assertThat(selectionLayer.getSelectedCellPositions()).as("NatTable lists the two cells.")
+                .hasSize(2);
+    }
+
+    @Test
+    void testHasMultipleCells_whenARowOfATableWithOneColumnIsSelected_isFalse()
+    {
+        final SelectionLayer selectionLayer =
+                new SelectionLayer(new DataLayer(new FixedSizeDataProvider(3, 1)));
+        selectionLayer.doCommand(new SelectRowsCommand(selectionLayer, 0, 1, false, false));
+
+        final GridSelection selection = GridSelection.compute("USERS", 3, 1, selectionLayer);
+
+        assertThat(selection.hasMultipleCells()).as("A whole row of a one-column table is one cell.")
+                .isFalse();
+        assertThat(selectionLayer.getSelectedCellPositions()).as("NatTable lists the one cell.").hasSize(1);
+    }
+
+    @Test
+    void testHasMultipleCells_whenARowOfATableWithTwoColumnsIsSelected_isTrue()
+    {
+        final SelectionLayer selectionLayer =
+                new SelectionLayer(new DataLayer(new FixedSizeDataProvider(3, 2)));
+        selectionLayer.doCommand(new SelectRowsCommand(selectionLayer, 0, 1, false, false));
+
+        final GridSelection selection = GridSelection.compute("USERS", 3, 2, selectionLayer);
+
+        assertThat(selection.hasMultipleCells()).as("A whole row of a two-column table is two cells.")
+                .isTrue();
+        assertThat(selectionLayer.getSelectedCellPositions()).as("NatTable lists the two cells.")
+                .hasSize(2);
+    }
+
+    @Test
+    void testHasMultipleCells_ofSelectAllOnA100000RowTable_isTrueWithoutListingTheCells()
+    {
+        final SelectionLayer selectionLayer = selectionLayerThatRefusesToListCells(100_000, 3);
+        selectionLayer.doCommand(new SelectAllCommand());
+
+        final GridSelection selection = GridSelection.compute("USERS", 100_000, 3, selectionLayer);
+
+        assertThat(selection.hasMultipleCells())
+                .as("Select All selects a lot of cells, and the answer must not list them.").isTrue();
+    }
+
+    @Test
     void testConstructor_whenTheGivenListsChangeAfterwards_keepsTheIndexesItWasGiven()
     {
         final List<Integer> rowIndexes = new ArrayList<>(List.of(1, 2));
@@ -134,6 +220,20 @@ class GridSelectionTest
         assertThatThrownBy(() -> selection.columnIndexes().add(1))
                 .as("The returned column indexes must not let a caller change the selection.")
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    private static SelectionLayer selectionLayerThatRefusesToListCells(final int rowCount,
+            final int columnCount)
+    {
+        return new SelectionLayer(new DataLayer(new FixedSizeDataProvider(rowCount, columnCount)))
+        {
+            @Override
+            public PositionCoordinate[] getSelectedCellPositions()
+            {
+                throw new AssertionError("GridSelection must compute what it knows without calling "
+                        + "getSelectedCellPositions().");
+            }
+        };
     }
 
     private static final class FixedSizeDataProvider implements IDataProvider

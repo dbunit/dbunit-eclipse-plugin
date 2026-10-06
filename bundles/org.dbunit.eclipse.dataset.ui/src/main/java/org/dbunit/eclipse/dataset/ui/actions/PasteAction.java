@@ -74,18 +74,19 @@ public final class PasteAction extends GridAction
         final DatasetTable table = context.getDatasetDocument().getModel().findTable(selection.tableKey())
                 .orElseThrow(() -> new DatasetEditException(
                         NLS.bind(Messages.Edit_noSuchTable, selection.tableKey())));
-        final List<Point> selectedCells = context.getSelectedCellPositions();
-        if (parsedRows.size() == 1 && parsedRows.get(0).size() == 1 && selectedCells.size() > 1)
+        final boolean singleValue = parsedRows.size() == 1 && parsedRows.get(0).size() == 1;
+        if (singleValue && selection.hasMultipleCells())
         {
-            fillSelection(context, selection, table, selectedCells, parsedRows.get(0).get(0));
+            fillSelection(context, selection, table, parsedRows.get(0).get(0));
             return;
         }
         pasteBlock(context, selection, table, parsedRows);
     }
 
     private void fillSelection(final DatasetGridContext context, final GridSelection selection,
-            final DatasetTable table, final List<Point> selectedCells, final String value)
+            final DatasetTable table, final String value)
     {
+        final List<Point> selectedCells = context.getSelectedCellPositions();
         final List<CellChange> changes = new ArrayList<>();
         for (final Point cell : selectedCells)
         {
