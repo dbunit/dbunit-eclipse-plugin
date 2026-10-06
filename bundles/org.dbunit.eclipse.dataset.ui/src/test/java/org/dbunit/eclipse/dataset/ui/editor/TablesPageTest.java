@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -322,6 +323,51 @@ class TablesPageTest
             assertThat(editor.getDatasetDocument().isBlank())
                     .as("Create Empty Dataset must not change a file whose input state does not validate.")
                     .isTrue();
+        }
+    }
+
+    @Test
+    void testTablesPage_whenTheFileIsNoLongerReadOnlyWhenTheWindowIsActivated_becomesEditable()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final Path path = workspace.createExternalFile("<dataset><USERS ID=\"1\"/></dataset>");
+            path.toFile().setReadOnly();
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.openExternalFile(path);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final boolean editableWhileReadOnly = tablesPage.isEditable();
+            final boolean bannerWhileReadOnly = tablesPage.getErrorBanner().getControl().getVisible();
+
+            path.toFile().setWritable(true);
+            editor.handleWindowActivated(editor.getEditorSite().getWorkbenchWindow());
+
+            assertThat(List.of(editableWhileReadOnly, bannerWhileReadOnly, tablesPage.isEditable(),
+                    tablesPage.getErrorBanner().getControl().getVisible()))
+                    .as("A read-only file shows the banner and refuses edits, until activating the window "
+                            + "finds that the file is writable, with no change of the text.")
+                    .containsExactly(false, true, true, false);
+        }
+    }
+
+    @Test
+    void testTablesPage_whenTheFileBecomesReadOnlyWhenTheWindowIsActivated_showsTheBannerAndRefusesEdits()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final Path path = workspace.createExternalFile("<dataset><USERS ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.openExternalFile(path);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final boolean editableWhileWritable = tablesPage.isEditable();
+
+            path.toFile().setReadOnly();
+            editor.handleWindowActivated(editor.getEditorSite().getWorkbenchWindow());
+
+            assertThat(List.of(editableWhileWritable, tablesPage.isEditable(),
+                    tablesPage.getErrorBanner().getControl().getVisible()))
+                    .as("A file that became read-only must show the banner and refuse edits at once.")
+                    .containsExactly(true, false, true);
         }
     }
 

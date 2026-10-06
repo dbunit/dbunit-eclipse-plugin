@@ -72,6 +72,8 @@ When the XML has an error, a banner at the top shows the error and a *Show in So
 and the grid is read-only until you fix the error on the Source page.
 When the file itself is read-only, for example a file in a JAR or an older revision from the history,
 the banner says so and the grid is read-only.
+When the file becomes read-only or writable while the editor is open, the banner and the grid follow
+the next time you return to the editor.
 A read-only grid still lets you select and copy cells, and *Show in Source* (*F3*) still works.
 
 [[editing]]

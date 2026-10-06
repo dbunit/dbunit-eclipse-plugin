@@ -517,19 +517,16 @@ final class TablesPage implements DatasetGridContext
             return;
         }
         final DatasetModel model = datasetDocument.getModel();
-        final boolean inputModifiable = editor.getSourceEditor().isEditorInputModifiable();
-        editable = model.isEditable() && inputModifiable;
+        updateEditable(model);
 
         if (datasetDocument.isBlank())
         {
             tabs.reconcile(DatasetModel.EMPTY);
-            createEmptyDatasetButton.setEnabled(inputModifiable);
             contentStackLayout.topControl = blankComposite;
         }
         else if (model.getTables().isEmpty())
         {
             tabs.reconcile(DatasetModel.EMPTY);
-            addTableButton.setEnabled(editable);
             contentStackLayout.topControl = noTablesComposite;
         }
         else
@@ -543,6 +540,35 @@ final class TablesPage implements DatasetGridContext
         // A blank document's only problem is its missing root element, which the blank state explains.
         final DatasetModel listedModel = datasetDocument.isBlank() ? DatasetModel.EMPTY : model;
         problemsSection.update(listedModel);
+        actions.updateGridActionsEnablement();
+    }
+
+    /**
+     * Works out whether the page can be edited, which the input of the editor decides along with the model,
+     * and sets the buttons that depend on it.
+     */
+    private void updateEditable(final DatasetModel model)
+    {
+        final boolean inputModifiable = editor.getSourceEditor().isEditorInputModifiable();
+        editable = model.isEditable() && inputModifiable;
+        createEmptyDatasetButton.setEnabled(inputModifiable);
+        addTableButton.setEnabled(editable);
+    }
+
+    /**
+     * Brings the editable state, the banner, and the buttons up to date with the input of the editor, which
+     * can change with no change of the text, for example when the read-only attribute of its file is set or
+     * cleared outside the editor.
+     */
+    void refreshInputState()
+    {
+        if (control.isDisposed())
+        {
+            return;
+        }
+        final DatasetModel model = datasetDocument.getModel();
+        updateEditable(model);
+        updateBanner(model);
         actions.updateGridActionsEnablement();
     }
 
