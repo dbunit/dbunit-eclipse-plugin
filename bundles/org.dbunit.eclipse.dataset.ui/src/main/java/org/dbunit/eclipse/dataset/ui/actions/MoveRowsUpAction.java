@@ -29,7 +29,7 @@ import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
  *
  * @since 1.0.0
  */
-public final class MoveRowsUpAction extends GridAction
+public final class MoveRowsUpAction extends MoveRowsAction
 {
     /**
      * Creates the action.
@@ -38,22 +38,8 @@ public final class MoveRowsUpAction extends GridAction
      */
     public MoveRowsUpAction(final DatasetGridContext context)
     {
-        super(DatasetCommandIds.MOVE_ROWS_UP, context);
+        super(DatasetCommandIds.MOVE_ROWS_UP, context, UP);
         setText(Messages.Action_moveRowsUp);
-    }
-
-    @Override
-    protected void runOnGrid(final DatasetGridContext context)
-    {
-        final GridSelection selection = context.getSelection();
-        final int newFirstRowIndex = selection.firstRowIndex() - 1;
-        final boolean applied = context.executeEdit(() -> context.getDatasetDocument().moveRows(
-                selection.tableKey(), selection.firstRowIndex(), selection.rowIndexes().size(), -1));
-        if (applied)
-        {
-            context.selectRegion(selection.firstColumnIndex(), newFirstRowIndex, selection.columnSpan(),
-                    selection.rowIndexes().size());
-        }
     }
 
     @Override

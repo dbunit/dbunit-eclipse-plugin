@@ -299,6 +299,7 @@ class GridActionsTest
         assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows().get(0).getValue(1))
                 .as("Alice must stay the first row, because Bob lacks the email that she has.")
                 .isEqualTo("Alice");
+        assertThat(context.selectedRegion).as("A move that was refused must not move the selection.").isNull();
     }
 
     @Test
@@ -548,6 +549,22 @@ class GridActionsTest
         assertThat(table.getRows().get(2).getValue(0)).isEqualTo("2");
         assertThat(context.selectedRegion).as("Move Rows Down must keep the moved block selected.")
                 .isEqualTo(new Rectangle(0, 1, 1, 2));
+    }
+
+    @Test
+    void testMoveRowsDown_withSeveralColumnsOfARowSelected_keepsThoseColumnsSelected()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><T A=\"1\" B=\"1\" C=\"1\"/>"
+                + "<T A=\"2\" B=\"2\" C=\"2\"/><T A=\"3\" B=\"3\" C=\"3\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "T");
+        context.rowIndexes = List.of(0);
+        context.columnIndexes = List.of(1, 2);
+
+        new MoveRowsDownAction(context).run();
+
+        assertThat(context.selectedRegion)
+                .as("The columns that were selected must stay selected in the row that moved.")
+                .isEqualTo(new Rectangle(1, 1, 2, 1));
     }
 
     @Test
