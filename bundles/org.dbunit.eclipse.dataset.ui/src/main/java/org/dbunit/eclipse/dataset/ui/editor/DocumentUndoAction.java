@@ -33,7 +33,9 @@ import org.eclipse.text.undo.IDocumentUndoManager;
 
 /**
  * Undoes or redoes a document's shared undo history, so the Tables page and the Source page act on the
- * same history; does nothing while a cell editor is active.
+ * same history; does nothing while a cell editor is active. The model and the grids catch up before the
+ * action returns, because a command that is already queued behind it would otherwise act on the rows that
+ * the undo or redo removed.
  *
  * @since 1.0.0
  */
@@ -47,6 +49,8 @@ final class DocumentUndoAction extends Action
 
     private final BooleanSupplier hasActiveCellEditor;
 
+    private final Runnable refreshModel;
+
     /**
      * Creates an undo or a redo action for the editor's current document.
      *
@@ -55,14 +59,17 @@ final class DocumentUndoAction extends Action
      * @param redo True for redo, false for undo.
      * @param hasActiveCellEditor Returns true while a grid cell editor is open, so the action can decline
      *                            to run.
+     * @param refreshModel Brings the model and the grids up to date with the document, and runs once the
+     *                     history has changed it.
      */
     DocumentUndoAction(final Supplier<IDocument> document, final boolean redo,
-            final BooleanSupplier hasActiveCellEditor)
+            final BooleanSupplier hasActiveCellEditor, final Runnable refreshModel)
     {
         super(redo ? Messages.Action_redo : Messages.Action_undo);
         this.document = document;
         this.redo = redo;
         this.hasActiveCellEditor = hasActiveCellEditor;
+        this.refreshModel = refreshModel;
         update();
     }
 
@@ -94,6 +101,7 @@ final class DocumentUndoAction extends Action
         {
             LOG.error((redo ? "Redo" : "Undo") + " failed.", e);
         }
+        refreshModel.run();
     }
 
     /**

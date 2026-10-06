@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
+import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
 import org.dbunit.eclipse.dataset.ui.actions.AddColumnAction;
 import org.dbunit.eclipse.dataset.ui.actions.AddTableAction;
 import org.dbunit.eclipse.dataset.ui.actions.CopyAction;
@@ -258,8 +259,11 @@ final class TablesPageActions
         });
         tabFolder.setMenu(tabMenuManager.createContextMenu(tabFolder));
 
-        undoAction = new DocumentUndoAction(sourceDocument, false, hasActiveCellEditor);
-        redoAction = new DocumentUndoAction(sourceDocument, true, hasActiveCellEditor);
+        final DatasetDocument datasetDocument = context.getDatasetDocument();
+        undoAction = new DocumentUndoAction(sourceDocument, false, hasActiveCellEditor,
+                datasetDocument::refresh);
+        redoAction = new DocumentUndoAction(sourceDocument, true, hasActiveCellEditor,
+                datasetDocument::refresh);
         globalActionHandlers = Map.of(ActionFactory.UNDO.getId(), undoAction, ActionFactory.REDO.getId(),
                 redoAction, ActionFactory.CUT.getId(), cutAction, ActionFactory.COPY.getId(), copyAction,
                 ActionFactory.PASTE.getId(), pasteAction, ActionFactory.DELETE.getId(), deleteAction,

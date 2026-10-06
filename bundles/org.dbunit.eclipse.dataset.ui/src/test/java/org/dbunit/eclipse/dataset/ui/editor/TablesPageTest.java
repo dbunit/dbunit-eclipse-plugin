@@ -668,6 +668,71 @@ class TablesPageTest
     }
 
     @Test
+    void testGlobalActionHandler_undoAndRedoOfARowInsert_refreshTheModelBeforeTheyReturn() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final FlatXmlDatasetDocument datasetDocument = editor.getDatasetDocument();
+            datasetDocument.insertRows("USERS", 1, List.of(List.of("9", "Zed")));
+            UiTestWorkspace.processEvents();
+
+            tablesPage.getGlobalActionHandler(ActionFactory.UNDO.getId()).run();
+
+            assertThat(datasetDocument.isStale())
+                    .as("Undo must bring the model up to date before it returns, not leave that to a "
+                            + "queued runnable.")
+                    .isFalse();
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows())
+                    .extracting(row -> row.getValues())
+                    .as("The model must show the rows that the undo left.")
+                    .containsExactly(List.of("1", "Alice"), List.of("2", "Bob"));
+
+            tablesPage.getGlobalActionHandler(ActionFactory.REDO.getId()).run();
+
+            assertThat(datasetDocument.isStale())
+                    .as("Redo must bring the model up to date before it returns, not leave that to a "
+                            + "queued runnable.")
+                    .isFalse();
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows())
+                    .extracting(row -> row.getValues())
+                    .as("The model must show the rows that the redo brought back.")
+                    .containsExactly(List.of("1", "Alice"), List.of("9", "Zed"), List.of("2", "Bob"));
+        }
+    }
+
+    @Test
+    void testTablesPage_whenFillDownFollowsAnUndoOfARowInsertBeforeEventsRun_actsOnTheUndoneRows()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                    + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carol\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final FlatXmlDatasetDocument datasetDocument = editor.getDatasetDocument();
+            final IHandlerService handlerService =
+                    editor.getEditorSite().getService(IHandlerService.class);
+            datasetDocument.insertRows("USERS", 1, List.of(List.of("9", "Zed")));
+            UiTestWorkspace.processEvents();
+            tablesPage.selectRegion(1, 1, 1, 2);
+
+            tablesPage.getGlobalActionHandler(ActionFactory.UNDO.getId()).run();
+            handlerService.executeCommand(DatasetCommandIds.FILL_DOWN, null);
+
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows())
+                    .extracting(row -> row.getValues())
+                    .as("A Fill Down that is already queued behind an undo must act on the rows that the "
+                            + "undo left, not copy the value of the row that it removed.")
+                    .containsExactly(List.of("1", "Alice"), List.of("2", "Alice"), List.of("3", "Carol"));
+        }
+    }
+
+    @Test
     void testTablesPage_afterTheEditorInputChanges_undoesAndRefreshesWithTheNewDocument() throws Exception
     {
         try (UiTestWorkspace workspace = new UiTestWorkspace())
