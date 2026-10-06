@@ -115,6 +115,61 @@ class XmlPartitionScannerTest
                         new Partition(TEXT, "\n")));
     }
 
+    @Test
+    void testNextToken_afterAChangeOnALaterLineOfAMultiLineValue_keepsTheTagInOnePartition() throws Exception
+    {
+        final IDocument document = setUpDocument("""
+                <dataset>
+                <R NOTE="first
+                second > third"/>
+                <A ID="1"/>
+                </dataset>
+                """);
+
+        document.replace(document.get().indexOf("second") + 1, 0, "x");
+
+        assertThat(partitions(document))
+                .as("A line that starts inside a quoted value must not forget the quote, so the > in the "
+                        + "value does not end the tag.")
+                .isEqualTo(List.of(
+                        new Partition(TAG, "<dataset>"),
+                        new Partition(TEXT, "\n"),
+                        new Partition(TAG, "<R NOTE=\"first\nsxecond > third\"/>"),
+                        new Partition(TEXT, "\n"),
+                        new Partition(TAG, "<A ID=\"1\"/>"),
+                        new Partition(TEXT, "\n"),
+                        new Partition(TAG, "</dataset>"),
+                        new Partition(TEXT, "\n")));
+    }
+
+    @Test
+    void testNextToken_afterTypingAnApostropheOnALaterLineOfAMultiLineValue_keepsTheTagInOnePartition()
+            throws Exception
+    {
+        final IDocument document = setUpDocument("""
+                <dataset>
+                <R NOTE="first
+                its second"/>
+                <A ID="1"/>
+                </dataset>
+                """);
+
+        document.replace(document.get().indexOf("its") + 2, 0, "'");
+
+        assertThat(partitions(document))
+                .as("An apostrophe inside a value that is quoted with double quotes is text, so it must not "
+                        + "open a quote that runs on to the end of the text.")
+                .isEqualTo(List.of(
+                        new Partition(TAG, "<dataset>"),
+                        new Partition(TEXT, "\n"),
+                        new Partition(TAG, "<R NOTE=\"first\nit's second\"/>"),
+                        new Partition(TEXT, "\n"),
+                        new Partition(TAG, "<A ID=\"1\"/>"),
+                        new Partition(TEXT, "\n"),
+                        new Partition(TAG, "</dataset>"),
+                        new Partition(TEXT, "\n")));
+    }
+
     private static IDocument setUpDocument(final String text)
     {
         final IDocument document = new Document(text);

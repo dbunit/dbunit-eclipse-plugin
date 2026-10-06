@@ -96,7 +96,7 @@ public final class XmlSourceViewerConfiguration extends TextSourceViewerConfigur
         final XmlTagScanner tagScanner = new XmlTagScanner(tokenColors.getToken(XmlTokenColors.TAG_COLOR),
                 tokenColors.getToken(XmlTokenColors.ATTRIBUTE_NAME_COLOR),
                 tokenColors.getToken(XmlTokenColors.ATTRIBUTE_VALUE_COLOR));
-        setDamagerRepairer(reconciler, XmlPartitionScanner.TAG, tagScanner);
+        setDamagerRepairer(reconciler, XmlPartitionScanner.TAG, new WholeTagDamagerRepairer(tagScanner));
         setDamagerRepairer(reconciler, XmlPartitionScanner.COMMENT,
                 singleColorScanner(XmlTokenColors.COMMENT_COLOR));
         setDamagerRepairer(reconciler, XmlPartitionScanner.PROCESSING_INSTRUCTION,
@@ -117,7 +117,12 @@ public final class XmlSourceViewerConfiguration extends TextSourceViewerConfigur
     private static void setDamagerRepairer(final PresentationReconciler reconciler, final String contentType,
             final ITokenScanner scanner)
     {
-        final DefaultDamagerRepairer damagerRepairer = new DefaultDamagerRepairer(scanner);
+        setDamagerRepairer(reconciler, contentType, new DefaultDamagerRepairer(scanner));
+    }
+
+    private static void setDamagerRepairer(final PresentationReconciler reconciler, final String contentType,
+            final DefaultDamagerRepairer damagerRepairer)
+    {
         reconciler.setDamager(damagerRepairer, contentType);
         reconciler.setRepairer(damagerRepairer, contentType);
     }
