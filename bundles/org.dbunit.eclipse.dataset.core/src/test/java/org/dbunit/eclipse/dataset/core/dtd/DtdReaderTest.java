@@ -345,13 +345,47 @@ class DtdReaderTest
     }
 
     @Test
-    void testMerge_whenTheInternalSubsetDeclaresAContentModel_theExternalEmptyOneIsNotUsed()
+    void testMerge_whenBothDeclareAContentModel_theExternalEmptyOneWins()
     {
         final DtdDeclarations internal = DtdReader.read("<!ELEMENT dataset (USERS*)>");
         final DtdDeclarations external = DtdReader.read("<!ELEMENT dataset EMPTY>");
 
         assertThat(internal.merge(external).hasEmptyContentModel())
-                .as("The internal subset's declaration is binding.").isFalse();
+                .as("dbUnit takes the last declaration of the root, which is the external DTD's.").isTrue();
+    }
+
+    @Test
+    void testMerge_whenBothDeclareTheContentModel_theExternalNamesWin()
+    {
+        final DtdDeclarations internal = DtdReader.read(
+                "<!ELEMENT dataset (A*)>\n<!ELEMENT A EMPTY>\n<!ELEMENT B EMPTY>\n<!ELEMENT C EMPTY>");
+        final DtdDeclarations external = DtdReader.read("<!ELEMENT dataset (B*, C*)>");
+
+        assertThat(List.of(internal.merge(external).tables().stream().map(DtdTable::name).toList(),
+                external.merge(internal).tables().stream().map(DtdTable::name).toList()))
+                .as("The content model of the DTD that is read last decides which tables there are, in "
+                        + "dbUnit's order of reading, the internal subset first.")
+                .containsExactly(List.of("B", "C"), List.of("A"));
+    }
+
+    @Test
+    void testMerge_whenOnlyTheInternalSubsetDeclaresTheContentModel_itIsKept()
+    {
+        final DtdDeclarations internal = DtdReader.read("<!ELEMENT dataset (A*)>\n<!ELEMENT A EMPTY>");
+        final DtdDeclarations external = DtdReader.read("<!ELEMENT B EMPTY>");
+
+        assertThat(internal.merge(external).tables()).as("An external DTD without a content model keeps it.")
+                .extracting(DtdTable::name).containsExactly("A");
+    }
+
+    @Test
+    void testRead_whenTheContentModelIsDeclaredTwice_theLastDeclarationWins()
+    {
+        final DtdDeclarations declarations = DtdReader.read(
+                "<!ELEMENT dataset (A*)>\n<!ELEMENT dataset (B*)>\n<!ELEMENT A EMPTY>\n<!ELEMENT B EMPTY>");
+
+        assertThat(declarations.tables()).as("dbUnit takes the last declaration of the root element.")
+                .extracting(DtdTable::name).containsExactly("B");
     }
 
     @Test
@@ -391,17 +425,17 @@ class DtdReaderTest
     }
 
     @Test
-    void testMerge_whenBothHaveAContentModel_keepsTheFirstAndAppendsLaterColumns()
+    void testMerge_whenBothHaveAContentModel_takesTheLaterOneAndAppendsLaterColumns()
     {
         final DtdDeclarations internalSubset = DtdReader
                 .read("<!ELEMENT dataset (USERS*)>\n<!ATTLIST USERS ID CDATA #REQUIRED>");
-        final DtdDeclarations externalDtd =
-                DtdReader.read("<!ELEMENT dataset ANY>\n<!ATTLIST USERS NAME CDATA #IMPLIED>");
+        final DtdDeclarations externalDtd = DtdReader.read(
+                "<!ELEMENT dataset ANY>\n<!ATTLIST USERS NAME CDATA #IMPLIED>\n<!ELEMENT ORDERS EMPTY>");
 
         final DtdDeclarations merged = internalSubset.merge(externalDtd);
 
-        assertThat(merged.tables()).as("The first (internal subset) content model must win.")
-                .extracting(DtdTable::name).containsExactly("USERS");
+        assertThat(merged.tables()).as("The last (external DTD) content model must win, which is ANY here.")
+                .extracting(DtdTable::name).containsExactly("USERS", "ORDERS");
         assertThat(merged.tables().get(0).columns())
                 .as("Columns must merge by element name, the internal subset's first, then the "
                         + "external DTD's, without duplicates.")

@@ -82,7 +82,8 @@ class FlatXmlDbUnitParityTest
     @ParameterizedTest
     @ValueSource(strings = { "flatXmlTableTest.xml", "flatXmlDataSetDtdDifferentCaseTest.xml",
             "internal-subset.xml", "column-name-case-dtd.xml", "dtd-defaults-internal.xml",
-            "dtd-defaults-external.xml", "dtd-parameter-entity.xml", "doctype-root-name.xml" })
+            "dtd-defaults-external.xml", "dtd-parameter-entity.xml", "doctype-root-name.xml",
+            "content-model-both.xml" })
     void testBuild_whenFixtureHasADoctype_matchesDbUnitOnDeclaredColumns(final String fixtureName)
             throws Exception
     {

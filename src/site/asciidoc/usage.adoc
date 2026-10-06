@@ -306,6 +306,8 @@ dbUnit takes the name of the root element from the DOCTYPE, `dataset` in the exa
 dbUnit loads it for a row without the attribute, and the editor shows it in italics (see <<null-values>>).
 A row that writes the attribute keeps its own value.
 When the internal subset and an external DTD both declare an attribute, the internal subset's declaration is binding, as in XML.
+When both declare the content model of the root element, the external DTD's is used, because dbUnit takes the last
+declaration of the root element.
 In such a table, an element without attributes, such as `<USERS/>`, is a row of default values for dbUnit,
 and the editor shows it as a row; *Delete Rows* then removes every element of the deleted rows,
 and the DTD keeps the table.

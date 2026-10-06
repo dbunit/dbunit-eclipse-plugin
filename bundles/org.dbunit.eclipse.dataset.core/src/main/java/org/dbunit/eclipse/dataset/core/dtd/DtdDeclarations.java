@@ -267,18 +267,20 @@ public final class DtdDeclarations
      * in the order XML parsers read them.
      *
      * @param later The declarations of the external DTD.
-     * @return The merged declarations: this content model when declared, otherwise later's; elements
-     *         merged by name, appending later's columns after this's and skipping duplicates. A column
+     * @return The merged declarations: later's content model when it declares one, otherwise this one's,
+     *         because dbUnit takes the last declaration of the root element; elements merged by name,
+     *         appending later's columns after this's and skipping duplicates. A column
      *         declared in both keeps the default value of this one, as the first declaration of an
      *         attribute is binding. The elements that the external DTD declares are the merged
      *         declarations' {@link #externalElementNames()}.
      */
     public DtdDeclarations merge(final DtdDeclarations later)
     {
-        final boolean mergedDeclared = contentModelDeclared || later.contentModelDeclared;
-        final boolean mergedAny = contentModelDeclared ? contentModelAny : later.contentModelAny;
-        final boolean mergedEmpty = contentModelDeclared ? contentModelEmpty : later.contentModelEmpty;
-        final List<String> mergedNames = contentModelDeclared ? contentModelNames : later.contentModelNames;
+        final boolean laterDeclares = later.contentModelDeclared;
+        final boolean mergedDeclared = contentModelDeclared || laterDeclares;
+        final boolean mergedAny = laterDeclares ? later.contentModelAny : contentModelAny;
+        final boolean mergedEmpty = laterDeclares ? later.contentModelEmpty : contentModelEmpty;
+        final List<String> mergedNames = laterDeclares ? later.contentModelNames : contentModelNames;
         final Map<String, List<String>> mergedElements = new LinkedHashMap<>();
         final Map<String, Map<String, String>> mergedDefaults = new LinkedHashMap<>();
         addColumnsNotYetDeclared(mergedElements, mergedDefaults, this);
