@@ -53,7 +53,7 @@ class ColumnEditsTest
     {
         final DatasetTable table = usersOf(parsed);
         final ColumnEdits columnEdits = new ColumnEdits(parsed.editContext());
-        final DatasetColumn column = columnEdits.requireRename("USERS", table, columnName, newColumnName);
+        final DatasetColumn column = ColumnEdits.requireRename(table, columnName, newColumnName);
         return parsed.apply(columnEdits.renameEdits("USERS", table, column, columnName, newColumnName));
     }
 
@@ -123,8 +123,7 @@ class ColumnEditsTest
     {
         final ParsedDataset parsed = ParsedDataset.of(TEXT);
 
-        final DatasetColumn column = new ColumnEdits(parsed.editContext()).requireRename("USERS",
-                usersOf(parsed), "NAME", "FULLNAME");
+        final DatasetColumn column = ColumnEdits.requireRename(usersOf(parsed), "NAME", "FULLNAME");
 
         assertThat(column).as("The column to rename must be returned.")
                 .isEqualTo(new DatasetColumn("NAME", false, true, false));
@@ -133,22 +132,18 @@ class ColumnEditsTest
     @Test
     void testRequireRename_whenOnlyTheLetterCaseChanges_accepts()
     {
-        final ParsedDataset parsed = ParsedDataset.of(TEXT);
-        final ColumnEdits columnEdits = new ColumnEdits(parsed.editContext());
-        final DatasetTable table = usersOf(parsed);
+        final DatasetTable table = usersOf(ParsedDataset.of(TEXT));
 
-        assertThatCode(() -> columnEdits.requireRename("USERS", table, "NAME", "name"))
+        assertThatCode(() -> ColumnEdits.requireRename(table, "NAME", "name"))
                 .as("A column may take another spelling of its own name.").doesNotThrowAnyException();
     }
 
     @Test
     void testRequireRename_whenTheNewNameBelongsToAnotherColumn_throwsDatasetEditException()
     {
-        final ParsedDataset parsed = ParsedDataset.of(TEXT);
-        final ColumnEdits columnEdits = new ColumnEdits(parsed.editContext());
-        final DatasetTable table = usersOf(parsed);
+        final DatasetTable table = usersOf(ParsedDataset.of(TEXT));
 
-        assertThatThrownBy(() -> columnEdits.requireRename("USERS", table, "NAME", "email"))
+        assertThatThrownBy(() -> ColumnEdits.requireRename(table, "NAME", "email"))
                 .as("Two columns cannot share a name.").isInstanceOf(DatasetEditException.class)
                 .hasMessage(NLS.bind(Messages.Edit_columnExists, "USERS", "email"));
     }
@@ -156,11 +151,9 @@ class ColumnEditsTest
     @Test
     void testRequireRename_whenTheNewNameIsInvalid_throwsDatasetEditException()
     {
-        final ParsedDataset parsed = ParsedDataset.of(TEXT);
-        final ColumnEdits columnEdits = new ColumnEdits(parsed.editContext());
-        final DatasetTable table = usersOf(parsed);
+        final DatasetTable table = usersOf(ParsedDataset.of(TEXT));
 
-        assertThatThrownBy(() -> columnEdits.requireRename("USERS", table, "NAME", "1bad"))
+        assertThatThrownBy(() -> ColumnEdits.requireRename(table, "NAME", "1bad"))
                 .as("The new name must be a valid XML name.").isInstanceOf(DatasetEditException.class)
                 .hasMessage(NLS.bind(Messages.Edit_invalidColumnName, "1bad"));
     }
@@ -168,28 +161,13 @@ class ColumnEditsTest
     @Test
     void testRequireRename_whenTheColumnDoesNotExist_throwsDatasetEditException()
     {
-        final ParsedDataset parsed = ParsedDataset.of(TEXT);
-        final ColumnEdits columnEdits = new ColumnEdits(parsed.editContext());
-        final DatasetTable table = usersOf(parsed);
+        final DatasetTable table = usersOf(ParsedDataset.of(TEXT));
 
-        assertThatThrownBy(() -> columnEdits.requireRename("USERS", table, "PHONE", "MOBILE"))
+        assertThatThrownBy(() -> ColumnEdits.requireRename(table, "PHONE", "MOBILE"))
                 .as("Only a column of the table can be renamed.").isInstanceOf(DatasetEditException.class)
                 .hasMessage(NLS.bind(Messages.Edit_noSuchColumn, "PHONE", "USERS"));
     }
 
-    @Test
-    void testRequireRename_whenARowSpellsTheColumnInTwoWays_throwsDatasetEditException()
-    {
-        final ParsedDataset parsed =
-                ParsedDataset.of("<dataset>\n  <USERS ID=\"1\" NAME=\"Bob\" name=\"x\"/>\n</dataset>\n");
-        final ColumnEdits columnEdits = new ColumnEdits(parsed.editContext());
-        final DatasetTable table = usersOf(parsed);
-
-        assertThatThrownBy(() -> columnEdits.requireRename("USERS", table, "NAME", "FULLNAME"))
-                .as("Renaming one spelling would leave the other one behind.")
-                .isInstanceOf(DatasetEditException.class)
-                .hasMessage(NLS.bind(Messages.Edit_renameColumnWithCaseVariants, "NAME", "USERS"));
-    }
 
     @Test
     void testRenameEdits_whenRowsHaveTheColumn_rewritesTheirStartTagsOnly() throws Exception
@@ -199,6 +177,44 @@ class ColumnEditsTest
         assertThat(result).as("The USERS rows must change, and the PETS row, which has a NAME too, must not.")
                 .isEqualTo(TEXT.replace("NAME=\"Bob\"", "FULLNAME=\"Bob\"").replace("NAME=\"Alice\"",
                         "FULLNAME=\"Alice\""));
+    }
+
+    @Test
+    void testRenameEdits_whenARowSpellsTheColumnInTwoWays_throwsDatasetEditException()
+    {
+        final ParsedDataset parsed =
+                ParsedDataset.of("<dataset>\n  <USERS ID=\"1\" NAME=\"Bob\" name=\"x\"/>\n</dataset>\n");
+
+        assertThatThrownBy(() -> renamed(parsed, "NAME", "FULLNAME"))
+                .as("Both attributes would get the new name, and the element would hold it twice.")
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage(NLS.bind(Messages.Edit_renameColumnWithCaseVariants, "NAME", "USERS"));
+    }
+
+    @Test
+    void testRenameEdits_whenOnlyAnotherRowSpellsTheColumnInTwoWays_throwsDatasetEditException()
+    {
+        final ParsedDataset parsed = ParsedDataset.of("<dataset>\n  <USERS ID=\"1\" NAME=\"Bob\"/>\n"
+                + "  <USERS ID=\"2\" NAME=\"Alice\" name=\"x\"/>\n</dataset>\n");
+
+        assertThatThrownBy(() -> renamed(parsed, "NAME", "FULLNAME"))
+                .as("A row after the first that spells the column in two ways must refuse the rename too.")
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage(NLS.bind(Messages.Edit_renameColumnWithCaseVariants, "NAME", "USERS"));
+    }
+
+    @Test
+    void testRenameEdits_whenARowSpellsAnotherColumnInTwoWays_renamesTheColumn() throws Exception
+    {
+        final ParsedDataset parsed = ParsedDataset.of(
+                "<dataset>\n  <USERS ID=\"1\" NAME=\"Bob\" EMAIL=\"a\" email=\"b\"/>\n</dataset>\n");
+
+        final String result = renamed(parsed, "NAME", "FULLNAME");
+
+        assertThat(result)
+                .as("A column that no row spells in two ways can be renamed, whatever other columns do.")
+                .isEqualTo("<dataset>\n  <USERS ID=\"1\" FULLNAME=\"Bob\" EMAIL=\"a\" email=\"b\"/>\n"
+                        + "</dataset>\n");
     }
 
     @Test
@@ -235,6 +251,18 @@ class ColumnEditsTest
 
         assertThat(parsed.apply(edits)).as("The column must go from every USERS row, ignoring case.")
                 .isEqualTo(TEXT.replace(" NAME=\"Bob\"", "").replace(" NAME=\"Alice\"", ""));
+    }
+
+    @Test
+    void testDeleteEdits_whenARowSpellsTheColumnInTwoWays_removesBothAttributes() throws Exception
+    {
+        final ParsedDataset parsed = ParsedDataset.of(
+                "<dataset>\n  <USERS ID=\"1\" NAME=\"Bob\" name=\"x\"/>\n</dataset>\n");
+
+        final List<TextEdit> edits = deletionPlan(parsed, "NAME");
+
+        assertThat(parsed.apply(edits)).as("The two spellings are one column, so deleting it removes both.")
+                .isEqualTo("<dataset>\n  <USERS ID=\"1\"/>\n</dataset>\n");
     }
 
     @Test

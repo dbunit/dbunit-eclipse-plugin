@@ -46,11 +46,13 @@ final class StartTagRewriter
      * @param columnKeys The table's columns by key, used for ordering new attributes and for their display
      *                   names; an edit builds it once for all of its rows.
      * @param changes Column key (upper-cased) to new value; null means NULL (the attribute is removed).
-     *                A column key absent from this map is unchanged. The caller must not change a column
-     *                for which element has two or more attributes differing only in letter case, because
-     *                every one of them matches the same key and would receive the same change.
+     *                A column key absent from this map is unchanged. When the element has two or more
+     *                attributes for a key that differ only in letter case, every one of them matches the
+     *                key and gets the same change, so a caller that sets a value must rule that out first;
+     *                removing a column removes all of them.
      * @param renames Column key (upper-cased) to new column name. A column key absent from this map
-     *                keeps its spelling.
+     *                keeps its spelling. A caller must rule out a key that the element has two or more
+     *                attributes for, which would all get the new name.
      * @param encoder The encoder used to decide which characters need a numeric character reference.
      * @return The replacement text for {@code text[element.nameEndOffset(), element.attributesEndOffset())},
      *         or null when the result equals the original text.

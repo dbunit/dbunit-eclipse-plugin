@@ -2718,6 +2718,20 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testDeleteColumn_whenARowSpellsTheColumnInTwoWays_removesBothSpellings()
+    {
+        final IDocument document =
+                new Document("<dataset><USERS ID=\"1\" NAME=\"Alice\" name=\"Bob\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.deleteColumn("USERS", "NAME");
+
+        assertThat(document.get()).as("The two spellings are one column, so deleting it must remove both.")
+                .isEqualTo("<dataset><USERS ID=\"1\"/></dataset>");
+    }
+
+    @Test
     void testDeleteColumn_whenItIsARowsOnlyValue_throwsAndChangesNothing()
     {
         final IDocument document = new Document("<dataset><USERS NAME=\"Alice\"/></dataset>");

@@ -40,9 +40,12 @@ import org.eclipse.text.edits.TextEdit;
 /**
  * Plans the text edits that rename and delete columns, and checks the names of new columns. A column is not
  * an element of a flat XML document: renaming or deleting it rewrites the start tag of every row of its
- * table, which is why a column that no row has, one that a row spells in two ways, or the only column of a
- * row cannot be changed. The edits are planned against the index and the text of the {@link EditContext}
- * that this is created with, which is meant for one operation.
+ * table. That is why a column that no row has cannot be renamed, why a column that a row spells in two ways
+ * cannot be renamed either, since both attributes would get the new name and the element would hold it
+ * twice, and why the only column of a row cannot be deleted. Deleting a column that a row spells in two
+ * ways removes both attributes, because the two spellings are one column. The edits are planned against the
+ * index and the text of the {@link EditContext} that this is created with, which is meant for one
+ * operation.
  */
 final class ColumnEdits
 {
@@ -82,35 +85,22 @@ final class ColumnEdits
     }
 
     /**
-     * Validates renaming a column: the column must exist, the new name must be a valid XML name that no other
-     * column has, and no row may spell the column in two ways.
+     * Validates renaming a column: the column must exist, and the new name must be a valid XML name that no
+     * other column has.
      *
-     * @param tableKey The key of the table.
      * @param table The table.
      * @param columnName The current name of the column, in any letter case.
      * @param newColumnName The new name.
      * @return The column that is renamed.
      * @throws DatasetEditException When the column cannot be renamed.
      */
-    DatasetColumn requireRename(final String tableKey, final DatasetTable table, final String columnName,
+    static DatasetColumn requireRename(final DatasetTable table, final String columnName,
             final String newColumnName)
     {
         final int columnIndex = requireColumnIndex(table, columnName);
         requireValidColumnName(newColumnName);
         requireAvailableColumnName(table, newColumnName, columnIndex);
-
-        final DatasetColumn column = table.getColumns().get(columnIndex);
-        final String key = columnName.toUpperCase(Locale.ENGLISH);
-        final List<FlatXmlElement> rowElements = context.index().getRowElements(tableKey);
-        for (final FlatXmlElement element : rowElements)
-        {
-            if (element.hasCaseVariantAttributes(key))
-            {
-                throw new DatasetEditException(NLS.bind(Messages.Edit_renameColumnWithCaseVariants,
-                        column.name(), table.getName()));
-            }
-        }
-        return column;
+        return table.getColumns().get(columnIndex);
     }
 
     /**
@@ -122,7 +112,8 @@ final class ColumnEdits
      * @param columnName The current name of the column, in any letter case.
      * @param newColumnName The new name.
      * @return The edits, one for each row that has the column.
-     * @throws DatasetEditException When the column is only declared, so that no row has it.
+     * @throws DatasetEditException When the column is only declared, so that no row has it, or when a row
+     *                              spells it in two ways, so that both attributes would get the new name.
      */
     List<TextEdit> renameEdits(final String tableKey, final DatasetTable table, final DatasetColumn column,
             final String columnName, final String newColumnName)
@@ -131,13 +122,15 @@ final class ColumnEdits
 
         final String key = columnName.toUpperCase(Locale.ENGLISH);
         final List<FlatXmlElement> rowElements = context.index().getRowElements(tableKey);
+        requireNoRowSpellsTheColumnInTwoWays(table, column, rowElements, key);
         final Map<String, String> renames = new LinkedHashMap<>();
         renames.put(key, newColumnName);
         return startTagEdits(table, rowElements, Map.of(), renames);
     }
 
     /**
-     * Plans deleting a column that rows have: the start tag of each row is rewritten without the column.
+     * Plans deleting a column that rows have: the start tag of each row is rewritten without the column. A
+     * row that spells the column in two ways loses both attributes.
      *
      * @param tableKey The key of the table.
      * @param table The table.
@@ -213,6 +206,19 @@ final class ColumnEdits
         {
             throw new DatasetEditException(NLS.bind(Messages.Edit_renameColumnIsDeclaredOnly,
                     column.name(), table.getName()));
+        }
+    }
+
+    private static void requireNoRowSpellsTheColumnInTwoWays(final DatasetTable table,
+            final DatasetColumn column, final List<FlatXmlElement> rowElements, final String key)
+    {
+        for (final FlatXmlElement element : rowElements)
+        {
+            if (element.hasCaseVariantAttributes(key))
+            {
+                throw new DatasetEditException(NLS.bind(Messages.Edit_renameColumnWithCaseVariants,
+                        column.name(), table.getName()));
+            }
         }
     }
 

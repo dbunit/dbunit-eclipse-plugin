@@ -342,7 +342,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     {
         final DatasetTable table = editableTable(tableKey);
         final ColumnEdits columnEdits = new ColumnEdits(editContext());
-        final DatasetColumn column = columnEdits.requireRename(tableKey, table, columnName, newColumnName);
+        final DatasetColumn column = ColumnEdits.requireRename(table, columnName, newColumnName);
         if (column.pending())
         {
             pendingColumns.renameColumn(document, tableKey, columnName, newColumnName);

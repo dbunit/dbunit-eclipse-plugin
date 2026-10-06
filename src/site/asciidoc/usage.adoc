@@ -203,6 +203,9 @@ give it a value in at least one row to keep it.
 after asking for confirmation.
 Renaming or deleting a column the DTD declares warns that the DTD must be updated too;
 renaming a declared column with no rows yet is rejected, since there is nothing in the file to rename.
+When a row spells a column in two ways, such as `NAME` and `name`, *Delete Column* removes both attributes,
+but *Rename Column* and editing a cell of that column are rejected for the row,
+because both attributes would get the same name or the same value; remove one of the two on the Source page first.
 
 Tables::
 *Add Table* asks for the table name and, optionally, comma-separated column names,
