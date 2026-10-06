@@ -54,7 +54,7 @@ final class AnchorCellKeyEditAction implements IKeyAction
         }
         natTable.doCommand(new SelectCellCommand(selectionLayer, anchor.columnPosition, anchor.rowPosition,
                 false, false));
-        if (isPrintable(event.character))
+        if (PrintableCharacterKeyEventMatcher.isPrintable(event.character))
         {
             natTable.doCommand(
                     new EditSelectionCommand(natTable, natTable.getConfigRegistry(), event.character));
@@ -63,10 +63,5 @@ final class AnchorCellKeyEditAction implements IKeyAction
         {
             natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
         }
-    }
-
-    private static boolean isPrintable(final char character)
-    {
-        return character != 0 && !Character.isISOControl(character);
     }
 }

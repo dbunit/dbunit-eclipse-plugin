@@ -81,6 +81,8 @@ A read-only grid still lets you select and copy cells, and *Show in Source* (*F3
 
 Select a cell and start typing to replace its value,
 or press *F2* or double-click to edit the value in place.
+Typing an emoji, or another character that needs two UTF-16 units, does not start the edit:
+open the cell first, then type it.
 *Enter* saves the value and moves down, *Tab* and *Shift+Tab* save it and move right and left,
 *Up* and *Down* save it and move up and down, and *Escape* discards the change.
 

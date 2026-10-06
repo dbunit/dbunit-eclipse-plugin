@@ -851,6 +851,50 @@ class GridEditingTest
     }
 
     @Test
+    void testMatches_forEitherHalfOfASupplementaryCharacter_returnsFalse()
+    {
+        final PrintableCharacterKeyEventMatcher matcher = new PrintableCharacterKeyEventMatcher(false);
+        final int emoji = 0x1F600;
+
+        assertThat(matcher.matches(keyEvent(Character.highSurrogate(emoji), 0, SWT.NONE)))
+                .as("The first half of an emoji, which SWT sends as a key event of its own, must not match.")
+                .isFalse();
+        assertThat(matcher.matches(keyEvent(Character.lowSurrogate(emoji), 0, SWT.NONE)))
+                .as("The second half of an emoji must not match either.").isFalse();
+    }
+
+    @Test
+    void testRun_whenTheKeyEventCarriesAPrintableCharacter_opensTheEditorSeededWithIt()
+    {
+        final DatasetGrid grid = openGrid(create(new Document(FOUR_USERS)), "USERS");
+        final NatTable natTable = grid.getNatTable();
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 2, false, false));
+
+        new AnchorCellKeyEditAction(grid.getSelectionLayer()).run(natTable, keyEvent('x', 'x', SWT.NONE));
+
+        assertThat(natTable.getActiveCellEditor().getEditorValue())
+                .as("Typing a character on a selected cell must start an edit with that character.")
+                .isEqualTo("x");
+    }
+
+    @Test
+    void testRun_whenTheKeyEventCarriesHalfOfASupplementaryCharacter_doesNotSeedTheEditorWithIt()
+    {
+        final DatasetGrid grid = openGrid(create(new Document(FOUR_USERS)), "USERS");
+        final NatTable natTable = grid.getNatTable();
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 2, false, false));
+        final char highSurrogate = Character.highSurrogate(0x1F600);
+
+        final KeyEvent typedHalf = keyEvent(highSurrogate, 0, SWT.NONE);
+        new AnchorCellKeyEditAction(grid.getSelectionLayer()).run(natTable, typedHalf);
+
+        final Object editorValue = natTable.getActiveCellEditor().getEditorValue();
+        assertThat(String.valueOf(editorValue))
+                .as("An editor seeded with half of a pair would hold a character that is not well formed.")
+                .doesNotContain(String.valueOf(highSurrogate));
+    }
+
+    @Test
     void testAddCellEditorListener_whenAnEditorOpensAndIsCommitted_reportsTheEditorStateAtEachStep()
     {
         final FlatXmlDatasetDocument datasetDocument = create(new Document(FOUR_USERS));

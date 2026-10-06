@@ -26,9 +26,9 @@ import org.eclipse.swt.events.KeyEvent;
 
 /**
  * Matches a key event that types a character to start editing the selection anchor: a non-zero,
- * non-control character typed with no modifier, Shift, AltGr (Ctrl+Alt, or Command+Option on macOS), or,
- * on macOS only, Option alone, since a character typed with Option there arrives with only
- * {@link SWT#ALT} in the state mask.
+ * non-control character, which is not one half of a supplementary character, typed with no modifier,
+ * Shift, AltGr (Ctrl+Alt, or Command+Option on macOS), or, on macOS only, Option alone, since a character
+ * typed with Option there arrives with only {@link SWT#ALT} in the state mask.
  *
  * @since 1.0.0
  */
@@ -49,10 +49,24 @@ final class PrintableCharacterKeyEventMatcher implements IKeyEventMatcher
         this.mac = mac;
     }
 
+    /**
+     * Tells whether the character of a key event is one that can start an edit when it is typed: not
+     * nothing, not a control character, and not one half of a supplementary character such as an emoji.
+     * SWT sends each half as a key event of its own, so an editor that is started by one of them would hold
+     * a character that is not well formed.
+     *
+     * @param character The character of the key event.
+     * @return True when typing the character can start an edit that is seeded with it.
+     */
+    static boolean isPrintable(final char character)
+    {
+        return character != 0 && !Character.isISOControl(character) && !Character.isSurrogate(character);
+    }
+
     @Override
     public boolean matches(final KeyEvent event)
     {
-        if (event.character == 0 || Character.isISOControl(event.character))
+        if (!isPrintable(event.character))
         {
             return false;
         }
