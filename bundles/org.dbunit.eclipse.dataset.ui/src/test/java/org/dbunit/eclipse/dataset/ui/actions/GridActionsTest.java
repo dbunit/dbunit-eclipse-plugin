@@ -367,6 +367,59 @@ class GridActionsTest
     }
 
     @Test
+    void testRun_whenTheTextChangedAndNothingRefreshedTheDocument_refreshesItBeforeTheCommandRuns()
+            throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final List<Boolean> staleWhenTheCommandRan = new ArrayList<>();
+        final GridAction action = new GridAction(context)
+        {
+            @Override
+            protected void runOnGrid(final DatasetGridContext gridContext)
+            {
+                staleWhenTheCommandRan.add(datasetDocument.isStale());
+            }
+
+            @Override
+            protected boolean isEnabledFor(final GridSelection selection)
+            {
+                return true;
+            }
+        };
+        document.replace(document.get().indexOf("<USERS"), 0, "<AUDIT_LOG/>");
+
+        action.run();
+
+        assertThat(staleWhenTheCommandRan)
+                .as("A command that is queued behind a change of the text must run on the model of the "
+                        + "text as it is now.")
+                .containsExactly(false);
+    }
+
+    @Test
+    void testRun_whileACellEditorIsActiveAndTheTextChanged_doesNotRefreshTheDocument() throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        context.hasActiveCellEditor = true;
+        final Text text = new Text(shell, SWT.NONE);
+        text.setText("hello world");
+        text.setSelection(0, 5);
+        context.activeCellEditorText = text;
+        document.replace(document.get().indexOf("<USERS"), 0, "<AUDIT_LOG/>");
+
+        new CopyAction(context).run();
+
+        assertThat(datasetDocument.isStale())
+                .as("A refresh rebuilds the grids and can close the editor, so a command that works on "
+                        + "the editor's text must leave it to the page.")
+                .isTrue();
+    }
+
+    @Test
     void testRun_whenRunOnGridThrowsADatasetEditException_reportsItAsAnErrorMessageInsteadOfPropagating()
     {
         final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");

@@ -863,6 +863,34 @@ class TablesPageTest
     }
 
     @Test
+    void testTablesPage_whenFillDownFollowsAChangeOfTheTextBeforeEventsRun_actsOnTheChangedText()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                    + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carol\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final FlatXmlDatasetDocument datasetDocument = editor.getDatasetDocument();
+            final IHandlerService handlerService =
+                    editor.getEditorSite().getService(IHandlerService.class);
+            UiTestWorkspace.processEvents();
+            tablesPage.selectRegion(1, 0, 1, 2);
+            final IDocument document = sourceDocument(editor);
+
+            document.replace(document.get().indexOf("Alice"), "Alice".length(), "Zed");
+            handlerService.executeCommand(DatasetCommandIds.FILL_DOWN, null);
+
+            assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows())
+                    .extracting(row -> row.getValues())
+                    .as("A Fill Down that runs before the page has refreshed from a change of the text must "
+                            + "copy the value that the text has now, not the one that it had.")
+                    .containsExactly(List.of("1", "Zed"), List.of("2", "Zed"), List.of("3", "Carol"));
+        }
+    }
+
+    @Test
     void testTablesPage_whileACellEditorIsOpen_leavesTheKeysOfTheGridCommandsToTheEditor() throws Exception
     {
         try (UiTestWorkspace workspace = new UiTestWorkspace())

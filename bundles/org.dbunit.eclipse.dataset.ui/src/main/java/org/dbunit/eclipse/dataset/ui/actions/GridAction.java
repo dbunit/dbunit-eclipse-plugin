@@ -28,7 +28,9 @@ import org.eclipse.jface.action.Action;
 /**
  * A command that acts on the Tables page's active grid: reaches it through a {@link DatasetGridContext},
  * updates its enablement from a {@link GridSelection}, and by default needs an editable page and does
- * nothing while a cell editor is active. A {@link DatasetEditException} thrown directly by
+ * nothing while a cell editor is active. The dataset document is refreshed before the command runs, so
+ * that it acts on the text as it is now, also when a change of the text came a moment before and the page
+ * has not refreshed from it yet. A {@link DatasetEditException} thrown directly by
  * {@link #runOnGrid} or {@link #runWhileEditing}, outside an edit run through the context, is reported as
  * the status line's error message, as a rejected edit is, instead of propagating.
  *
@@ -74,6 +76,7 @@ public abstract class GridAction extends Action
                 }
                 return;
             }
+            context.getDatasetDocument().refresh();
             runOnGrid(context);
         }
         catch (final DatasetEditException e)
