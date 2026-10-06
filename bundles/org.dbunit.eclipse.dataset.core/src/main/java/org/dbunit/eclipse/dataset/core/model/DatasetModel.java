@@ -48,8 +48,10 @@ public final class DatasetModel
 
     private final boolean editable;
 
+    private final boolean blank;
+
     /**
-     * Creates a dataset model.
+     * Creates the model of a source that has content.
      *
      * @param tables The tables of the dataset, copied defensively.
      * @param problems The problems found while building the model, copied defensively.
@@ -58,11 +60,27 @@ public final class DatasetModel
     public DatasetModel(final List<DatasetTable> tables, final List<DatasetProblem> problems,
             final boolean editable)
     {
+        this(tables, problems, editable, false);
+    }
+
+    /**
+     * Creates a dataset model.
+     *
+     * @param tables The tables of the dataset, copied defensively.
+     * @param problems The problems found while building the model, copied defensively.
+     * @param editable False when the source has errors that block editing.
+     * @param blank True when the source is empty or only whitespace, so that it has no content to build a
+     *              model from, which is no error.
+     */
+    public DatasetModel(final List<DatasetTable> tables, final List<DatasetProblem> problems,
+            final boolean editable, final boolean blank)
+    {
         this.tables = List.copyOf(tables);
         this.problems = List.copyOf(problems);
         this.problemsByTable = groupByTable(this.problems);
         this.worstSeverityByTableAndColumn = worstSeverityByTableAndColumn(this.problems);
         this.editable = editable;
+        this.blank = blank;
     }
 
     private static Map<String, List<DatasetProblem>> groupByTable(final List<DatasetProblem> problems)
@@ -175,5 +193,16 @@ public final class DatasetModel
     public boolean isEditable()
     {
         return editable;
+    }
+
+    /**
+     * Returns whether the source is blank: empty or only whitespace. A blank source has no content to
+     * build a model from, which is no problem to list; it needs an empty dataset to be created in it.
+     *
+     * @return True when the source has no content.
+     */
+    public boolean isBlank()
+    {
+        return blank;
     }
 }

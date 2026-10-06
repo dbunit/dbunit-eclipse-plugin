@@ -175,6 +175,64 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testRefresh_whenTheTextIsEmpty_buildsABlankModelWithoutProblems()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(new Document(""));
+
+        datasetDocument.refresh();
+
+        final DatasetModel model = datasetDocument.getModel();
+        assertThat(List.of(model.isBlank(), model.getProblems().isEmpty(), model.isEditable()))
+                .as("An empty text is blank, which is no problem to list, and nothing to edit until an "
+                        + "empty dataset is created.")
+                .containsExactly(true, true, false);
+    }
+
+    @Test
+    void testRefresh_whenTheTextIsOnlyWhitespace_buildsABlankModelWithoutProblems()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(new Document(" \t\r\n  "));
+
+        datasetDocument.refresh();
+
+        final DatasetModel model = datasetDocument.getModel();
+        assertThat(List.of(model.isBlank(), model.getProblems().isEmpty()))
+                .as("A text of whitespace only is as blank as an empty one.").containsExactly(true, true);
+    }
+
+    @Test
+    void testRefresh_whenTheTextHasContentThatIsNotADataset_buildsAModelThatIsNotBlank()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create(new Document("<notdataset/>"));
+
+        datasetDocument.refresh();
+
+        final DatasetModel model = datasetDocument.getModel();
+        assertThat(List.of(model.isBlank(), model.getProblems().isEmpty()))
+                .as("A text with content is not blank, and the root that is wrong is a problem.")
+                .containsExactly(false, false);
+    }
+
+    @Test
+    void testRefresh_whenABlankTextGetsContentAndLosesItAgain_followsTheText() throws Exception
+    {
+        final IDocument document = new Document("");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.createEmptyDataset();
+        final boolean blankWithContent = datasetDocument.getModel().isBlank();
+        final boolean editableWithContent = datasetDocument.getModel().isEditable();
+        document.set("  ");
+        datasetDocument.refresh();
+
+        assertThat(List.of(blankWithContent, editableWithContent, datasetDocument.getModel().isBlank()))
+                .as("The model must not be blank once the empty dataset is created, and must be blank "
+                        + "again when the text is.")
+                .containsExactly(false, true, true);
+    }
+
+    @Test
     void testCreateEmptyDataset_whenDocumentIsBlank_replacesItAndUndoRestoresTheBlankText()
             throws Exception
     {

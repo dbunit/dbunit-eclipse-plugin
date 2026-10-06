@@ -573,10 +573,12 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         }
         pendingColumns.record(modificationStamp);
         pendingColumns.keepOnly(PendingColumns.snapshotsToKeep(document));
-        final List<DatasetProblem> problems = FlatXmlValidator.validate(parse, built.index(), tables,
-                dtdResolution.state(), dtdResolution.declarations(), options);
+        final boolean blank = text.isBlank();
+        final List<DatasetProblem> problems = blank ? List.of()
+                : FlatXmlValidator.validate(parse, built.index(), tables, dtdResolution.state(),
+                        dtdResolution.declarations(), options);
         final DatasetModel oldModel = model;
-        model = new DatasetModel(tables, problems, built.model().isEditable());
+        model = new DatasetModel(tables, problems, built.model().isEditable(), blank);
         index = built.index();
         layout = new FlatXmlTextLayout(text, TextUtilities.getDefaultLineDelimiter(document));
         stale = false;

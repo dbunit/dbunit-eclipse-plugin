@@ -530,7 +530,7 @@ final class TablesPage implements DatasetGridContext
         final DatasetModel model = datasetDocument.getModel();
         updateEditable(model);
 
-        if (datasetDocument.isBlank())
+        if (model.isBlank())
         {
             tabs.reconcile(DatasetModel.EMPTY);
             contentStackLayout.topControl = blankComposite;
@@ -548,9 +548,7 @@ final class TablesPage implements DatasetGridContext
         contentStack.layout();
 
         updateBanner(model);
-        // A blank document's only problem is its missing root element, which the blank state explains.
-        final DatasetModel listedModel = datasetDocument.isBlank() ? DatasetModel.EMPTY : model;
-        problemsSection.update(listedModel);
+        problemsSection.update(model);
         actions.updateGridActionsEnablement();
     }
 
@@ -590,11 +588,6 @@ final class TablesPage implements DatasetGridContext
         if (!editor.getSourceEditor().isEditorInputModifiable())
         {
             errorBanner.showReadOnly();
-            return;
-        }
-        if (datasetDocument.isBlank())
-        {
-            errorBanner.hide();
             return;
         }
         for (final DatasetProblem problem : model.getProblems())

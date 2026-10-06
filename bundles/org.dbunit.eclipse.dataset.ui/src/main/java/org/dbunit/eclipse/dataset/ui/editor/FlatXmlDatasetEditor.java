@@ -26,6 +26,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
+import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
 import org.dbunit.eclipse.dataset.ui.Messages;
 import org.dbunit.eclipse.dataset.ui.preferences.PreferenceKeys;
@@ -182,7 +183,8 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         addPage(TABLES_PAGE_INDEX, tablesPage.getControl());
         setPageText(TABLES_PAGE_INDEX, Messages.Editor_tablesPageText);
 
-        final boolean editable = datasetDocument.getModel().isEditable() || datasetDocument.isBlank();
+        final DatasetModel model = datasetDocument.getModel();
+        final boolean editable = model.isEditable() || model.isBlank();
         setActivePage(editable ? TABLES_PAGE_INDEX : SOURCE_PAGE_INDEX);
         previousPageIndex = getActivePage();
 

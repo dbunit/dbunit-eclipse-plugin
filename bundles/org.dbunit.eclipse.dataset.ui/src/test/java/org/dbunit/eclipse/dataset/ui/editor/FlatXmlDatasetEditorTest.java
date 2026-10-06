@@ -398,6 +398,37 @@ class FlatXmlDatasetEditorTest
     }
 
     @Test
+    void testOpen_whenFileIsBlank_opensOnTheTablesPage() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("blank.xml", "");
+
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.openInDatasetEditor(file);
+
+            assertThat(editor.getActivePage())
+                    .as("A blank file has no error, and its Tables page offers to create the empty dataset.")
+                    .isEqualTo(TABLES_PAGE_INDEX);
+        }
+    }
+
+    @Test
+    void testOpen_whenFileHasContentThatIsNotADataset_opensOnTheSourcePage() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("other.xml", "<notdataset/>");
+
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.openInDatasetEditor(file);
+
+            assertThat(editor.getActivePage())
+                    .as("A file with content whose root is not a dataset must open on the Source page, "
+                            + "unlike a blank one.")
+                    .isEqualTo(SOURCE_PAGE_INDEX);
+        }
+    }
+
+    @Test
     void testOpen_whenDoctypeSystemIdClimbsAboveTheWorkspaceRoot_opensOnTheTablesPage() throws Exception
     {
         try (UiTestWorkspace workspace = new UiTestWorkspace())

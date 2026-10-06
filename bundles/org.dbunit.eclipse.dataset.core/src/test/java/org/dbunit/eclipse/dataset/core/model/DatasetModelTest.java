@@ -50,6 +50,30 @@ class DatasetModelTest
     }
 
     @Test
+    void testIsBlank_whenBuiltAsBlank_isTrue()
+    {
+        final DatasetModel model = new DatasetModel(List.of(), List.of(), false, true);
+
+        assertThat(model.isBlank()).as("A model that is built as blank must say so.").isTrue();
+    }
+
+    @Test
+    void testIsBlank_whenBuiltWithoutSayingSo_isFalse()
+    {
+        final DatasetModel model = new DatasetModel(List.of(USERS_TABLE), List.of(), true);
+
+        assertThat(model.isBlank()).as("A model of a document with content is not blank.").isFalse();
+    }
+
+    @Test
+    void testIsBlank_forTheModelBeforeTheFirstParse_isFalse()
+    {
+        assertThat(DatasetModel.EMPTY.isBlank())
+                .as("Nothing is known of the text before the first parse, so the model is not blank.")
+                .isFalse();
+    }
+
+    @Test
     void testFindTable_whenKeyExists_returnsTheTable()
     {
         final DatasetModel model = new DatasetModel(List.of(USERS_TABLE), List.of(), true);
