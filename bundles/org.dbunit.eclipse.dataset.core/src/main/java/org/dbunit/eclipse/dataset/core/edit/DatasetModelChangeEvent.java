@@ -32,4 +32,14 @@ import org.dbunit.eclipse.dataset.core.model.DatasetModel;
  */
 public record DatasetModelChangeEvent(DatasetModel oldModel, DatasetModel newModel, ChangeOrigin origin)
 {
+    /**
+     * Returns which tables of the new model came from the tables of the old model, which a listener needs
+     * to keep what it shows for a table when the table has another key.
+     *
+     * @return The tables that were renamed and the tables that were added.
+     */
+    public TableChanges tableChanges()
+    {
+        return TableChanges.between(oldModel, newModel);
+    }
 }

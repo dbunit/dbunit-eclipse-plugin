@@ -30,6 +30,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -41,6 +42,7 @@ import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.edit.ChangeOrigin;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
+import org.dbunit.eclipse.dataset.core.edit.TableChanges;
 import org.dbunit.eclipse.dataset.core.model.CellAddress;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
@@ -3122,6 +3124,87 @@ class FlatXmlDatasetDocumentTest
             undoManager.undo();
             assertThat(document.get()).isEqualTo(original);
         });
+    }
+
+    @Test
+    void testRenameTable_whenListenersAreNotified_theEventSaysWhichTableWasRenamed()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/><ORDERS ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        final List<TableChanges> changes = new ArrayList<>();
+        datasetDocument.addModelListener(event -> changes.add(event.tableChanges()));
+
+        datasetDocument.renameTable("USERS", "CUSTOMERS");
+
+        assertThat(changes).as("The event of the rename must say which table has the new name.")
+                .containsExactly(new TableChanges(Map.of("USERS", "CUSTOMERS"), List.of()));
+    }
+
+    @Test
+    void testRenameTable_whenUndone_theEventSaysThatTheTableHasItsOldNameAgain() throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.renameTable("USERS", "CUSTOMERS");
+            final List<TableChanges> changes = new ArrayList<>();
+            datasetDocument.addModelListener(event -> changes.add(event.tableChanges()));
+
+            undoManager.undo();
+            datasetDocument.refresh();
+
+            assertThat(changes).as("An undo is no edit of the dataset document, and its event must say "
+                    + "which table has the old name again.")
+                    .containsExactly(new TableChanges(Map.of("CUSTOMERS", "USERS"), List.of()));
+        });
+    }
+
+    @Test
+    void testRefresh_whenTheTextRenamesATable_theEventSaysWhichTableWasRenamed() throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        final List<TableChanges> changes = new ArrayList<>();
+        datasetDocument.addModelListener(event -> changes.add(event.tableChanges()));
+
+        document.set("<dataset><CUSTOMERS ID=\"1\"/><CUSTOMERS ID=\"2\"/></dataset>");
+        datasetDocument.refresh();
+
+        assertThat(changes).as("A rename that was typed in the text is one change of the model.")
+                .containsExactly(new TableChanges(Map.of("USERS", "CUSTOMERS"), List.of()));
+    }
+
+    @Test
+    void testSetOptions_whenTableNamesBecomeCaseSensitive_theEventSaysWhichTablesHaveNewKeys()
+    {
+        final IDocument document = new Document("<dataset><users ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        final List<TableChanges> changes = new ArrayList<>();
+        datasetDocument.addModelListener(event -> changes.add(event.tableChanges()));
+
+        datasetDocument.setOptions(new FlatXmlOptions(true, false));
+
+        assertThat(changes).as("The table is the same, and the event must say that its key changed.")
+                .containsExactly(new TableChanges(Map.of("USERS", "users"), List.of()));
+    }
+
+    @Test
+    void testAddTable_whenListenersAreNotified_theEventSaysWhichTableWasAdded()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        final List<TableChanges> changes = new ArrayList<>();
+        datasetDocument.addModelListener(event -> changes.add(event.tableChanges()));
+
+        datasetDocument.addTable("ORDERS", List.of("ID"));
+
+        assertThat(changes).as("The event of the new table must list its key.")
+                .containsExactly(new TableChanges(Map.of(), List.of("ORDERS")));
     }
 
     @Test
