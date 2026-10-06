@@ -63,6 +63,11 @@ class XmlLexerTest
         return text.substring(position);
     }
 
+    private static String remainderAfterSkippingALiteral(final String text)
+    {
+        return remainderAfter(text, lexer -> lexer.skipQuotedLiteral("unclosed"));
+    }
+
     private static Scan scan(final String text, final Function<XmlLexer, String> operation)
     {
         final XmlLexer lexer = lexerFor(text);
@@ -676,6 +681,43 @@ class XmlLexerTest
 
         assertThat(scan).as("A double quote inside a single-quoted literal must not end it.")
                 .isEqualTo(new Scan("a\"b", " tail"));
+    }
+
+    @Test
+    void testSkipQuotedLiteral_whenDoubleQuoted_movesPastTheClosingQuote()
+    {
+        final String remainder = remainderAfterSkippingALiteral("\"a>b]c\" tail");
+
+        assertThat(remainder).as("Everything up to and including the closing quote must be skipped, '>' and "
+                + "']' included.").isEqualTo(" tail");
+    }
+
+    @Test
+    void testSkipQuotedLiteral_whenSingleQuoted_isNotEndedByADoubleQuote()
+    {
+        final String remainder = remainderAfterSkippingALiteral("'a\"b' tail");
+
+        assertThat(remainder).as("A double quote inside a single-quoted literal must not end it.")
+                .isEqualTo(" tail");
+    }
+
+    @Test
+    void testSkipQuotedLiteral_whenTheLiteralHoldsLineBreaks_movesPastThem()
+    {
+        final String remainder = remainderAfterSkippingALiteral("\"a\nb\r\nc\"x");
+
+        assertThat(remainder).as("A literal may span lines.").isEqualTo("x");
+    }
+
+    @Test
+    void testSkipQuotedLiteral_whenUnclosed_recordsTheGivenMessageAtTheOpeningQuote()
+    {
+        final List<DatasetProblem> problems =
+                problemsAfterFailure("ab\"open", 2, lexer -> lexer.skipQuotedLiteral("my message"));
+
+        assertThat(problems).as("An unclosed literal must be reported at its opening quote, with the "
+                + "message that the caller gave.")
+                .containsExactly(problemInFirstLine("my message", 2));
     }
 
     @Test

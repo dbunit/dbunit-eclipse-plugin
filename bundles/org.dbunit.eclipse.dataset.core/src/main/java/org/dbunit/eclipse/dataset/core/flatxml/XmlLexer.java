@@ -312,18 +312,38 @@ final class XmlLexer
     {
         final char quote = scanOpeningQuote(Messages.Parser_expectedQuotedLiteral);
         final int start = pos;
+        skipPastClosingQuote(quote, Messages.Parser_unclosedLiteral);
+        return text.subSequence(start, pos - 1).toString();
+    }
+
+    /**
+     * Moves over the quoted literal that starts at the position, which must be at its opening quote. A
+     * literal that has no closing quote records the blocking problem that the message describes, at its
+     * opening quote.
+     */
+    void skipQuotedLiteral(final String unclosedMessage)
+    {
+        final char quote = text.charAt(pos);
+        pos++;
+        skipPastClosingQuote(quote, unclosedMessage);
+    }
+
+    /**
+     * Moves over the rest of a quoted literal, past its closing quote, from the position just after its
+     * opening quote.
+     */
+    private void skipPastClosingQuote(final char quote, final String unclosedMessage)
+    {
+        final int openingQuoteOffset = pos - 1;
         while (pos < length && text.charAt(pos) != quote)
         {
             pos++;
         }
         if (pos >= length)
         {
-            throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, Messages.Parser_unclosedLiteral,
-                    start - 1);
+            throw problems.blockingError(ProblemCode.NOT_WELL_FORMED, unclosedMessage, openingQuoteOffset);
         }
-        final String value = text.subSequence(start, pos).toString();
         pos++; // consume the closing quote
-        return value;
     }
 
     /**

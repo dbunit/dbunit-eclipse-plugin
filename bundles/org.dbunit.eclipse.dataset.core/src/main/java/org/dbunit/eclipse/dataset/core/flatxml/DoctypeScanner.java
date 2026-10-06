@@ -143,7 +143,7 @@ final class DoctypeScanner
         final char ch = lexer.currentCharacter();
         if (ch == '"' || ch == '\'')
         {
-            skipSubsetLiteral(ch);
+            lexer.skipQuotedLiteral(Messages.Parser_unclosedSubsetLiteral);
         }
         else if (lexer.atText("<!--"))
         {
@@ -157,20 +157,5 @@ final class DoctypeScanner
         {
             lexer.advance(1);
         }
-    }
-
-    private void skipSubsetLiteral(final char quote)
-    {
-        lexer.advance(1);
-        while (!lexer.atEnd() && lexer.currentCharacter() != quote)
-        {
-            lexer.advance(1);
-        }
-        if (lexer.atEnd())
-        {
-            throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
-                    Messages.Parser_unclosedSubsetLiteral, lexer.position());
-        }
-        lexer.advance(1); // consume the closing quote
     }
 }

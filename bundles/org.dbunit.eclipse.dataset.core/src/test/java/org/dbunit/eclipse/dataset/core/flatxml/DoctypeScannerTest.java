@@ -276,14 +276,15 @@ class DoctypeScannerTest
     }
 
     @Test
-    void testScan_whenALiteralInTheSubsetIsNotClosed_recordsABlockingProblemAtTheEndOfTheText()
+    void testScan_whenALiteralInTheSubsetIsNotClosed_recordsABlockingProblemAtItsOpeningQuote()
     {
         final String text = "<!DOCTYPE dataset [<!ATTLIST a b CDATA \"x]>";
 
         final List<DatasetProblem> problems = problemsAfterFailure(text, 0);
 
-        assertThat(problems).as("An unclosed literal in the subset must be reported at the end.")
-                .containsExactly(problemInFirstLine(Messages.Parser_unclosedSubsetLiteral, text.length()));
+        assertThat(problems).as("An unclosed literal in the subset must be reported at its opening quote.")
+                .containsExactly(
+                        problemInFirstLine(Messages.Parser_unclosedSubsetLiteral, text.indexOf('"')));
     }
 
     @Test
