@@ -467,12 +467,14 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     @Override
     public Optional<IRegion> locate(final CellAddress address)
     {
+        refresh();
         return new CellLocator(model, index, options).locate(address);
     }
 
     @Override
     public Optional<CellAddress> cellAt(final int offset)
     {
+        refresh();
         return new CellLocator(model, index, options).cellAt(offset);
     }
 

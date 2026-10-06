@@ -48,7 +48,7 @@ public interface TextDatasetDocument extends DatasetDocument
     void createEmptyDataset();
 
     /**
-     * Locates a cell or a row in the text.
+     * Locates a cell or a row in the text, as the text is now: a model that is stale is refreshed first.
      *
      * @param address The cell to locate, or a row when its column index is -1.
      * @return The attribute value range of the cell, the element name range when the cell is NULL, or
@@ -57,7 +57,7 @@ public interface TextDatasetDocument extends DatasetDocument
     Optional<IRegion> locate(CellAddress address);
 
     /**
-     * Finds the cell at a text offset.
+     * Finds the cell at a text offset, as the text is now: a model that is stale is refreshed first.
      *
      * @param offset The offset to look up.
      * @return The attribute under the offset, or the row's first column when the offset is not inside an

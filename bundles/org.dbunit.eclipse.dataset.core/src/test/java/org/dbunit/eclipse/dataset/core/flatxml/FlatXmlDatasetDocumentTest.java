@@ -519,6 +519,25 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testLocateAndCellAt_whenTheTextChangedAndNothingRefreshed_answerForTheCurrentText() throws Exception
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        document.replace(0, 0, "<!-- a comment that moves every row -->");
+        final int idOfSecondRow = document.get().indexOf("\"2\"") + 1;
+
+        final Optional<IRegion> region = datasetDocument.locate(new CellAddress("USERS", 1, 0));
+        final Optional<CellAddress> address = datasetDocument.cellAt(idOfSecondRow);
+
+        assertThat(region.map(found -> document.get().substring(found.getOffset(),
+                found.getOffset() + found.getLength()))).as("The cell must be found where its text is now.")
+                .contains("2");
+        assertThat(address).as("The offset must be mapped to the cell that has it now.")
+                .contains(new CellAddress("USERS", 1, 0));
+    }
+
+    @Test
     void testLocate_whenCellIsNull_returnsTheElementNameRange()
     {
         final IDocument document = new Document(TestDatasets.read("editor-sample.xml"));
