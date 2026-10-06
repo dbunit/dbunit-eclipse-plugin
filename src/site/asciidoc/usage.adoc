@@ -296,7 +296,8 @@ A dataset may declare its tables and columns in a DTD, in the DOCTYPE itself or 
 
 When a dataset has a DOCTYPE, dbUnit reads its tables and columns from the DTD, and the editor does the same:
 
-* The tables are the elements that the content model of the `dataset` element lists, in that order.
+* The tables are the elements that the content model of the root element lists, in that order.
+dbUnit takes the name of the root element from the DOCTYPE, `dataset` in the example, and so does the editor.
 * A table's columns are the attributes of its `ATTLIST`, in declared order, followed by any other columns the rows use.
 * An attribute can have a default value (`STATUS CDATA "ACTIVE"`) or a fixed value (`STATUS CDATA #FIXED "ACTIVE"`).
 dbUnit loads it for a row without the attribute, and the editor shows it in italics (see <<null-values>>).

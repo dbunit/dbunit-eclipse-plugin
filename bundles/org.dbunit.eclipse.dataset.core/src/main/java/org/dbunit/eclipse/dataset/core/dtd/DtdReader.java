@@ -44,37 +44,65 @@ import org.eclipse.osgi.util.NLS;
  */
 public final class DtdReader
 {
+    private static final String DEFAULT_ROOT_NAME = "dataset";
+
     private DtdReader()
     {
     }
 
     /**
-     * Reads a DTD's declarations.
+     * Reads a DTD's declarations, for a document whose root element is {@code dataset}.
      *
      * @param dtdText The DTD text: an external DTD file's content, or a DOCTYPE's internal subset.
      * @return The declarations found.
      */
     public static DtdDeclarations read(final String dtdText)
     {
-        final Scanner scanner = new Scanner(new DtdLexer(dtdText));
+        return read(dtdText, DEFAULT_ROOT_NAME);
+    }
+
+    /**
+     * Reads a DTD's declarations. The content model of the element that the DOCTYPE names lists the tables,
+     * as it does for dbUnit, which takes the name of the DOCTYPE for the name of the root.
+     *
+     * @param dtdText The DTD text: an external DTD file's content, or a DOCTYPE's internal subset.
+     * @param rootName The name that the DOCTYPE gives the root element.
+     * @return The declarations found.
+     */
+    public static DtdDeclarations read(final String dtdText, final String rootName)
+    {
+        final Scanner scanner = new Scanner(new DtdLexer(dtdText), rootName);
         scanner.scan();
         return scanner.declarations();
     }
 
     /**
-     * Finds where a DTD writes the names of its elements, so that a caller who edits the DTD text can
-     * rename an element everywhere the DTD names it. The names are the one of each {@code ELEMENT}
-     * declaration, the one of each {@code ATTLIST} declaration, and those in the content model of the
-     * {@code dataset} element, which is how a DTD lists the tables of a dataset. The name of the
-     * {@code dataset} element itself is not among them. A name in a comment, in a default value, or
-     * behind a parameter entity reference is not found.
+     * Finds where a DTD writes the names of its elements, for a document whose root element is
+     * {@code dataset}; see {@link #locateElementNames(String, String)}.
      *
      * @param dtdText The DTD text: an external DTD file's content, or a DOCTYPE's internal subset.
      * @return The names, in the order the text writes them.
      */
     public static List<DtdElementName> locateElementNames(final String dtdText)
     {
-        final Scanner scanner = new Scanner(new DtdLexer(dtdText));
+        return locateElementNames(dtdText, DEFAULT_ROOT_NAME);
+    }
+
+    /**
+     * Finds where a DTD writes the names of its elements, so that a caller who edits the DTD text can
+     * rename an element everywhere the DTD names it. The names are the one of each {@code ELEMENT}
+     * declaration, the one of each {@code ATTLIST} declaration, and those in the content model of the root
+     * element, which is how a DTD lists the tables of a dataset. The name of the root element itself is not
+     * among them. A name in a comment, in a default value, or behind a parameter entity reference is not
+     * found.
+     *
+     * @param dtdText The DTD text: an external DTD file's content, or a DOCTYPE's internal subset.
+     * @param rootName The name that the DOCTYPE gives the root element.
+     * @return The names, in the order the text writes them.
+     */
+    public static List<DtdElementName> locateElementNames(final String dtdText, final String rootName)
+    {
+        final Scanner scanner = new Scanner(new DtdLexer(dtdText), rootName);
         scanner.scan();
         return scanner.elementNames();
     }
@@ -85,6 +113,8 @@ public final class DtdReader
     private static final class Scanner
     {
         private final DtdLexer lexer;
+
+        private final String rootName;
 
         private final Map<String, List<String>> elements = new LinkedHashMap<>();
 
@@ -102,9 +132,10 @@ public final class DtdReader
 
         private List<String> contentModelNames = List.of();
 
-        private Scanner(final DtdLexer lexer)
+        private Scanner(final DtdLexer lexer, final String rootName)
         {
             this.lexer = lexer;
+            this.rootName = rootName;
         }
 
         private void scan()
@@ -198,7 +229,7 @@ public final class DtdReader
             final String contentSpec = scanContentSpec();
             lexer.skipWhitespace();
             lexer.skipCharacter('>');
-            if ("dataset".equals(name))
+            if (rootName.equals(name))
             {
                 scanRootContentModel(contentSpec, contentSpecOffset);
             }
@@ -215,7 +246,7 @@ public final class DtdReader
         }
 
         /**
-         * Reads the content model of the {@code dataset} element, which lists the tables. {@code ANY} and
+         * Reads the content model of the root element, which lists the tables. {@code ANY} and
          * {@code EMPTY} list none by name.
          */
         private void scanRootContentModel(final String contentSpec, final int contentSpecOffset)
@@ -236,7 +267,7 @@ public final class DtdReader
             lexer.skipWhitespace();
             final int elementNameOffset = lexer.position();
             final String elementName = lexer.scanName();
-            final boolean collectsColumns = !elementName.isEmpty() && !"dataset".equals(elementName);
+            final boolean collectsColumns = !elementName.isEmpty() && !rootName.equals(elementName);
             if (collectsColumns)
             {
                 elements.computeIfAbsent(elementName, key -> new ArrayList<>());

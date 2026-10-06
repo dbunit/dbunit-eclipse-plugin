@@ -82,7 +82,7 @@ class FlatXmlDbUnitParityTest
     @ParameterizedTest
     @ValueSource(strings = { "flatXmlTableTest.xml", "flatXmlDataSetDtdDifferentCaseTest.xml",
             "internal-subset.xml", "column-name-case-dtd.xml", "dtd-defaults-internal.xml",
-            "dtd-defaults-external.xml", "dtd-parameter-entity.xml" })
+            "dtd-defaults-external.xml", "dtd-parameter-entity.xml", "doctype-root-name.xml" })
     void testBuild_whenFixtureHasADoctype_matchesDbUnitOnDeclaredColumns(final String fixtureName)
             throws Exception
     {
@@ -148,6 +148,26 @@ class FlatXmlDbUnitParityTest
         assertThat(datasetDocument.getModel().getProblems()).extracting(DatasetProblem::code)
                 .as("The model must report the failure whatever the case sensitivity of table names.")
                 .containsExactly(ProblemCode.DTD_TABLE_NAME_CASE_VARIANTS);
+    }
+
+    @Test
+    void testBuild_whenTheDtdDeclaresOnlyAnotherNameThanTheDoctypesAsRoot_dbUnitFailsToLoadTheRows()
+            throws Exception
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ELEMENT DATASET (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                + "<!ATTLIST USERS ID CDATA #IMPLIED>\n]>\n<dataset><USERS ID=\"1\"/></dataset>\n";
+        final Path file = tempDir.resolve("other-root-name.xml");
+        Files.writeString(file, text, StandardCharsets.UTF_8);
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(new Document(text),
+                DtdSource.NONE, FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> new FlatXmlDataSetBuilder().build(file.toFile()))
+                .as("dbUnit takes the name of the DOCTYPE for the root, and finds no tables in the DTD.")
+                .isInstanceOf(DataSetException.class);
+        assertThat(datasetDocument.getModel().getProblems()).extracting(DatasetProblem::code)
+                .as("The model must report that the DTD does not list the table, as dbUnit finds it.")
+                .containsExactly(ProblemCode.TABLE_NOT_DECLARED_IN_DTD);
     }
 
     @Test
@@ -350,11 +370,12 @@ class FlatXmlDbUnitParityTest
             return null;
         }
         final String internalSubset = parse.doctype().internalSubset();
-        DtdDeclarations declarations = DtdReader.read(internalSubset == null ? "" : internalSubset);
+        final String rootName = parse.doctype().rootName();
+        DtdDeclarations declarations = DtdReader.read(internalSubset == null ? "" : internalSubset, rootName);
         if (parse.doctype().systemId() != null)
         {
-            declarations =
-                    declarations.merge(DtdReader.read(TestDatasets.read(parse.doctype().systemId())));
+            declarations = declarations
+                    .merge(DtdReader.read(TestDatasets.read(parse.doctype().systemId()), rootName));
         }
         return declarations;
     }

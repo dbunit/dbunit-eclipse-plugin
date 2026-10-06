@@ -3026,6 +3026,41 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testRefresh_whenTheDoctypeNamesAnotherRoot_showsTheTablesOfItsContentModel()
+    {
+        final IDocument document = new Document("<!DOCTYPE DATASET [\n<!ELEMENT DATASET (USERS*, ORDERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #IMPLIED>\n"
+                + "<!ELEMENT ORDERS EMPTY>\n<!ATTLIST ORDERS NO CDATA #IMPLIED>\n]>\n"
+                + "<dataset><USERS ID=\"1\"/></dataset>\n");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+
+        datasetDocument.refresh();
+
+        assertThat(datasetDocument.getModel().getTables()).extracting(DatasetTable::getName)
+                .as("dbUnit takes the name of the DOCTYPE for the root, so the tables are the ones that its "
+                        + "content model lists, the table without rows included.")
+                .containsExactly("USERS", "ORDERS");
+    }
+
+    @Test
+    void testRenameTable_whenTheDoctypeNamesAnotherRoot_renamesTheTableInTheContentModelOfThatRoot()
+    {
+        final String original = "<!DOCTYPE DATASET [\n<!ELEMENT DATASET (USERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n"
+                + "<dataset>\n  <USERS ID=\"1\"/>\n</dataset>\n";
+        final IDocument document = new Document(original);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.renameTable("USERS", "ACCOUNTS");
+
+        assertThat(document.get()).as("The content model of the root that the DOCTYPE names must follow.")
+                .isEqualTo(original.replace("USERS", "ACCOUNTS"));
+        assertThat(datasetDocument.getModel().getProblems()).as("The DTD must still list the table.")
+                .isEmpty();
+    }
+
+    @Test
     void testRenameTable_whenNewNameIsInvalid_throwsAndChangesNothing()
     {
         final IDocument document = new Document("<dataset><USERS ID=\"1\"/></dataset>");

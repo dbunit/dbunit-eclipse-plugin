@@ -244,6 +244,32 @@ class DtdReaderTest
     }
 
     @Test
+    void testRead_whenTheDoctypeNamesAnotherRoot_takesTheContentModelOfThatElement()
+    {
+        final String dtd = "<!ELEMENT DATASET (USERS*)>\n<!ELEMENT dataset (ORDERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ELEMENT ORDERS EMPTY>\n<!ATTLIST DATASET ID CDATA #IMPLIED>";
+
+        final List<String> rootedAtDataset = DtdReader.read(dtd, "DATASET").tables().stream()
+                .map(DtdTable::name).toList();
+        final List<String> rootedAtLowercase = DtdReader.read(dtd).tables().stream().map(DtdTable::name)
+                .toList();
+
+        assertThat(List.of(rootedAtDataset, rootedAtLowercase))
+                .as("The element that the DOCTYPE names is the root, and the other one is a table's.")
+                .containsExactly(List.of("USERS"), List.of("ORDERS"));
+    }
+
+    @Test
+    void testRead_whenTheRootNamedByTheDoctypeHasAnAttlist_isNoTable()
+    {
+        final DtdDeclarations declarations = DtdReader.read(
+                "<!ELEMENT other ANY>\n<!ATTLIST other ID CDATA #IMPLIED>\n<!ELEMENT USERS EMPTY>", "other");
+
+        assertThat(declarations.tables()).as("The root is never listed as a table.")
+                .extracting(DtdTable::name).containsExactly("USERS");
+    }
+
+    @Test
     void testRead_whenContentModelIsEmpty_hasNoTablesAndIsReportedEmpty()
     {
         final DtdDeclarations declarations = DtdReader.read(
@@ -634,6 +660,18 @@ class DtdReaderTest
 
         assertThat(DtdReader.locateElementNames(dtd))
                 .as("A parameter entity reference is no element name, so it is not renamed.")
+                .containsExactly(new DtdElementName("USERS", dtd.indexOf("USERS")),
+                        new DtdElementName("USERS", dtd.lastIndexOf("USERS")));
+    }
+
+    @Test
+    void testLocateElementNames_whenTheDoctypeNamesAnotherRoot_findsTheNamesOfItsContentModel()
+    {
+        final String dtd = "<!ELEMENT DATASET (USERS*)>\n<!ELEMENT USERS EMPTY>";
+
+        assertThat(DtdReader.locateElementNames(dtd, "DATASET"))
+                .as("The name of the root is not an element name to rename, but the names in its content "
+                        + "model are.")
                 .containsExactly(new DtdElementName("USERS", dtd.indexOf("USERS")),
                         new DtdElementName("USERS", dtd.lastIndexOf("USERS")));
     }

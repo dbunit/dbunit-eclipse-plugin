@@ -65,8 +65,9 @@ final class DtdResolver
             return new DtdResolution(null, DtdState.NONE);
         }
         final String internalSubsetText = doctype.internalSubset();
+        final String rootName = doctype.rootName();
         DtdDeclarations internalSubset =
-                DtdReader.read(internalSubsetText == null ? "" : internalSubsetText);
+                DtdReader.read(internalSubsetText == null ? "" : internalSubsetText, rootName);
         if (internalSubsetText != null)
         {
             internalSubset = internalSubset.withProblemsShiftedBy(doctype.internalSubsetOffset());
@@ -80,7 +81,7 @@ final class DtdResolver
         {
             return new DtdResolution(internalSubset, DtdState.NOT_LOADED);
         }
-        final DtdDeclarations external = DtdReader.read(externalText)
+        final DtdDeclarations external = DtdReader.read(externalText, rootName)
                 .withProblemsAt(doctype.offset(), doctype.endOffset() - doctype.offset());
         return new DtdResolution(internalSubset.merge(external), DtdState.LOADED);
     }

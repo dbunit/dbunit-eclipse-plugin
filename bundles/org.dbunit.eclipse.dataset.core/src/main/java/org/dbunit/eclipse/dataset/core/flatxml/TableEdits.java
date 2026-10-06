@@ -201,7 +201,9 @@ final class TableEdits
             return List.of();
         }
         final List<TextEdit> edits = new ArrayList<>();
-        for (final DtdElementName elementName : DtdReader.locateElementNames(doctype.internalSubset()))
+        final List<DtdElementName> elementNames =
+                DtdReader.locateElementNames(doctype.internalSubset(), doctype.rootName());
+        for (final DtdElementName elementName : elementNames)
         {
             if (tableKeyOf.apply(elementName.name()).equals(tableKey))
             {
