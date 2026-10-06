@@ -22,15 +22,15 @@ package org.dbunit.eclipse.dataset.ui.dialogs;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 import org.dbunit.eclipse.dataset.core.flatxml.XmlNames;
+import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.ui.Messages;
 import org.eclipse.osgi.util.NLS;
 
 /**
- * Validates a table's optional column names: each must be a valid XML name, and no two may be equal after
- * upper-casing them with Locale.ENGLISH, which is how the dataset model keys columns.
+ * Validates a table's optional column names: each must be a valid XML name, and no two may have the same
+ * key, which is how the dataset model tells columns apart, see {@link DatasetColumn#keyOf}.
  *
  * @since 1.0.0
  */
@@ -52,10 +52,10 @@ public final class ColumnNamesValidator
             {
                 return NLS.bind(Messages.NameValidator_invalid, columnName);
             }
-            final String columnKey = columnName.toUpperCase(Locale.ENGLISH);
+            final String columnKey = DatasetColumn.keyOf(columnName);
             for (final String seenColumnName : seenColumnNames)
             {
-                if (seenColumnName.toUpperCase(Locale.ENGLISH).equals(columnKey))
+                if (DatasetColumn.keyOf(seenColumnName).equals(columnKey))
                 {
                     return NLS.bind(Messages.NameValidator_used, columnName);
                 }

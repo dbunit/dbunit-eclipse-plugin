@@ -22,7 +22,6 @@ package org.dbunit.eclipse.dataset.ui.actions;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
@@ -64,11 +63,11 @@ public class RenameColumnAction extends GridAction
                         NLS.bind(Messages.Edit_noSuchTable, selection.tableKey())));
         final DatasetColumn currentColumn = table.getColumns().get(selection.anchorColumnIndex());
         final String currentName = currentColumn.name();
-        final String currentKey = currentName.toUpperCase(Locale.ENGLISH);
+        final String currentKey = currentColumn.key();
         final List<String> existingNames = new ArrayList<>();
         for (final DatasetColumn column : table.getColumns())
         {
-            if (!column.name().toUpperCase(Locale.ENGLISH).equals(currentKey))
+            if (!column.key().equals(currentKey))
             {
                 existingNames.add(column.name());
             }

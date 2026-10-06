@@ -22,7 +22,6 @@ package org.dbunit.eclipse.dataset.ui.grid;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
@@ -475,16 +474,11 @@ public final class DatasetGrid
         }
         for (int index = 0; index < oldColumns.size(); index++)
         {
-            if (!columnKey(oldColumns.get(index)).equals(columnKey(newColumns.get(index))))
+            if (!oldColumns.get(index).key().equals(newColumns.get(index).key()))
             {
                 return false;
             }
         }
         return true;
-    }
-
-    private static String columnKey(final DatasetColumn column)
-    {
-        return column.name().toUpperCase(Locale.ENGLISH);
     }
 }

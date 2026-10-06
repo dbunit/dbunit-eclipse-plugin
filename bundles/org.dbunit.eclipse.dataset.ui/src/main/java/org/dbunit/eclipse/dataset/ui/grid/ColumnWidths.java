@@ -21,7 +21,6 @@
 package org.dbunit.eclipse.dataset.ui.grid;
 
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
@@ -65,7 +64,7 @@ final class ColumnWidths
             final int width = bodyDataLayer.getConfiguredColumnWidthByPosition(index);
             if (width >= 0)
             {
-                widthsByColumnKey.put(columnKey(table, index), width);
+                widthsByColumnKey.put(table.getColumns().get(index).key(), width);
             }
         }
     }
@@ -78,17 +77,12 @@ final class ColumnWidths
     {
         for (int index = 0; index < table.getColumns().size(); index++)
         {
-            final String key = columnKey(table, index);
+            final String key = table.getColumns().get(index).key();
             final Integer remembered = widthsByColumnKey.get(key);
             final int width = remembered != null ? remembered : computeAutoWidth(natTable, table, index);
             bodyDataLayer.setColumnWidthByPosition(index, width);
             widthsByColumnKey.put(key, width);
         }
-    }
-
-    private static String columnKey(final DatasetTable table, final int columnIndex)
-    {
-        return table.getColumns().get(columnIndex).name().toUpperCase(Locale.ENGLISH);
     }
 
     private static int computeAutoWidth(final NatTable natTable, final DatasetTable table,

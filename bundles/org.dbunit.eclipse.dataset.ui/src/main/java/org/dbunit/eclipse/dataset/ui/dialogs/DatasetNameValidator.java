@@ -22,9 +22,9 @@ package org.dbunit.eclipse.dataset.ui.dialogs;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 
 import org.dbunit.eclipse.dataset.core.flatxml.XmlNames;
+import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.ui.Messages;
 import org.eclipse.jface.dialogs.IInputValidator;
 import org.eclipse.osgi.util.NLS;
@@ -41,9 +41,9 @@ public final class DatasetNameValidator implements IInputValidator
     /**
      * Creates a validator.
      *
-     * @param existingNames The names already in use; the entered name must not equal any of them after
-     *                       upper-casing both with Locale.ENGLISH, which is how the dataset model keys
-     *                       columns. The validator keeps its own copy of them.
+     * @param existingNames The names already in use; the entered name must not have the same key as any
+     *                       of them, which is how the dataset model tells columns apart, see
+     *                       {@link DatasetColumn#keyOf}. The validator keeps its own copy of them.
      */
     public DatasetNameValidator(final Collection<String> existingNames)
     {
@@ -61,10 +61,10 @@ public final class DatasetNameValidator implements IInputValidator
         {
             return NLS.bind(Messages.NameValidator_invalid, newText);
         }
-        final String newKey = newText.toUpperCase(Locale.ENGLISH);
+        final String newKey = DatasetColumn.keyOf(newText);
         for (final String existingName : existingNames)
         {
-            if (existingName.toUpperCase(Locale.ENGLISH).equals(newKey))
+            if (DatasetColumn.keyOf(existingName).equals(newKey))
             {
                 return NLS.bind(Messages.NameValidator_used, newText);
             }
