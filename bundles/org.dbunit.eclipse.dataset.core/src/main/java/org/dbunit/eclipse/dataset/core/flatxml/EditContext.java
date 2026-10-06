@@ -31,16 +31,15 @@ import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
 
 /**
- * What the classes that plan the edits of one operation read: the text of the document, the index and the
- * layout of the parse that all offsets come from, and an encoder for the charset that the document is saved
- * in. The dataset document creates one after it refreshed, for the operation that it is about to plan, so
- * the index and the layout always describe the text as it is. The text and the encoder are read when they
- * are asked for, not when the context is created.
+ * What the classes that plan the edits of one operation read: the index and the layout of the parse that
+ * all offsets come from, the text that was parsed, which the index holds, and an encoder for the charset
+ * that the document is saved in. The dataset document creates one after it refreshed, for the operation
+ * that it is about to plan, so the text, the index, and the layout always describe the document as it is,
+ * and planning copies nothing out of the document. The encoder is read when it is asked for, not when the
+ * context is created.
  */
 final class EditContext
 {
-    private final Supplier<String> text;
-
     private final FlatXmlIndex index;
 
     private final FlatXmlTextLayout layout;
@@ -54,18 +53,16 @@ final class EditContext
     /**
      * Creates the context of an operation.
      *
-     * @param text Returns the current text of the document.
-     * @param index The index of the parse that the offsets come from.
+     * @param index The index of the parse that the offsets come from, which holds the text that was parsed.
      * @param layout The layout of the text that was parsed.
      * @param charset Returns the document's current charset; a null result or a thrown exception falls back
      *                to UTF-8.
      * @param options The case-sensitivity and column-sensing options that the model was built with.
      * @param log Receives a warning status for each failure of the charset supplier.
      */
-    EditContext(final Supplier<String> text, final FlatXmlIndex index, final FlatXmlTextLayout layout,
-            final Supplier<Charset> charset, final FlatXmlOptions options, final Consumer<IStatus> log)
+    EditContext(final FlatXmlIndex index, final FlatXmlTextLayout layout, final Supplier<Charset> charset,
+            final FlatXmlOptions options, final Consumer<IStatus> log)
     {
-        this.text = text;
         this.index = index;
         this.layout = layout;
         this.charset = charset;
@@ -74,13 +71,14 @@ final class EditContext
     }
 
     /**
-     * Returns the current text of the document.
+     * Returns the text that the index was parsed from, which is the text of the document when the operation
+     * was planned.
      *
-     * @return The text, which equals the text that the index was parsed from.
+     * @return The text that the offsets of the index belong to.
      */
     String text()
     {
-        return text.get();
+        return index.getText();
     }
 
     /**

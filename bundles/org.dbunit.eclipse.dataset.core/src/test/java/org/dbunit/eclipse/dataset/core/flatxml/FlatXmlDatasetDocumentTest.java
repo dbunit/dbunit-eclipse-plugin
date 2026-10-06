@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.stream.IntStream;
 
 import org.dbunit.eclipse.dataset.core.TestDatasets;
@@ -1060,6 +1061,59 @@ class FlatXmlDatasetDocumentTest
 
         assertThat(document.get()).as("setCells must refresh and use fresh offsets after an external change.")
                 .isEqualTo("<dataset><AUDIT_LOG/><USERS ID=\"1\" NAME=\"Bob\"/></dataset>");
+    }
+
+    @Test
+    void testSetCells_whenTheModelIsCurrent_copiesTheTextOnlyToParseTheEditedDocument()
+    {
+        final String text = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
+        final List<CellChange> changes = List.of(new CellChange(0, "NAME", "Bob"));
+
+        final int copies =
+                copiesDuringEdit(text, datasetDocument -> datasetDocument.setCells("USERS", changes));
+
+        assertThat(copies).as("The edit must be planned on the text that the model was parsed from, so the "
+                + "only copy of the whole text is the one that parses the document after the edit.")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void testMoveRows_whenTheModelIsCurrent_copiesTheTextOnlyToParseTheEditedDocument()
+    {
+        final String text = "<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>";
+
+        final int copies =
+                copiesDuringEdit(text, datasetDocument -> datasetDocument.moveRows("USERS", 0, 1, 1));
+
+        assertThat(copies).as("The edit must be planned on the text that the model was parsed from, so the "
+                + "only copy of the whole text is the one that parses the document after the edit.")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void testDuplicateRows_whenTheModelIsCurrent_copiesTheTextOnlyToParseTheEditedDocument()
+    {
+        final String text = "<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>";
+
+        final int copies = copiesDuringEdit(text,
+                datasetDocument -> datasetDocument.duplicateRows("USERS", new int[] { 0 }));
+
+        assertThat(copies).as("The edit must be planned on the text that the model was parsed from, so the "
+                + "only copy of the whole text is the one that parses the document after the edit.")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void testRenameColumn_whenTheModelIsCurrent_copiesTheTextOnlyToParseTheEditedDocument()
+    {
+        final String text = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
+
+        final int copies = copiesDuringEdit(text,
+                datasetDocument -> datasetDocument.renameColumn("USERS", "NAME", "FULL_NAME"));
+
+        assertThat(copies).as("The edit must be planned on the text that the model was parsed from, so the "
+                + "only copy of the whole text is the one that parses the document after the edit.")
+                .isEqualTo(1);
     }
 
     @Test
@@ -3392,6 +3446,21 @@ class FlatXmlDatasetDocumentTest
     {
         return new FlatXmlDatasetDocument(document, DtdSource.NONE, FlatXmlOptions.DBUNIT_DEFAULTS,
                 () -> StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Returns how often an edit copies the whole text out of a document whose model is current.
+     */
+    private static int copiesDuringEdit(final String text, final Consumer<FlatXmlDatasetDocument> edit)
+    {
+        final CountingDocument document = new CountingDocument(text);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        final int copiesBefore = document.copies;
+
+        edit.accept(datasetDocument);
+
+        return document.copies - copiesBefore;
     }
 
     /**

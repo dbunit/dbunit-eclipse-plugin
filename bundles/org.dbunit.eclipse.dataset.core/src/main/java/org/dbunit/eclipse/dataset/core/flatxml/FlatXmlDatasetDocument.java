@@ -255,7 +255,7 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
 
     private EditContext editContext()
     {
-        return new EditContext(document::get, index, layout, charset, options, log);
+        return new EditContext(index, layout, charset, options, log);
     }
 
     private TableEdits tableEdits()

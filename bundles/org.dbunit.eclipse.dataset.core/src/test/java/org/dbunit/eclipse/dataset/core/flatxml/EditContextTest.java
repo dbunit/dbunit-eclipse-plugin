@@ -27,7 +27,6 @@ import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import org.dbunit.eclipse.dataset.core.DatasetCore;
@@ -36,8 +35,8 @@ import org.eclipse.core.runtime.Status;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests {@link EditContext}: what it hands out, when it reads the text, and the encoder that it falls back
- * to when the charset supplier gives none or fails.
+ * Tests {@link EditContext}: what it hands out, where its text comes from, and the encoder that it falls
+ * back to when the charset supplier gives none or fails.
  */
 class EditContextTest
 {
@@ -45,25 +44,17 @@ class EditContextTest
 
     private static EditContext contextWith(final Supplier<Charset> charset, final List<IStatus> statuses)
     {
-        return new EditContext(() -> "text", PARSED.index(), PARSED.layout(), charset,
-                FlatXmlOptions.DBUNIT_DEFAULTS, statuses::add);
+        return new EditContext(PARSED.index(), PARSED.layout(), charset, FlatXmlOptions.DBUNIT_DEFAULTS,
+                statuses::add);
     }
 
     @Test
-    void testText_whenCalledTwice_readsTheSupplierEachTime()
+    void testText_whenCalled_returnsTheTextThatTheIndexWasParsedFrom()
     {
-        final AtomicInteger reads = new AtomicInteger();
-        final EditContext context = new EditContext(() -> "text" + reads.incrementAndGet(), PARSED.index(),
-                PARSED.layout(), () -> StandardCharsets.UTF_8, FlatXmlOptions.DBUNIT_DEFAULTS, status ->
-                {
-                    // Nothing is logged here.
-                });
+        final EditContext context = contextWith(() -> StandardCharsets.UTF_8, new ArrayList<>());
 
-        final String first = context.text();
-        final String second = context.text();
-
-        assertThat(List.of(first, second)).as("The text must be read when it is asked for.")
-                .containsExactly("text1", "text2");
+        assertThat(context.text()).as("The text must be the one that the offsets of the index belong to, "
+                + "not a copy of it.").isSameAs(PARSED.index().getText());
     }
 
     @Test

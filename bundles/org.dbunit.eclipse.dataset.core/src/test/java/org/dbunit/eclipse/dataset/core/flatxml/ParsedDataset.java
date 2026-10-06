@@ -112,7 +112,7 @@ record ParsedDataset(String text, DatasetModel model, FlatXmlIndex index, FlatXm
      */
     EditContext editContext(final Charset charset)
     {
-        return new EditContext(() -> text, index, layout, () -> charset, options, status ->
+        return new EditContext(index, layout, () -> charset, options, status ->
         {
             // These tests do not look at the log.
         });
