@@ -107,13 +107,12 @@ final class TablesPage implements DatasetGridContext
         @Override
         public void documentAboutToBeChanged(final DocumentEvent event)
         {
-            // Nothing to do before a change: documentChanged marks the page for a refresh afterwards.
+            // Nothing to do before a change: documentChanged schedules a refresh afterwards.
         }
 
         @Override
         public void documentChanged(final DocumentEvent event)
         {
-            refreshPending = true;
             if (active)
             {
                 scheduleRefresh();
@@ -122,8 +121,6 @@ final class TablesPage implements DatasetGridContext
     };
 
     private boolean active;
-
-    private boolean refreshPending;
 
     private boolean refreshScheduled;
 
@@ -224,11 +221,7 @@ final class TablesPage implements DatasetGridContext
     {
         active = true;
         actions.activate();
-        if (refreshPending)
-        {
-            refreshPending = false;
-            datasetDocument.refresh();
-        }
+        datasetDocument.refresh();
         pageSelectionSync.onActivate().ifPresent(tabs::selectCell);
     }
 
@@ -526,11 +519,7 @@ final class TablesPage implements DatasetGridContext
             {
                 return;
             }
-            if (refreshPending)
-            {
-                refreshPending = false;
-                datasetDocument.refresh();
-            }
+            datasetDocument.refresh();
         });
     }
 

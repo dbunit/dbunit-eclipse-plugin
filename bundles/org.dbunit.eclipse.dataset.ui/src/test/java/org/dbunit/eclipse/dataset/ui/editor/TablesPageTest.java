@@ -530,6 +530,31 @@ class TablesPageTest
     }
 
     @Test
+    void testActivate_whenTheTextChangedWhileInactiveButTheSourceSelectionDidNotMove_refreshesTheModel()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            tablesPage.selectRegion(0, 0, 1, 1);
+            tablesPage.deactivate();
+            final IDocument document = sourceDocument(editor);
+            document.replace(document.getLength(), 0, "<!--x-->");
+            UiTestWorkspace.processEvents();
+
+            tablesPage.activate();
+
+            assertThat(editor.getDatasetDocument().isStale())
+                    .as("Activating the Tables page must refresh the model of a text that changed while it "
+                            + "was inactive, also when the selection of the Source page stayed where the "
+                            + "page left it.")
+                    .isFalse();
+        }
+    }
+
+    @Test
     void testActivate_whenTheTablesPageIsActive_activatesTheContextAndHandlers() throws Exception
     {
         try (UiTestWorkspace workspace = new UiTestWorkspace())
