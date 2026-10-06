@@ -44,8 +44,6 @@ import org.eclipse.swt.graphics.Point;
  */
 public final class FillDownAction extends GridAction
 {
-    private final DatasetGridContext context;
-
     /**
      * Creates the action.
      *
@@ -54,7 +52,6 @@ public final class FillDownAction extends GridAction
     public FillDownAction(final DatasetGridContext context)
     {
         super(DatasetCommandIds.FILL_DOWN, context);
-        this.context = context;
         setText(Messages.Action_fillDown);
         setImageDescriptor(DatasetImages.getImageDescriptor(DatasetImages.IMG_FILL_DOWN));
     }
@@ -90,21 +87,17 @@ public final class FillDownAction extends GridAction
                 () -> context.getDatasetDocument().setCells(selection.tableKey(), changes));
     }
 
+    /**
+     * Tells whether any selected cell can be filled, which is so when a selected cell is below the first
+     * row: a column with several selected cells fills those below its topmost one, and a column with one
+     * selected cell below the first row fills it from the row above. The answer comes from the snapshot of
+     * the selection, because it is worked out on every selection event, and the selected cells are too many
+     * to list each time when the whole table is selected.
+     */
     @Override
     protected boolean isEnabledFor(final GridSelection selection)
     {
-        if (selection.columnIndexes().isEmpty())
-        {
-            return false;
-        }
-        for (final List<Integer> selectedRows : selectedRowsByColumn(context).values())
-        {
-            if (sourceRowIndex(selectedRows) >= 0)
-            {
-                return true;
-            }
-        }
-        return false;
+        return selection.lastRowIndex() > 0;
     }
 
     /**

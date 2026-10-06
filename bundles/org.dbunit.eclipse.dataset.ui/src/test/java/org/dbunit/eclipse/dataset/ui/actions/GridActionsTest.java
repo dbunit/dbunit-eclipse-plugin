@@ -1752,6 +1752,63 @@ class GridActionsTest
     }
 
     @Test
+    void testUpdate_forFillDown_doesNotEnumerateTheSelectedCells()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                + "<USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final FillDownAction action = new FillDownAction(context);
+        context.rowIndexes = List.of(0, 1);
+        context.columnIndexes = List.of(0, 1);
+        context.selectedCellPositions =
+                List.of(new Point(0, 0), new Point(0, 1), new Point(1, 0), new Point(1, 1));
+
+        action.update(context.getSelection());
+
+        assertThat(action.isEnabled()).as("Two selected rows in a column enable Fill Down.").isTrue();
+        assertThat(context.selectedCellPositionReads)
+                .as("The enablement is worked out on every selection event, so it must read the snapshot "
+                        + "of the selection and not list every selected cell, which is a million for a big "
+                        + "table.")
+                .isZero();
+    }
+
+    @Test
+    void testUpdate_forFillDown_withOneCellInEachOfTwoColumnsOnTheFirstRow_isDisabled()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                + "<USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final FillDownAction action = new FillDownAction(context);
+        context.rowIndexes = List.of(0);
+        context.columnIndexes = List.of(0, 1);
+        context.selectedCellPositions = List.of(new Point(0, 0), new Point(1, 0));
+
+        action.update(context.getSelection());
+
+        assertThat(action.isEnabled())
+                .as("Each column has one selected cell in the first row, so none has a row above it.")
+                .isFalse();
+    }
+
+    @Test
+    void testUpdate_forFillDown_withCellsOnTheFirstAndSecondRowInDifferentColumns_isEnabled()
+    {
+        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                + "<USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final TestContext context = new TestContext(datasetDocument, "USERS");
+        final FillDownAction action = new FillDownAction(context);
+        context.rowIndexes = List.of(0, 1);
+        context.columnIndexes = List.of(0, 1);
+        context.selectedCellPositions = List.of(new Point(0, 0), new Point(1, 1));
+
+        action.update(context.getSelection());
+
+        assertThat(action.isEnabled())
+                .as("The cell on the second row has the row above it, so its column can be filled.").isTrue();
+    }
+
+    @Test
     void testFillDown_withANonRectangularSelection_fillsEachColumnFromItsOwnTopSelectedCell()
     {
         final FlatXmlDatasetDocument datasetDocument = create(
@@ -2163,6 +2220,8 @@ class GridActionsTest
 
         private List<Point> selectedCellPositions = List.of();
 
+        private int selectedCellPositionReads;
+
         private Text activeCellEditorText;
 
         private boolean selectAllCalled;
@@ -2321,6 +2380,7 @@ class GridActionsTest
         @Override
         public List<Point> getSelectedCellPositions()
         {
+            selectedCellPositionReads++;
             return selectedCellPositions;
         }
 
