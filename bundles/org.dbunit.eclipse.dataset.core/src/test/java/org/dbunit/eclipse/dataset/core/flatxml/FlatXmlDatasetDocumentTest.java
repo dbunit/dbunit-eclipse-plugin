@@ -117,6 +117,61 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testIsBlank_forTextThatIsEmptyOrOnlyWhitespace_isTrue()
+    {
+        assertThat(List.of(create(new Document("")).isBlank(), create(new Document(" \t\r\n ")).isBlank(),
+                create(new Document("\n".repeat(10_000))).isBlank()))
+                .as("An empty text and a text of whitespace only are blank.")
+                .containsExactly(true, true, true);
+    }
+
+    @Test
+    void testIsBlank_forTextWithAnyOtherCharacter_isFalse()
+    {
+        final String nonBreakingSpace = String.valueOf((char) 0xA0);
+
+        assertThat(List.of(create(new Document("x")).isBlank(),
+                create(new Document("   <dataset/>")).isBlank(),
+                create(new Document(" ".repeat(10_000) + "x")).isBlank(),
+                create(new Document(nonBreakingSpace)).isBlank()))
+                .as("Any character that is not whitespace makes the text not blank, a no-break space too, "
+                        + "as for String.isBlank.")
+                .containsExactly(false, false, false, false);
+    }
+
+    @Test
+    void testIsBlank_whenTheTextIsNotBlank_doesNotCopyTheText()
+    {
+        final CountingDocument document = new CountingDocument("<dataset><USERS ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final int copiesBefore = document.copies;
+
+        final boolean blank = datasetDocument.isBlank();
+
+        assertThat(blank).as("The text is not blank.").isFalse();
+        assertThat(document.copies - copiesBefore)
+                .as("The page asks several times for each change of the text, so the answer must not copy "
+                        + "the whole text each time.")
+                .isZero();
+    }
+
+    @Test
+    void testIsBlank_afterTheTextChanges_answersForTheTextAsItIsNow()
+            throws Exception
+    {
+        final IDocument document = new Document("  ");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        document.replace(1, 0, "x");
+
+        assertThat(datasetDocument.isBlank())
+                .as("Text that arrived before the model was refreshed must count at once, because "
+                        + "creating the empty dataset must not overwrite it.")
+                .isFalse();
+    }
+
+    @Test
     void testCreateEmptyDataset_whenDocumentIsBlank_replacesItAndUndoRestoresTheBlankText()
             throws Exception
     {
@@ -3337,6 +3392,26 @@ class FlatXmlDatasetDocumentTest
     {
         return new FlatXmlDatasetDocument(document, DtdSource.NONE, FlatXmlOptions.DBUNIT_DEFAULTS,
                 () -> StandardCharsets.UTF_8);
+    }
+
+    /**
+     * A document that counts how often its whole text is copied out of it.
+     */
+    private static final class CountingDocument extends Document
+    {
+        private int copies;
+
+        CountingDocument(final String text)
+        {
+            super(text);
+        }
+
+        @Override
+        public String get()
+        {
+            copies++;
+            return super.get();
+        }
     }
 
     private static final class MutableDtdSource implements DtdSource

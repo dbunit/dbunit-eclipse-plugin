@@ -44,6 +44,7 @@ import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.core.runtime.IStatus;
+import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentListener;
@@ -432,10 +433,35 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
         listeners.clear();
     }
 
+    /**
+     * Tells whether the text is empty or only whitespace, as {@link String#isBlank()} does, from the text
+     * as it is now. It reads characters up to the first one that is not whitespace instead of copying the
+     * whole text, because the Tables page asks on each change.
+     */
     @Override
     public boolean isBlank()
     {
-        return document.get().isBlank();
+        final int length = document.getLength();
+        for (int offset = 0; offset < length; offset++)
+        {
+            if (!Character.isWhitespace(characterAt(offset)))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private char characterAt(final int offset)
+    {
+        try
+        {
+            return document.getChar(offset);
+        }
+        catch (final BadLocationException e)
+        {
+            throw new IllegalStateException("The text has no character at " + offset + ".", e);
+        }
     }
 
     @Override
