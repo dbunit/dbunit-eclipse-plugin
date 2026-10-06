@@ -153,6 +153,8 @@ public final class FlatXmlContentDescriber extends XMLContentDescriber
      */
     private static final class DescriptionKnown extends SAXException
     {
+        private static final long serialVersionUID = 1L;
+
         private final int result;
 
         private DescriptionKnown(final int result)
