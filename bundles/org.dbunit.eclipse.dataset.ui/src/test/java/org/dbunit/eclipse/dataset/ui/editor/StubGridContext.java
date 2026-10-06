@@ -113,30 +113,6 @@ final class StubGridContext implements DatasetGridContext
     }
 
     @Override
-    public void expectRename(final String oldKey, final String newKey)
-    {
-        // The stub has no tabs.
-    }
-
-    @Override
-    public void cancelExpectedRename()
-    {
-        // The stub has no tabs.
-    }
-
-    @Override
-    public void cancelExpectedNewTableSelected()
-    {
-        // The stub has no tabs.
-    }
-
-    @Override
-    public void expectNewTableSelected(final String tableKey)
-    {
-        // The stub has no tabs.
-    }
-
-    @Override
     public Text getActiveCellEditorText()
     {
         return null;

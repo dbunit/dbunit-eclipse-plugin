@@ -219,6 +219,8 @@ dbUnit treats such an element as an empty table, which operations such as `DELET
 The first row that you insert into such a table replaces the element, except for what the element holds,
 such as a comment, which stays.
 *Rename Table* renames every element of the table.
+The table keeps its tab, its column widths, and its selection when its name changes and its columns and rows do not,
+whether you rename it with this command, undo or redo a rename, or rename its elements on the Source page.
 When the DOCTYPE has an internal subset that declares the table,
 the table is renamed there too, in its `ELEMENT` and `ATTLIST` declarations and in the content model of the
 `dataset` element, as part of the same undo step, so dbUnit still finds the table in the DTD.

@@ -739,7 +739,7 @@ class GridActionsTest
     }
 
     @Test
-    void testAddTable_whenTheDialogReturnsANameAndColumns_addsTheTableAndSelectsItsTab()
+    void testAddTable_whenTheDialogReturnsANameAndColumns_addsTheTable()
     {
         final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
         final TestContext context = new TestContext(datasetDocument, "USERS");
@@ -771,13 +771,10 @@ class GridActionsTest
         assertThat(table.getColumns()).extracting(DatasetColumn::name)
                 .as("Add Table must create the table with the entered columns.")
                 .containsExactly("ID", "BALANCE");
-        assertThat(context.expectedNewTableKey)
-                .as("Add Table must select the new table's tab by its case-folded key.")
-                .isEqualTo("ACCOUNTS");
     }
 
     @Test
-    void testAddTable_whenTheEditIsRejected_cancelsTheNewTableExpectation()
+    void testAddTable_whenTheEditIsRejected_createsNoTable()
     {
         final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
         final TestContext context = new TestContext(datasetDocument, "USERS");
@@ -808,10 +805,6 @@ class GridActionsTest
 
         assertThat(datasetDocument.getModel().findTable("ACCOUNTS"))
                 .as("A rejected edit must not create the table.").isEmpty();
-        assertThat(context.expectedNewTableKey)
-                .as("A rejected edit must cancel the new-table expectation so a later reconciliation "
-                        + "cannot match it by coincidence.")
-                .isNull();
     }
 
     @Test
@@ -916,7 +909,7 @@ class GridActionsTest
     }
 
     @Test
-    void testRenameTable_whenTheDialogReturnsANewName_renamesTheTableAndKeepsItsTab()
+    void testRenameTable_whenTheDialogReturnsANewName_renamesTheTable()
     {
         final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
         final TestContext context = new TestContext(datasetDocument, "USERS");
@@ -934,14 +927,10 @@ class GridActionsTest
 
         assertThat(datasetDocument.getModel().findTable("CUSTOMERS")).as("Rename Table must apply the entered name.")
                 .isPresent();
-        assertThat(context.expectedRenameOldKey).as("Rename Table must record the old tab key.")
-                .isEqualTo("USERS");
-        assertThat(context.expectedRenameNewKey)
-                .as("Rename Table must record the new tab's case-folded key.").isEqualTo("CUSTOMERS");
     }
 
     @Test
-    void testRenameTable_whenTheEditIsRejected_cancelsTheRenameExpectation()
+    void testRenameTable_whenTheEditIsRejected_leavesTheTableAsItWas()
     {
         final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
         final TestContext context = new TestContext(datasetDocument, "USERS");
@@ -960,11 +949,6 @@ class GridActionsTest
 
         assertThat(datasetDocument.getModel().findTable("USERS"))
                 .as("A rejected edit must not rename the table.").isPresent();
-        assertThat(context.expectedRenameOldKey)
-                .as("A rejected edit must cancel the rename expectation so a later reconciliation cannot "
-                        + "match it by coincidence.")
-                .isNull();
-        assertThat(context.expectedRenameNewKey).isNull();
     }
 
     @Test
@@ -2379,12 +2363,6 @@ class GridActionsTest
 
         private Rectangle selectedRegion;
 
-        private String expectedRenameOldKey;
-
-        private String expectedRenameNewKey;
-
-        private String expectedNewTableKey;
-
         TestContext(final DatasetDocument datasetDocument, final String tableKey)
         {
             this.datasetDocument = datasetDocument;
@@ -2482,32 +2460,6 @@ class GridActionsTest
         public Shell getShell()
         {
             return shell;
-        }
-
-        @Override
-        public void expectRename(final String oldKey, final String newKey)
-        {
-            expectedRenameOldKey = oldKey;
-            expectedRenameNewKey = newKey;
-        }
-
-        @Override
-        public void cancelExpectedRename()
-        {
-            expectedRenameOldKey = null;
-            expectedRenameNewKey = null;
-        }
-
-        @Override
-        public void cancelExpectedNewTableSelected()
-        {
-            expectedNewTableKey = null;
-        }
-
-        @Override
-        public void expectNewTableSelected(final String tableKey)
-        {
-            expectedNewTableKey = tableKey;
         }
 
         @Override

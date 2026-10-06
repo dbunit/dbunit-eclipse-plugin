@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.dbunit.eclipse.dataset.core.edit.TableChanges;
 import org.dbunit.eclipse.dataset.core.model.CellAddress;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
@@ -48,10 +49,10 @@ import org.eclipse.ui.PlatformUI;
 /**
  * The sheet tabs of the Tables page: one tab with a {@link DatasetGrid} for each table of the dataset model,
  * in the order of the model, with the name, the tooltip, the font, and the problem icon of each tab. The page
- * tells the tabs before it renames or adds a table, so that the renamed table keeps its tab and its grid and
- * the added table's tab is selected. A tab stays selected when the tabs move, and when the selected table is
- * gone, the tab that takes its place is selected. All of it belongs to the tab folder, so it may be used on
- * the UI thread only.
+ * tells the tabs which tables of the model are tables that they show under other keys, so that a renamed
+ * table keeps its tab and its grid, and which table's tab to select. A tab stays selected when the tabs
+ * move, and when the selected table is gone, the tab that takes its place is selected. All of it belongs to
+ * the tab folder, so it may be used on the UI thread only.
  */
 final class TableTabs
 {
@@ -66,12 +67,6 @@ final class TableTabs
     private final Map<String, CTabItem> tabsByKey = new LinkedHashMap<>();
 
     private final Map<String, DatasetGrid> gridsByKey = new LinkedHashMap<>();
-
-    private String expectedRenameOldKey;
-
-    private String expectedRenameNewKey;
-
-    private String expectedNewTableKey;
 
     /**
      * Creates the tabs of a page.
@@ -132,28 +127,6 @@ final class TableTabs
         }
     }
 
-    void expectRename(final String oldKey, final String newKey)
-    {
-        expectedRenameOldKey = oldKey;
-        expectedRenameNewKey = newKey;
-    }
-
-    void expectNewTableSelected(final String tableKey)
-    {
-        expectedNewTableKey = tableKey;
-    }
-
-    void cancelExpectedRename()
-    {
-        expectedRenameOldKey = null;
-        expectedRenameNewKey = null;
-    }
-
-    void cancelExpectedNewTableSelected()
-    {
-        expectedNewTableKey = null;
-    }
-
     /**
      * Has every grid apply the theme of the workbench again when it changed.
      */
@@ -199,21 +172,34 @@ final class TableTabs
     }
 
     /**
-     * Brings the tabs in line with the tables of the model. The tabs of tables that are gone are disposed
-     * first, so that they do not make the tabs after them move, then the tab of each table is created or
-     * moved to the table's place and updated. The tab that was selected stays selected, also when it moves,
-     * and when its table is gone, the tab that takes its place is selected. The tab of a table that the page
-     * announced as new is selected in any case.
+     * Brings the tabs in line with the tables of a model, when nothing is known about how they came from
+     * the tables that the tabs show: a table under a new key gets a new tab.
      *
      * @param model The model whose tables the tabs show.
      */
     void reconcile(final DatasetModel model)
     {
+        reconcile(model, TableChanges.NONE, null);
+    }
+
+    /**
+     * Brings the tabs in line with the tables of the model. A table that was renamed keeps its tab and its
+     * grid under its new key. The tabs of tables that are gone are disposed first, so that they do not make
+     * the tabs after them move, then the tab of each table is created or moved to the table's place and
+     * updated. The tab that was selected stays selected, also when it moves, and when its table is gone, the
+     * tab that takes its place is selected. The tab of the table to select is selected in any case.
+     *
+     * @param model The model whose tables the tabs show.
+     * @param changes Which tables of the model are tables that the tabs show under other keys.
+     * @param tableKeyToSelect The key of the table whose tab is selected, or null to keep the selection.
+     */
+    void reconcile(final DatasetModel model, final TableChanges changes, final String tableKeyToSelect)
+    {
         final Map<String, DatasetTable> tables = tablesByKey(model);
         final DatasetGrid selectedGrid = activeGrid();
         final int selectedIndex = tabFolder.getSelectionIndex();
 
-        applyExpectedRename(tables.keySet());
+        applyRenames(changes.renamedKeys(), tables.keySet());
         disposeStaleTabs(tables.keySet());
         int index = 0;
         for (final DatasetTable table : tables.values())
@@ -224,10 +210,7 @@ final class TableTabs
             updateTab(item, table, model);
             index++;
         }
-        selectTab(selectedGrid, selectedIndex);
-        expectedRenameOldKey = null;
-        expectedRenameNewKey = null;
-        expectedNewTableKey = null;
+        selectTab(selectedGrid, selectedIndex, tableKeyToSelect);
     }
 
     private static Map<String, DatasetTable> tablesByKey(final DatasetModel model)
@@ -240,17 +223,22 @@ final class TableTabs
         return tables;
     }
 
-    private void applyExpectedRename(final Set<String> tableKeys)
+    private void applyRenames(final Map<String, String> renamedKeys, final Set<String> tableKeys)
     {
-        final boolean renameApplies = expectedRenameNewKey != null && tableKeys.contains(expectedRenameNewKey)
-                && tabsByKey.containsKey(expectedRenameOldKey);
-        if (renameApplies)
+        for (final Map.Entry<String, String> renamed : renamedKeys.entrySet())
         {
-            final CTabItem item = tabsByKey.remove(expectedRenameOldKey);
-            tabsByKey.put(expectedRenameNewKey, item);
-            final DatasetGrid grid = gridsByKey.remove(expectedRenameOldKey);
-            grid.tableRenamed(expectedRenameNewKey);
-            gridsByKey.put(expectedRenameNewKey, grid);
+            final String oldKey = renamed.getKey();
+            final String newKey = renamed.getValue();
+            final boolean renameApplies = tableKeys.contains(newKey) && tabsByKey.containsKey(oldKey)
+                    && !tabsByKey.containsKey(newKey);
+            if (renameApplies)
+            {
+                final CTabItem item = tabsByKey.remove(oldKey);
+                tabsByKey.put(newKey, item);
+                final DatasetGrid grid = gridsByKey.remove(oldKey);
+                grid.tableRenamed(newKey);
+                gridsByKey.put(newKey, grid);
+            }
         }
     }
 
@@ -313,12 +301,13 @@ final class TableTabs
         return newItem;
     }
 
-    private void selectTab(final DatasetGrid previousGrid, final int previousIndex)
+    private void selectTab(final DatasetGrid previousGrid, final int previousIndex,
+            final String tableKeyToSelect)
     {
-        final CTabItem newTableTab = tabsByKey.get(expectedNewTableKey);
-        if (newTableTab != null)
+        final CTabItem tabToSelect = tabsByKey.get(tableKeyToSelect);
+        if (tabToSelect != null)
         {
-            tabFolder.setSelection(newTableTab);
+            tabFolder.setSelection(tabToSelect);
         }
         else if (tabOf(previousGrid) == null)
         {

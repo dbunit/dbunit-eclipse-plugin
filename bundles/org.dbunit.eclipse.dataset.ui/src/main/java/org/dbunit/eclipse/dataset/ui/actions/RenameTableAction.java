@@ -77,13 +77,7 @@ public class RenameTableAction extends GridAction
         {
             return;
         }
-        context.expectRename(selection.tableKey(), context.getDatasetDocument().tableKeyOf(newName));
-        final boolean renamed = context.executeEdit(
-                () -> context.getDatasetDocument().renameTable(selection.tableKey(), newName));
-        if (renamed == false)
-        {
-            context.cancelExpectedRename();
-        }
+        context.executeEdit(() -> context.getDatasetDocument().renameTable(selection.tableKey(), newName));
     }
 
     /**

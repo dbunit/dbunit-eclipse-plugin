@@ -69,13 +69,7 @@ public class AddTableAction extends GridAction
         }
         final String tableName = dialog.getTableName();
         final List<String> columnNames = dialog.getColumnNames();
-        context.expectNewTableSelected(context.getDatasetDocument().tableKeyOf(tableName));
-        final boolean added =
-                context.executeEdit(() -> context.getDatasetDocument().addTable(tableName, columnNames));
-        if (added == false)
-        {
-            context.cancelExpectedNewTableSelected();
-        }
+        context.executeEdit(() -> context.getDatasetDocument().addTable(tableName, columnNames));
     }
 
     /**

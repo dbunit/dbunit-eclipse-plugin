@@ -22,7 +22,10 @@ package org.dbunit.eclipse.dataset.ui.editor;
 
 import java.util.List;
 
+import org.dbunit.eclipse.dataset.core.edit.ChangeOrigin;
 import org.dbunit.eclipse.dataset.core.edit.DatasetDocument;
+import org.dbunit.eclipse.dataset.core.edit.DatasetModelChangeEvent;
+import org.dbunit.eclipse.dataset.core.edit.TableChanges;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.core.model.CellAddress;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
@@ -186,7 +189,7 @@ final class TablesPage implements DatasetGridContext
         final IDocument document = sourceDocument();
         listenedDocument = document;
         document.addDocumentListener(sourceDocumentListener);
-        datasetDocument.addModelListener(event -> reconcile());
+        datasetDocument.addModelListener(event -> reconcile(event));
 
         reconcile();
     }
@@ -270,30 +273,6 @@ final class TablesPage implements DatasetGridContext
     void repaintGrids()
     {
         tabs.repaintGrids();
-    }
-
-    @Override
-    public void expectRename(final String oldKey, final String newKey)
-    {
-        tabs.expectRename(oldKey, newKey);
-    }
-
-    @Override
-    public void expectNewTableSelected(final String tableKey)
-    {
-        tabs.expectNewTableSelected(tableKey);
-    }
-
-    @Override
-    public void cancelExpectedRename()
-    {
-        tabs.cancelExpectedRename();
-    }
-
-    @Override
-    public void cancelExpectedNewTableSelected()
-    {
-        tabs.cancelExpectedNewTableSelected();
     }
 
     @Override
@@ -525,6 +504,25 @@ final class TablesPage implements DatasetGridContext
 
     private void reconcile()
     {
+        reconcile(TableChanges.NONE, null);
+    }
+
+    /**
+     * Brings the page in line with a change of the model. A table that an edit added gets its tab selected;
+     * a table that appears any other way, as after an undo or a change on the Source page, does not take
+     * the selection from the table that the user is working on.
+     */
+    private void reconcile(final DatasetModelChangeEvent event)
+    {
+        final TableChanges changes = event.tableChanges();
+        final boolean anEditAddedATable =
+                event.origin() == ChangeOrigin.EDIT && !changes.addedKeys().isEmpty();
+        final String tableKeyToSelect = anEditAddedATable ? changes.addedKeys().get(0) : null;
+        reconcile(changes, tableKeyToSelect);
+    }
+
+    private void reconcile(final TableChanges changes, final String tableKeyToSelect)
+    {
         if (control.isDisposed())
         {
             return;
@@ -544,7 +542,7 @@ final class TablesPage implements DatasetGridContext
         }
         else
         {
-            tabs.reconcile(model);
+            tabs.reconcile(model, changes, tableKeyToSelect);
             contentStackLayout.topControl = tabFolder;
         }
         contentStack.layout();

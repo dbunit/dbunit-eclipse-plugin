@@ -24,10 +24,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
+import org.dbunit.eclipse.dataset.core.edit.TableChanges;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlOptions;
 import org.dbunit.eclipse.dataset.core.model.CellAddress;
@@ -198,14 +201,13 @@ class TableTabsTest
     }
 
     @Test
-    void testReconcile_whenARenameIsExpected_keepsTheTabAndGridUnderTheNewKey()
+    void testReconcile_whenARenameIsReported_keepsTheTabAndGridUnderTheNewKey()
     {
         tabs.reconcile(show("<dataset><USERS ID=\"1\"/></dataset>"));
         final CTabItem usersTab = tabFolder.getItem(0);
         final Control usersGrid = usersTab.getControl();
 
-        tabs.expectRename("USERS", "CUSTOMERS");
-        tabs.reconcile(show("<dataset><CUSTOMERS ID=\"1\"/></dataset>"));
+        tabs.reconcile(show("<dataset><CUSTOMERS ID=\"1\"/></dataset>"), renamed("USERS", "CUSTOMERS"), null);
 
         assertThat(tabFolder.getItem(0)).as("The renamed table must keep its tab.").isSameAs(usersTab);
         assertThat(usersTab.getText()).as("The tab must show the new name.").isEqualTo("CUSTOMERS");
@@ -216,7 +218,7 @@ class TableTabsTest
     }
 
     @Test
-    void testReconcile_whenARenameIsNotExpected_replacesTheTabAndGrid()
+    void testReconcile_whenNoRenameIsReported_replacesTheTabAndGrid()
     {
         tabs.reconcile(show("<dataset><USERS ID=\"1\"/></dataset>"));
         final Control usersGrid = tabFolder.getItem(0).getControl();
@@ -229,40 +231,14 @@ class TableTabsTest
     }
 
     @Test
-    void testCancelExpectedRename_beforeTheReconcile_replacesTheTabAndGrid()
-    {
-        tabs.reconcile(show("<dataset><USERS ID=\"1\"/></dataset>"));
-        final Control usersGrid = tabFolder.getItem(0).getControl();
-
-        tabs.expectRename("USERS", "CUSTOMERS");
-        tabs.cancelExpectedRename();
-        tabs.reconcile(show("<dataset><CUSTOMERS ID=\"1\"/></dataset>"));
-
-        assertThat(usersGrid.isDisposed()).as("A cancelled rename must not keep the grid.").isTrue();
-    }
-
-    @Test
-    void testReconcile_whenAnExpectedRenameDidNotHappen_forgetsItForTheNextReconcile()
-    {
-        tabs.reconcile(show("<dataset><USERS ID=\"1\"/></dataset>"));
-        tabs.expectRename("USERS", "CUSTOMERS");
-        tabs.reconcile(show("<dataset><USERS ID=\"1\"/><NOTES ID=\"1\"/></dataset>"));
-        final Control usersGrid = tabFolder.getItem(0).getControl();
-
-        tabs.reconcile(show("<dataset><CUSTOMERS ID=\"1\"/><NOTES ID=\"1\"/></dataset>"));
-
-        assertThat(usersGrid.isDisposed()).as("An expectation must last for one reconcile.").isTrue();
-    }
-
-    @Test
-    void testReconcile_whenAnExpectedRenameDidNotHappen_keepsTheTabAndGridOfTheOldName()
+    void testReconcile_whenAReportedRenameHasNoTableUnderTheNewKey_keepsTheTabAndGridOfTheOldKey()
     {
         tabs.reconcile(show("<dataset><USERS ID=\"1\"/></dataset>"));
         final CTabItem usersTab = tabFolder.getItem(0);
         final Control usersGrid = usersTab.getControl();
 
-        tabs.expectRename("USERS", "CUSTOMERS");
-        tabs.reconcile(show("<dataset><USERS ID=\"1\"/><NOTES ID=\"1\"/></dataset>"));
+        tabs.reconcile(show("<dataset><USERS ID=\"1\"/><NOTES ID=\"1\"/></dataset>"),
+                renamed("USERS", "CUSTOMERS"), null);
 
         assertThat(tabFolder.getItem(0)).as("A table that was not renamed must keep its tab.")
                 .isSameAs(usersTab);
@@ -271,41 +247,84 @@ class TableTabsTest
     }
 
     @Test
-    void testReconcile_whenANewTableIsExpected_selectsItsTab()
+    void testReconcile_whenAReportedRenameHasNoTabUnderTheOldKey_createsTheTabOfTheNewKey()
+    {
+        tabs.reconcile(show("<dataset><NOTES ID=\"1\"/></dataset>"));
+        final CTabItem notesTab = tabFolder.getItem(0);
+
+        tabs.reconcile(show("<dataset><NOTES ID=\"1\"/><CUSTOMERS ID=\"1\"/></dataset>"),
+                renamed("USERS", "CUSTOMERS"), null);
+
+        assertThat(tabTexts()).as("The table under the new key must get a tab of its own.")
+                .containsExactly("NOTES", "CUSTOMERS");
+        assertThat(tabFolder.getItem(0)).as("The other table must keep its tab.").isSameAs(notesTab);
+    }
+
+    @Test
+    void testReconcile_whenAReportedRenameTargetsAKeyThatHasATabAlready_keepsBothTabs()
+    {
+        final String text = "<dataset><USERS ID=\"1\"/><CUSTOMERS ID=\"1\"/></dataset>";
+        tabs.reconcile(show(text));
+        final CTabItem usersTab = tabFolder.getItem(0);
+        final CTabItem customersTab = tabFolder.getItem(1);
+
+        tabs.reconcile(show(text), renamed("USERS", "CUSTOMERS"), null);
+
+        assertThat(List.of(tabFolder.getItem(0), tabFolder.getItem(1)))
+                .as("A rename must not take the tab of a table that has its own.")
+                .containsExactly(usersTab, customersTab);
+    }
+
+    @Test
+    void testReconcile_whenTwoTablesAreRenamedAtOnce_keepsBothTabsAndGrids()
+    {
+        tabs.reconcile(show("<dataset><A ID=\"1\"/><B ID=\"1\"/></dataset>"));
+        final Control gridOfA = tabFolder.getItem(0).getControl();
+        final Control gridOfB = tabFolder.getItem(1).getControl();
+        final Map<String, String> renamedKeys = new LinkedHashMap<>();
+        renamedKeys.put("A", "X");
+        renamedKeys.put("B", "Y");
+
+        tabs.reconcile(show("<dataset><X ID=\"1\"/><Y ID=\"1\"/></dataset>"),
+                new TableChanges(renamedKeys, List.of()), null);
+
+        assertThat(List.of(tabFolder.getItem(0).getControl(), tabFolder.getItem(1).getControl()))
+                .as("Each renamed table must keep its own grid.").containsExactly(gridOfA, gridOfB);
+        assertThat(tabTexts()).as("The tabs must show the new names.").containsExactly("X", "Y");
+    }
+
+    @Test
+    void testReconcile_whenATableToSelectIsGiven_selectsItsTab()
     {
         tabs.reconcile(show("<dataset><USERS ID=\"1\"/></dataset>"));
 
-        tabs.expectNewTableSelected("ORDERS");
-        tabs.reconcile(show(USERS_AND_ORDERS));
+        tabs.reconcile(show(USERS_AND_ORDERS), TableChanges.NONE, "ORDERS");
 
-        assertThat(tabFolder.getSelection().getText()).as("The new table's tab must be selected.")
+        assertThat(tabFolder.getSelection().getText()).as("The tab of the table to select must be selected.")
                 .isEqualTo("ORDERS");
     }
 
     @Test
-    void testCancelExpectedNewTableSelected_beforeTheReconcile_keepsTheSelection()
+    void testReconcile_whenNoTableToSelectIsGiven_keepsTheSelection()
     {
         tabs.reconcile(show("<dataset><USERS ID=\"1\"/></dataset>"));
 
-        tabs.expectNewTableSelected("ORDERS");
-        tabs.cancelExpectedNewTableSelected();
-        tabs.reconcile(show(USERS_AND_ORDERS));
+        tabs.reconcile(show(USERS_AND_ORDERS), new TableChanges(Map.of(), List.of("ORDERS")), null);
 
-        assertThat(tabFolder.getSelection().getText()).as("A cancelled expectation must not move the selection.")
+        assertThat(tabFolder.getSelection().getText()).as("An added table alone must not move the selection.")
                 .isEqualTo("USERS");
     }
 
     @Test
-    void testReconcile_whenTheExpectedNewTableDidNotAppear_forgetsItForTheNextReconcile()
+    void testReconcile_whenTheTableToSelectHasNoTab_keepsTheSelection()
     {
-        tabs.reconcile(show("<dataset><USERS ID=\"1\"/></dataset>"));
-        tabs.expectNewTableSelected("ORDERS");
-        tabs.reconcile(show("<dataset><USERS ID=\"1\"/></dataset>"));
-
         tabs.reconcile(show(USERS_AND_ORDERS));
+        tabFolder.setSelection(1);
 
-        assertThat(tabFolder.getSelection().getText()).as("An expectation must last for one reconcile.")
-                .isEqualTo("USERS");
+        tabs.reconcile(show(USERS_AND_ORDERS), TableChanges.NONE, "NOTES");
+
+        assertThat(tabFolder.getSelection().getText()).as("A table without a tab cannot be selected.")
+                .isEqualTo("ORDERS");
     }
 
     @Test
@@ -385,8 +404,8 @@ class TableTabsTest
     {
         tabs.reconcile(show(A_B_C));
         tabFolder.setSelection(1);
-        tabs.expectRename("B", "X");
-        tabs.reconcile(show("<dataset><A ID=\"1\"/><X ID=\"1\"/><C ID=\"1\"/></dataset>"));
+        tabs.reconcile(show("<dataset><A ID=\"1\"/><X ID=\"1\"/><C ID=\"1\"/></dataset>"),
+                renamed("B", "X"), null);
         final CTabItem tabOfC = tabFolder.getItem(2);
         final Control gridOfC = tabOfC.getControl();
 
@@ -746,6 +765,11 @@ class TableTabsTest
             texts.add(item.getText());
         }
         return texts;
+    }
+
+    private static TableChanges renamed(final String oldKey, final String newKey)
+    {
+        return new TableChanges(Map.of(oldKey, newKey), List.of());
     }
 
     private static CellAddress anchorOf(final GridSelection selection)

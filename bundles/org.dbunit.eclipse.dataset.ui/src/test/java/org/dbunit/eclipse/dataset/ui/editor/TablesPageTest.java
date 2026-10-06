@@ -32,6 +32,7 @@ import java.util.List;
 
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
+import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlOptions;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.actions.DatasetCommandIds;
@@ -60,6 +61,7 @@ import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
@@ -192,25 +194,155 @@ class TablesPageTest
     }
 
     @Test
-    void testTablesPage_whenRenamingATableThroughExpectRename_keepsTheSameTabItem() throws Exception
+    void testTablesPage_whenATableIsRenamedByTheDocument_keepsItsTabAndGrid() throws Exception
     {
         try (UiTestWorkspace workspace = new UiTestWorkspace())
         {
-            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\"/></dataset>");
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><ORDERS ID=\"1\"/></dataset>");
             final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
             final TablesPage tablesPage = editor.getTablesPage();
-            final CTabItem originalItem = tablesPage.getTabFolder().getItem(0);
+            final CTabItem usersTab = tablesPage.getTabFolder().getItem(0);
+            final Control usersGrid = usersTab.getControl();
 
-            tablesPage.expectRename("USERS", "CUSTOMERS");
             editor.getDatasetDocument().renameTable("USERS", "CUSTOMERS");
 
-            assertThat(tablesPage.getTabFolder().getItemCount()).as("The rename must not add a tab.")
-                    .isEqualTo(1);
             assertThat(tablesPage.getTabFolder().getItem(0))
-                    .as("expectRename must keep the same tab item, not recreate it.")
-                    .isSameAs(originalItem);
+                    .as("A rename that nobody announced must still leave the table its tab.")
+                    .isSameAs(usersTab);
+            assertThat(usersTab.getControl()).as("The renamed table must keep its grid.").isSameAs(usersGrid);
+            assertThat(usersTab.getText()).as("The tab must show the new name.").isEqualTo("CUSTOMERS");
+        }
+    }
+
+    @Test
+    void testTablesPage_whenAnEditAddsATable_selectsItsTab() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\"/><ORDERS ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final CTabFolder tabFolder = editor.getTablesPage().getTabFolder();
+
+            editor.getDatasetDocument().addTable("ACCOUNTS", List.of("ID"));
+
+            assertThat(tabFolder.getSelection().getText()).as("The tab of the table that an edit added "
+                    + "must be selected, wherever the table is in the model.").isEqualTo("ACCOUNTS");
+        }
+    }
+
+    @Test
+    void testTablesPage_whenATableAppearsOnTheSourcePage_keepsTheSelection() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><A ID=\"1\"/><B ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final CTabFolder tabFolder = editor.getTablesPage().getTabFolder();
+            tabFolder.setSelection(1);
+
+            sourceDocument(editor).set("<dataset><A ID=\"1\"/><B ID=\"1\"/><C ID=\"1\"/></dataset>");
+            UiTestWorkspace.processEvents();
+
+            assertThat(tabFolder.getSelection().getText())
+                    .as("A table that the Source page added must not take the selection from the table that "
+                            + "the user is working on.")
+                    .isEqualTo("B");
+        }
+    }
+
+    @Test
+    void testTablesPage_whenAnUndoBringsATableBack_keepsTheSelection() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><A ID=\"1\"/><B ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            editor.getDatasetDocument().deleteTable("B");
+            UiTestWorkspace.processEvents();
+
+            tablesPage.getGlobalActionHandler(ActionFactory.UNDO.getId()).run();
+            UiTestWorkspace.processEvents();
+
+            assertThat(tablesPage.getTabFolder().getSelection().getText())
+                    .as("A table that an undo brought back must not take the selection from the table that "
+                            + "the user is working on.")
+                    .isEqualTo("A");
+        }
+    }
+
+    @Test
+    void testTablesPage_whenTheRenameOfATableIsUndone_keepsItsGridAndItsSelection() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                    + "<USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            editor.getDatasetDocument().renameTable("USERS", "CUSTOMERS");
+            tablesPage.selectRegion(1, 1, 1, 1);
+            UiTestWorkspace.processEvents();
+            final Control gridBeforeTheUndo = tablesPage.getTabFolder().getItem(0).getControl();
+
+            tablesPage.getGlobalActionHandler(ActionFactory.UNDO.getId()).run();
+            UiTestWorkspace.processEvents();
+
             assertThat(tablesPage.getTabFolder().getItem(0).getText())
-                    .as("The surviving tab must show the new name.").isEqualTo("CUSTOMERS");
+                    .as("The undo must bring the old name back.").isEqualTo("USERS");
+            assertThat(tablesPage.getTabFolder().getItem(0).getControl())
+                    .as("The undo of a rename must leave the table its grid.").isSameAs(gridBeforeTheUndo);
+            assertThat(tablesPage.getSelection().anchorRowIndex())
+                    .as("The grid must keep its selection, the cell in the second row.").isEqualTo(1);
+        }
+    }
+
+    @Test
+    void testTablesPage_whenTheSourcePageRenamesATable_keepsItsTabAndGrid() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+                    + "<ORDERS ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final CTabItem usersTab = tablesPage.getTabFolder().getItem(0);
+            final Control usersGrid = usersTab.getControl();
+
+            sourceDocument(editor)
+                    .set("<dataset><CUSTOMERS ID=\"1\" NAME=\"Alice\"/><ORDERS ID=\"1\"/></dataset>");
+            UiTestWorkspace.processEvents();
+
+            assertThat(tablesPage.getTabFolder().getItem(0))
+                    .as("A table that the Source page renamed must keep its tab.").isSameAs(usersTab);
+            assertThat(usersTab.getControl()).as("The renamed table must keep its grid.").isSameAs(usersGrid);
+            assertThat(usersTab.getText()).as("The tab must show the new name.").isEqualTo("CUSTOMERS");
+        }
+    }
+
+    @Test
+    void testTablesPage_whenTableNamesBecomeCaseSensitive_keepsTheTabsAndGrids() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><users ID=\"1\"/><orders ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final CTabFolder tabFolder = tablesPage.getTabFolder();
+            final Control usersGrid = tabFolder.getItem(0).getControl();
+            final Control ordersGrid = tabFolder.getItem(1).getControl();
+
+            editor.getDatasetDocument().setOptions(new FlatXmlOptions(true, false));
+            UiTestWorkspace.processEvents();
+
+            assertThat(List.of(tabFolder.getItem(0).getControl(), tabFolder.getItem(1).getControl()))
+                    .as("The tables are the same, only their keys changed, so they must keep their grids.")
+                    .containsExactly(usersGrid, ordersGrid);
         }
     }
 
@@ -226,7 +358,6 @@ class TablesPageTest
             final CTabFolder tabFolder = tablesPage.getTabFolder();
             tabFolder.setSelection(1);
 
-            tablesPage.expectRename("B", "X");
             editor.getDatasetDocument().renameTable("B", "X");
             tablesPage.getGlobalActionHandler(ActionFactory.UNDO.getId()).run();
             UiTestWorkspace.processEvents();
