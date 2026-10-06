@@ -21,9 +21,9 @@
 package org.dbunit.eclipse.dataset.core.model;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -42,6 +42,10 @@ public final class DatasetModel
 
     private final List<DatasetProblem> problems;
 
+    private final Map<String, List<DatasetProblem>> problemsByTable;
+
+    private final Map<String, Map<String, ProblemSeverity>> worstSeverityByTableAndColumn;
+
     private final boolean editable;
 
     /**
@@ -56,7 +60,40 @@ public final class DatasetModel
     {
         this.tables = List.copyOf(tables);
         this.problems = List.copyOf(problems);
+        this.problemsByTable = groupByTable(this.problems);
+        this.worstSeverityByTableAndColumn = worstSeverityByTableAndColumn(this.problems);
         this.editable = editable;
+    }
+
+    private static Map<String, List<DatasetProblem>> groupByTable(final List<DatasetProblem> problems)
+    {
+        final Map<String, List<DatasetProblem>> grouped = new HashMap<>();
+        for (final DatasetProblem problem : problems)
+        {
+            grouped.computeIfAbsent(problem.tableKey(), unused -> new ArrayList<>()).add(problem);
+        }
+        grouped.replaceAll((tableKey, tableProblems) -> List.copyOf(tableProblems));
+        return grouped;
+    }
+
+    private static Map<String, Map<String, ProblemSeverity>> worstSeverityByTableAndColumn(
+            final List<DatasetProblem> problems)
+    {
+        final Map<String, Map<String, ProblemSeverity>> worst = new HashMap<>();
+        for (final DatasetProblem problem : problems)
+        {
+            if (problem.tableKey() != null && problem.columnName() != null)
+            {
+                worst.computeIfAbsent(problem.tableKey(), unused -> new HashMap<>())
+                        .merge(problem.columnName(), problem.severity(), DatasetModel::worseOf);
+            }
+        }
+        return worst;
+    }
+
+    private static ProblemSeverity worseOf(final ProblemSeverity first, final ProblemSeverity second)
+    {
+        return first.compareTo(second) <= 0 ? first : second;
     }
 
     /**
@@ -99,22 +136,35 @@ public final class DatasetModel
     }
 
     /**
-     * Returns the problems that belong to one table.
+     * Returns the problems that belong to one table. The model groups them once, so asking is cheap enough
+     * for the grid to do on every paint.
      *
-     * @param tableKey The table key to filter by.
-     * @return An unmodifiable list of the problems whose table key equals the given key.
+     * @param tableKey The table key to filter by, or null for the problems that belong to no table.
+     * @return An unmodifiable list of the problems whose table key equals the given key, in the order in
+     *         which they were found.
      */
     public List<DatasetProblem> getProblems(final String tableKey)
     {
-        final List<DatasetProblem> filtered = new ArrayList<>();
-        for (final DatasetProblem problem : problems)
+        return problemsByTable.getOrDefault(tableKey, List.of());
+    }
+
+    /**
+     * Returns the worst severity among the problems that belong to one column of one table. The model
+     * works it out once for all of its columns, so asking is cheap enough for the grid to do on every paint.
+     *
+     * @param tableKey The key of the table.
+     * @param columnName The name of the column, as the problems spell it, or null.
+     * @return The worst severity, an error being worse than a warning and a warning worse than a note, or
+     *         an empty {@link Optional} when no problem belongs to that column.
+     */
+    public Optional<ProblemSeverity> getWorstSeverity(final String tableKey, final String columnName)
+    {
+        final Map<String, ProblemSeverity> byColumn = worstSeverityByTableAndColumn.get(tableKey);
+        if (byColumn == null)
         {
-            if (Objects.equals(problem.tableKey(), tableKey))
-            {
-                filtered.add(problem);
-            }
+            return Optional.empty();
         }
-        return Collections.unmodifiableList(filtered);
+        return Optional.ofNullable(byColumn.get(columnName));
     }
 
     /**

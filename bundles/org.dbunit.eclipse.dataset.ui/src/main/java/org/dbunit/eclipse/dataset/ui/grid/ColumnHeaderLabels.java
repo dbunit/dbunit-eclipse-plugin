@@ -20,10 +20,8 @@
  */
 package org.dbunit.eclipse.dataset.ui.grid;
 
-import java.util.List;
-
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
-import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
+import org.dbunit.eclipse.dataset.core.model.DatasetModel;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
 import org.eclipse.nebula.widgets.nattable.layer.LabelStack;
 import org.eclipse.nebula.widgets.nattable.layer.cell.IConfigLabelAccumulator;
@@ -74,24 +72,7 @@ final class ColumnHeaderLabels implements IConfigLabelAccumulator
 
     private ProblemSeverity worstSeverityFor(final DatasetColumn column)
     {
-        final List<DatasetProblem> problems = bodyDataProvider.getContext().getDatasetDocument().getModel()
-                .getProblems(bodyDataProvider.getTableKey());
-        ProblemSeverity worst = null;
-        for (final DatasetProblem problem : problems)
-        {
-            if (!column.name().equals(problem.columnName()))
-            {
-                continue;
-            }
-            if (problem.severity() == ProblemSeverity.ERROR)
-            {
-                return ProblemSeverity.ERROR;
-            }
-            if (problem.severity() == ProblemSeverity.WARNING)
-            {
-                worst = ProblemSeverity.WARNING;
-            }
-        }
-        return worst;
+        final DatasetModel model = bodyDataProvider.getContext().getDatasetDocument().getModel();
+        return model.getWorstSeverity(bodyDataProvider.getTableKey(), column.name()).orElse(null);
     }
 }

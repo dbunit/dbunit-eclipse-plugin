@@ -42,6 +42,13 @@ class DatasetModelTest
     private static final DatasetProblem DOCUMENT_PROBLEM = new DatasetProblem(ProblemCode.NOT_WELL_FORMED,
             ProblemSeverity.ERROR, "The document is not well-formed.", null, null, -1, 0, 1);
 
+    private static DatasetProblem columnProblem(final String tableKey, final String columnName,
+            final ProblemSeverity severity)
+    {
+        return new DatasetProblem(ProblemCode.COLUMN_NOT_IN_FIRST_ROW, severity, "A column problem.",
+                tableKey, columnName, -1, 0, 1);
+    }
+
     @Test
     void testFindTable_whenKeyExists_returnsTheTable()
     {
@@ -72,6 +79,88 @@ class DatasetModelTest
 
         assertThat(problems).as("getProblems(tableKey) must filter by the table key.")
                 .containsExactly(USERS_PROBLEM);
+    }
+
+    @Test
+    void testGetProblemsWithTableKey_forTheDocumentLevelProblems_usesANullKey()
+    {
+        final DatasetModel model = new DatasetModel(List.of(USERS_TABLE),
+                List.of(USERS_PROBLEM, DOCUMENT_PROBLEM), true);
+
+        assertThat(model.getProblems(null)).as("The problems of no table are the document's.")
+                .containsExactly(DOCUMENT_PROBLEM);
+    }
+
+    @Test
+    void testGetProblemsWithTableKey_forATableWithoutProblems_isEmpty()
+    {
+        final DatasetModel model = new DatasetModel(List.of(USERS_TABLE), List.of(USERS_PROBLEM), true);
+
+        assertThat(model.getProblems("ORDERS")).as("A table without problems has an empty list.").isEmpty();
+    }
+
+    @Test
+    void testGetProblemsWithTableKey_whenAskedAgain_returnsTheListItBuiltBefore()
+    {
+        final DatasetModel model = new DatasetModel(List.of(USERS_TABLE),
+                List.of(USERS_PROBLEM, DOCUMENT_PROBLEM), true);
+
+        assertThat(model.getProblems("USERS"))
+                .as("The problems of a table are filtered once, because the grid asks on every paint.")
+                .isSameAs(model.getProblems("USERS"));
+    }
+
+    @Test
+    void testGetProblemsWithTableKey_whenSeveralProblemsBelongToTheTable_keepsTheirOrder()
+    {
+        final DatasetProblem second = columnProblem("USERS", "NAME", ProblemSeverity.INFO);
+        final DatasetModel model = new DatasetModel(List.of(USERS_TABLE),
+                List.of(USERS_PROBLEM, DOCUMENT_PROBLEM, second), true);
+
+        assertThat(model.getProblems("USERS")).as("The problems must stay in the order they were found in.")
+                .containsExactly(USERS_PROBLEM, second);
+    }
+
+    @Test
+    void testGetWorstSeverity_whenAColumnHasProblemsOfSeveralSeverities_returnsTheWorst()
+    {
+        final DatasetModel model = new DatasetModel(List.of(USERS_TABLE),
+                List.of(columnProblem("USERS", "NAME", ProblemSeverity.INFO),
+                        columnProblem("USERS", "NAME", ProblemSeverity.ERROR),
+                        columnProblem("USERS", "NAME", ProblemSeverity.WARNING)),
+                true);
+
+        assertThat(model.getWorstSeverity("USERS", "NAME"))
+                .as("An error is worse than a warning, which is worse than a note, in any order.")
+                .contains(ProblemSeverity.ERROR);
+    }
+
+    @Test
+    void testGetWorstSeverity_whenTheWorstIsAWarning_returnsTheWarning()
+    {
+        final DatasetModel model = new DatasetModel(List.of(USERS_TABLE),
+                List.of(columnProblem("USERS", "NAME", ProblemSeverity.WARNING),
+                        columnProblem("USERS", "NAME", ProblemSeverity.INFO)),
+                true);
+
+        assertThat(model.getWorstSeverity("USERS", "NAME"))
+                .as("A warning is worse than a note, whichever comes first.")
+                .contains(ProblemSeverity.WARNING);
+    }
+
+    @Test
+    void testGetWorstSeverity_forAnotherColumnOrTableOrOneWithoutAColumn_isEmpty()
+    {
+        final DatasetModel model = new DatasetModel(List.of(USERS_TABLE),
+                List.of(columnProblem("USERS", "NAME", ProblemSeverity.ERROR), USERS_PROBLEM,
+                        columnProblem("ORDERS", "ID", ProblemSeverity.ERROR)),
+                true);
+
+        assertThat(List.of(model.getWorstSeverity("USERS", "ID"), model.getWorstSeverity("ORDERS", "NAME"),
+                model.getWorstSeverity("USERS", null), model.getWorstSeverity("PRODUCTS", "ID")))
+                .as("Only the problems of that column of that table count, and a problem of a table as a "
+                        + "whole belongs to no column.")
+                .containsOnly(Optional.empty());
     }
 
     @Test
