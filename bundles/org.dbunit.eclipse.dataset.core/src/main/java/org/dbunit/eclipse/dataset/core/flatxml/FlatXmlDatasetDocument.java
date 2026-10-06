@@ -62,7 +62,7 @@ import org.eclipse.text.edits.TextEdit;
 public final class FlatXmlDatasetDocument implements TextDatasetDocument
 {
     private static final FlatXmlIndex EMPTY_INDEX =
-            new FlatXmlIndex(null, null, "", List.of(), Map.of(), Map.of(), Map.of());
+            new FlatXmlIndex(null, null, "", List.of(), Map.of(), Map.of());
 
     private final IDocumentListener documentListener = new IDocumentListener()
     {
@@ -176,12 +176,6 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     public void addModelListener(final DatasetModelListener listener)
     {
         listeners.add(listener);
-    }
-
-    @Override
-    public void removeModelListener(final DatasetModelListener listener)
-    {
-        listeners.remove(listener);
     }
 
     @Override

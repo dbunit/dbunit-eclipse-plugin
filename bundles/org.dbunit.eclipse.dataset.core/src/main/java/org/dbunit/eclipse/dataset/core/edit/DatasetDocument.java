@@ -64,13 +64,6 @@ public interface DatasetDocument
     void addModelListener(DatasetModelListener listener);
 
     /**
-     * Unregisters a previously added listener.
-     *
-     * @param listener The listener to remove.
-     */
-    void removeModelListener(DatasetModelListener listener);
-
-    /**
      * Changes one or more cells of a table.
      *
      * @param tableKey The key of the table.

@@ -25,12 +25,11 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Everything the edit engine needs from a parse that the dataset model itself does not keep: the root,
- * the DOCTYPE, the text that was parsed, and, per table key, the display name, the row elements, and the
- * marker elements. The edit engine takes all offsets from this index.
+ * the DOCTYPE, the text that was parsed, and, per table key, the row elements and the marker elements. The
+ * edit engine takes all offsets from this index.
  */
 final class FlatXmlIndex
 {
@@ -42,14 +41,12 @@ final class FlatXmlIndex
 
     private final List<FlatXmlElement> elements;
 
-    private final Map<String, String> displayNames;
-
     private final Map<String, List<FlatXmlElement>> rowElements;
 
     private final Map<String, List<FlatXmlElement>> markerElements;
 
     FlatXmlIndex(final FlatXmlRoot root, final FlatXmlDoctype doctype, final String text,
-            final List<FlatXmlElement> elements, final Map<String, String> displayNames,
+            final List<FlatXmlElement> elements,
             final Map<String, List<FlatXmlElement>> rowElements,
             final Map<String, List<FlatXmlElement>> markerElements)
     {
@@ -57,7 +54,6 @@ final class FlatXmlIndex
         this.doctype = doctype;
         this.text = text;
         this.elements = List.copyOf(elements);
-        this.displayNames = new LinkedHashMap<>(displayNames);
         this.rowElements = copyOfElementLists(rowElements);
         this.markerElements = copyOfElementLists(markerElements);
     }
@@ -80,16 +76,6 @@ final class FlatXmlIndex
     List<FlatXmlElement> getElements()
     {
         return elements;
-    }
-
-    Set<String> getTableKeys()
-    {
-        return displayNames.keySet();
-    }
-
-    String getDisplayName(final String tableKey)
-    {
-        return displayNames.get(tableKey);
     }
 
     List<FlatXmlElement> getRowElements(final String tableKey)

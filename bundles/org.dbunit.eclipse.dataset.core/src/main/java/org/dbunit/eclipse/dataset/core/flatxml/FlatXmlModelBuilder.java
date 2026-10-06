@@ -250,18 +250,16 @@ final class FlatXmlModelBuilder
     private static FlatXmlIndex buildIndex(final FlatXmlParseResult parse, final String text,
             final Map<String, TableGroup> groups)
     {
-        final Map<String, String> displayNames = new LinkedHashMap<>();
         final Map<String, List<FlatXmlElement>> rowElementsByKey = new LinkedHashMap<>();
         final Map<String, List<FlatXmlElement>> markerElementsByKey = new LinkedHashMap<>();
         for (final Map.Entry<String, TableGroup> entry : groups.entrySet())
         {
             final TableGroup group = entry.getValue();
-            displayNames.put(entry.getKey(), group.displayName);
             rowElementsByKey.put(entry.getKey(), group.rowElements);
             markerElementsByKey.put(entry.getKey(), group.markerElements);
         }
-        return new FlatXmlIndex(parse.root(), parse.doctype(), text, parse.elements(), displayNames,
-                rowElementsByKey, markerElementsByKey);
+        return new FlatXmlIndex(parse.root(), parse.doctype(), text, parse.elements(), rowElementsByKey,
+                markerElementsByKey);
     }
 
     /**
