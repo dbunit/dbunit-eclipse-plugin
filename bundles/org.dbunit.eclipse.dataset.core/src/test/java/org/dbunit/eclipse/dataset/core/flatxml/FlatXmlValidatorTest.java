@@ -327,6 +327,19 @@ class FlatXmlValidatorTest
     }
 
     @Test
+    void testValidate_whenAMarkerComesFirstAndAnotherFollowsTheRows_reportsOnlyTheLaterMarker()
+    {
+        final String text = "<dataset><USERS/><USERS ID=\"1\"/><USERS/></dataset>";
+
+        final List<DatasetProblem> problems = validate(text, FlatXmlOptions.DBUNIT_DEFAULTS, false);
+
+        assertThat(onlyCode(problems, ProblemCode.REDUNDANT_EMPTY_ELEMENT))
+                .extracting(DatasetProblem::offset)
+                .as("The marker that is the table's first element is not redundant; only the later one is.")
+                .containsExactly(text.lastIndexOf("<USERS/>"));
+    }
+
+    @Test
     void testValidate_whenAMarkerIsTheTablesOnlyElement_doesNotReportRedundantEmptyElement()
     {
         final List<DatasetProblem> problems =

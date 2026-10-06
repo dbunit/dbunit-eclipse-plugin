@@ -112,12 +112,11 @@ final class FlatXmlValidator
         {
             return;
         }
-        final List<FlatXmlElement> elements = index.getAllElementsInOrder(table.getKey());
-        if (elements.isEmpty())
+        final FlatXmlElement first = index.getFirstElement(table.getKey());
+        if (first == null)
         {
             return;
         }
-        final FlatXmlElement first = elements.get(0);
         if (first.attributes().isEmpty())
         {
             if (!table.getRows().isEmpty())
@@ -210,12 +209,11 @@ final class FlatXmlValidator
         {
             return;
         }
-        final List<FlatXmlElement> elements = index.getAllElementsInOrder(table.getKey());
-        if (elements.isEmpty())
+        final FlatXmlElement first = index.getFirstElement(table.getKey());
+        if (first == null)
         {
             return;
         }
-        final FlatXmlElement first = elements.get(0);
         problems.add(new DatasetProblem(ProblemCode.TABLE_NOT_DECLARED_IN_DTD, ProblemSeverity.ERROR,
                 NLS.bind(Messages.Validator_tableNotDeclaredInDtd, table.getName()), table.getKey(), null,
                 -1, first.offset(), first.nameEndOffset() - first.offset()));
@@ -329,8 +327,7 @@ final class FlatXmlValidator
         {
             return;
         }
-        final List<FlatXmlElement> elements = index.getAllElementsInOrder(table.getKey());
-        final FlatXmlElement first = elements.isEmpty() ? null : elements.get(0);
+        final FlatXmlElement first = index.getFirstElement(table.getKey());
         for (final FlatXmlElement marker : index.getMarkerElements(table.getKey()))
         {
             if (!marker.equals(first))

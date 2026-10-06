@@ -124,8 +124,8 @@ final class FlatXmlIndex
     }
 
     /**
-     * Returns a table's row and marker elements together, in document order, so callers can find the
-     * table's first element regardless of whether it is a row or a marker.
+     * Returns a table's row and marker elements together, in document order, as a new list. It copies and
+     * sorts, so a caller that needs only the first element asks {@link #getFirstElement} instead.
      */
     List<FlatXmlElement> getAllElementsInOrder(final String tableKey)
     {
