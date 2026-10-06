@@ -295,13 +295,16 @@ final class TableTabs
             final String tableKeyToSelect)
     {
         final TableTab tabToSelect = tabsByKey.get(tableKeyToSelect);
-        if (tabToSelect != null)
+        if (tabToSelect == null)
+        {
+            if (!showsGrid(previousGrid))
+            {
+                selectTabNearIndex(previousIndex);
+            }
+        }
+        else
         {
             tabFolder.setSelection(tabToSelect.item());
-        }
-        else if (!showsGrid(previousGrid))
-        {
-            selectTabNearIndex(previousIndex);
         }
     }
 
