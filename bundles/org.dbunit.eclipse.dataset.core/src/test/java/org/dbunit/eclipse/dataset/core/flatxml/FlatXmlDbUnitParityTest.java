@@ -61,6 +61,11 @@ class FlatXmlDbUnitParityTest
 {
     private static final Path DATASETS_DIRECTORY = Path.of("src", "test", "resources", "datasets");
 
+    private static final String CASE_VARIANT_TABLES_DATASET = "<!DOCTYPE dataset [\n"
+            + "<!ELEMENT dataset (users*, USERS*)>\n"
+            + "<!ELEMENT users EMPTY>\n<!ATTLIST users A CDATA #IMPLIED>\n"
+            + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS B CDATA #IMPLIED>\n]>\n<dataset/>\n";
+
     @TempDir
     private Path tempDir;
 
@@ -102,6 +107,47 @@ class FlatXmlDbUnitParityTest
                 .as("The model must report the failure, and not as a table named EMPTY.")
                 .containsExactly(ProblemCode.DTD_EMPTY_CONTENT_MODEL);
         assertThat(datasetDocument.getModel().getTables()).as("The keyword EMPTY is no table.").isEmpty();
+    }
+
+    @Test
+    void testBuild_whenTheDtdListsTwoSpellingsOfATable_dbUnitFailsToLoadTheDatasetAndTheModelReportsIt()
+            throws Exception
+    {
+        final Path file = tempDir.resolve("table-name-case-variants.xml");
+        Files.writeString(file, CASE_VARIANT_TABLES_DATASET, StandardCharsets.UTF_8);
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(
+                new Document(CASE_VARIANT_TABLES_DATASET), DtdSource.NONE, FlatXmlOptions.DBUNIT_DEFAULTS,
+                () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> new FlatXmlDataSetBuilder().build(file.toFile()))
+                .as("dbUnit must fail to load a DTD that lists two spellings of one table.")
+                .isInstanceOf(DataSetException.class);
+        assertThat(datasetDocument.getModel().getProblems()).extracting(DatasetProblem::code)
+                .as("The model must report the failure.")
+                .containsExactly(ProblemCode.DTD_TABLE_NAME_CASE_VARIANTS);
+        assertThat(datasetDocument.getModel().getTables()).extracting(DatasetTable::getName)
+                .as("The two spellings are one table, as in dbUnit.").containsExactly("users");
+    }
+
+    @Test
+    void testBuild_whenTheDtdListsTwoSpellingsOfATableAndNamesAreCaseSensitive_dbUnitStillFailsToLoadIt()
+            throws Exception
+    {
+        final Path file = tempDir.resolve("table-name-case-variants.xml");
+        Files.writeString(file, CASE_VARIANT_TABLES_DATASET, StandardCharsets.UTF_8);
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(
+                new Document(CASE_VARIANT_TABLES_DATASET), DtdSource.NONE, new FlatXmlOptions(true, false),
+                () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(
+                () -> new FlatXmlDataSetBuilder().setCaseSensitiveTableNames(true).build(file.toFile()))
+                .as("dbUnit keeps the tables of a DTD in a map that ignores letter case.")
+                .isInstanceOf(DataSetException.class);
+        assertThat(datasetDocument.getModel().getProblems()).extracting(DatasetProblem::code)
+                .as("The model must report the failure whatever the case sensitivity of table names.")
+                .containsExactly(ProblemCode.DTD_TABLE_NAME_CASE_VARIANTS);
     }
 
     @Test

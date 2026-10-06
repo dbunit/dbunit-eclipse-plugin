@@ -84,6 +84,11 @@ public final class Messages extends NLS
     public static String Validator_dtdEmptyContentModel;
 
     /**
+     * The DTD lists two spellings of one table, which dbUnit cannot load.
+     */
+    public static String Validator_dtdTableNameCaseVariants;
+
+    /**
      * The DOCTYPE's external DTD could not be read.
      */
     public static String Validator_dtdNotLoaded;

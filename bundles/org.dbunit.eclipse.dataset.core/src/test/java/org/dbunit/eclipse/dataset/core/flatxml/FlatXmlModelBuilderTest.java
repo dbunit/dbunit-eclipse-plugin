@@ -150,6 +150,30 @@ class FlatXmlModelBuilderTest
     }
 
     @Test
+    void testBuild_whenTheDtdDeclaresTwoSpellingsOfATable_theFirstOneGivesTheColumnsWithOrWithoutRows()
+    {
+        final String doctype = "<!DOCTYPE dataset [\n<!ELEMENT dataset (users*, USERS*)>\n"
+                + "<!ELEMENT users EMPTY>\n<!ATTLIST users A CDATA #IMPLIED>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS B CDATA #IMPLIED>\n]>\n";
+
+        final DatasetModel withoutRows =
+                buildWithDoctype(doctype + "<dataset/>", FlatXmlOptions.DBUNIT_DEFAULTS, Map.of());
+        final DatasetModel withARow = buildWithDoctype(doctype + "<dataset><USERS B=\"1\"/></dataset>",
+                FlatXmlOptions.DBUNIT_DEFAULTS, Map.of());
+
+        assertThat(List.of(declaredColumnNames(withoutRows, "USERS"), declaredColumnNames(withARow, "USERS")))
+                .as("The declared columns must be the first spelling's, A, whether or not the table has "
+                        + "rows, and not switch when the first row is added.")
+                .containsExactly(List.of("A"), List.of("A"));
+    }
+
+    private static List<String> declaredColumnNames(final DatasetModel model, final String tableKey)
+    {
+        final List<DatasetColumn> columns = model.findTable(tableKey).orElseThrow().getColumns();
+        return columns.stream().filter(DatasetColumn::declared).map(DatasetColumn::name).toList();
+    }
+
+    @Test
     void testBuild_whenAnElementIsDeclaredOutsideTheContentModel_isNeitherADtdTableNorDeclaredOnly()
     {
         final DatasetModel model = buildWithDoctype(

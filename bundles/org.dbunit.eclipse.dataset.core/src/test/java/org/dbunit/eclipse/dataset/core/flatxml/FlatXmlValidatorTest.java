@@ -34,6 +34,7 @@ import org.dbunit.eclipse.dataset.core.dtd.DtdReader;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
+import org.eclipse.osgi.util.NLS;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -252,6 +253,39 @@ class FlatXmlValidatorTest
         assertThat(onlyCode(problems, ProblemCode.DTD_TABLE_WITHOUT_DECLARATION))
                 .as("ORDERS is named in the content model but has neither ELEMENT nor ATTLIST.")
                 .hasSize(1);
+    }
+
+    @Test
+    void testValidate_whenTheContentModelListsTwoSpellingsOfATable_reportsDtdTableNameCaseVariants()
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ELEMENT dataset (users*, USERS*, Users*)>\n"
+                + "<!ELEMENT users EMPTY>\n<!ATTLIST users A CDATA #IMPLIED>\n<!ELEMENT USERS EMPTY>\n"
+                + "<!ATTLIST USERS B CDATA #IMPLIED>\n<!ELEMENT Users EMPTY>\n]>\n<dataset/>";
+
+        final List<DatasetProblem> problems = validate(text, FlatXmlOptions.DBUNIT_DEFAULTS, false);
+
+        assertThat(problems).as("Each later spelling must be reported against the first, on the DOCTYPE.")
+                .extracting(DatasetProblem::code, DatasetProblem::severity, DatasetProblem::message,
+                        DatasetProblem::offset)
+                .containsExactly(
+                        tuple(ProblemCode.DTD_TABLE_NAME_CASE_VARIANTS, ProblemSeverity.ERROR,
+                                NLS.bind(Messages.Validator_dtdTableNameCaseVariants, "users", "USERS"), 0),
+                        tuple(ProblemCode.DTD_TABLE_NAME_CASE_VARIANTS, ProblemSeverity.ERROR,
+                                NLS.bind(Messages.Validator_dtdTableNameCaseVariants, "users", "Users"), 0));
+    }
+
+    @Test
+    void testValidate_whenTableNamesAreCaseSensitive_stillReportsDtdTableNameCaseVariants()
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ELEMENT dataset (users*, USERS*)>\n"
+                + "<!ELEMENT users EMPTY>\n<!ATTLIST users A CDATA #IMPLIED>\n<!ELEMENT USERS EMPTY>\n"
+                + "<!ATTLIST USERS B CDATA #IMPLIED>\n]>\n<dataset/>";
+
+        final List<DatasetProblem> problems = validate(text, new FlatXmlOptions(true, false), false);
+
+        assertThat(problems).extracting(DatasetProblem::code)
+                .as("dbUnit ignores letter case in the tables of a DTD even with case-sensitive table names.")
+                .containsExactly(ProblemCode.DTD_TABLE_NAME_CASE_VARIANTS);
     }
 
     @Test

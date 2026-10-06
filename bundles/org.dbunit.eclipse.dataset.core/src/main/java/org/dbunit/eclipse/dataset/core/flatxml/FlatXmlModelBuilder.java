@@ -94,7 +94,9 @@ final class FlatXmlModelBuilder
         {
             for (final DtdTable table : dtd.tables())
             {
-                byKey.put(tableKey(table.name(), options), table);
+                // Two spellings of one table, which dbUnit rejects, keep the first one's declaration, as a
+                // table that has no rows does.
+                byKey.putIfAbsent(tableKey(table.name(), options), table);
             }
         }
         return byKey;

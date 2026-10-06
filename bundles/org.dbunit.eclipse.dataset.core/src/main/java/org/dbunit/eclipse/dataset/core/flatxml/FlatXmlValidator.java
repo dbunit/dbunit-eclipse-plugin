@@ -85,6 +85,7 @@ final class FlatXmlValidator
         }
         validateDtdTableWithoutDeclaration(problems, index, dtdState, dtd);
         validateDtdEmptyContentModel(problems, index, dtdState, dtd);
+        validateDtdTableNameCaseVariants(problems, index, dtdState, dtd);
         validateDtdNotLoaded(problems, index, dtdState);
         return List.copyOf(problems);
     }
@@ -281,6 +282,32 @@ final class FlatXmlValidator
         problems.add(new DatasetProblem(ProblemCode.DTD_EMPTY_CONTENT_MODEL, ProblemSeverity.ERROR,
                 Messages.Validator_dtdEmptyContentModel, null, null, -1, doctypeOffset(index),
                 doctypeLength(index)));
+    }
+
+    private static void validateDtdTableNameCaseVariants(final List<DatasetProblem> problems,
+            final FlatXmlIndex index, final DtdState dtdState, final DtdDeclarations dtd)
+    {
+        if (dtdState != DtdState.LOADED || dtd == null)
+        {
+            return;
+        }
+        // dbUnit keeps the tables of a DTD in a map that ignores letter case, even for case-sensitive table
+        // names.
+        final Map<String, String> firstSpellingByKey = new HashMap<>();
+        for (final DtdTable dtdTable : dtd.tables())
+        {
+            final String name = dtdTable.name();
+            final String firstSpelling =
+                    firstSpellingByKey.putIfAbsent(name.toUpperCase(Locale.ENGLISH), name);
+            if (firstSpelling != null)
+            {
+                final String message =
+                        NLS.bind(Messages.Validator_dtdTableNameCaseVariants, firstSpelling, name);
+                problems.add(new DatasetProblem(ProblemCode.DTD_TABLE_NAME_CASE_VARIANTS,
+                        ProblemSeverity.ERROR, message, null, null, -1, doctypeOffset(index),
+                        doctypeLength(index)));
+            }
+        }
     }
 
     private static void validateDtdNotLoaded(final List<DatasetProblem> problems,

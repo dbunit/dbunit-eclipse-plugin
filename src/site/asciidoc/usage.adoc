@@ -376,6 +376,10 @@ or, with column sensing, fails to load the dataset.
 |*The DTD declares the dataset element as EMPTY, so dbUnit fails to load the dataset.*
 |List the tables in the content model of the `dataset` element, or use `ANY`.
 
+|*The DTD lists table ... and table ..., which dbUnit takes for one table, so it fails to load the dataset.*
+dbUnit ignores the letter case of the tables of a DTD, even when table names are case-sensitive.
+|Keep one spelling of the table in the DTD.
+
 |*The DOCTYPE's external DTD could not be read.*
 The editor skips the checks that need the DTD.
 |Check the DOCTYPE's system identifier; the editor reads only local files (see <<dtd>>).

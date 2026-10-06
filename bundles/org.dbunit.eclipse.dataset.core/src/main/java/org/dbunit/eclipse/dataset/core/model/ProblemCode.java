@@ -98,6 +98,12 @@ public enum ProblemCode
     DTD_EMPTY_CONTENT_MODEL(false),
 
     /**
+     * The DTD's tables include two spellings of one table, which dbUnit takes for the same table, so it
+     * fails to load the dataset.
+     */
+    DTD_TABLE_NAME_CASE_VARIANTS(false),
+
+    /**
      * The DOCTYPE's external DTD could not be read.
      */
     DTD_NOT_LOADED(false),
