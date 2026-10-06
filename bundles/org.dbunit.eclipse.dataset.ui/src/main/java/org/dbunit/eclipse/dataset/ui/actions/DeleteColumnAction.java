@@ -20,7 +20,6 @@
  */
 package org.dbunit.eclipse.dataset.ui.actions;
 
-import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetRow;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
@@ -55,9 +54,7 @@ public class DeleteColumnAction extends GridAction
     protected void runOnGrid(final DatasetGridContext context)
     {
         final GridSelection selection = context.getSelection();
-        final DatasetTable table = context.getDatasetDocument().getModel().findTable(selection.tableKey())
-                .orElseThrow(() -> new DatasetEditException(
-                        NLS.bind(Messages.Edit_noSuchTable, selection.tableKey())));
+        final DatasetTable table = context.getDatasetDocument().requireTable(selection.tableKey());
         final DatasetColumn column = table.getColumns().get(selection.anchorColumnIndex());
         final int valueCount = countValues(table, selection.anchorColumnIndex());
         if (!confirmDelete(context.getShell(), column, valueCount))

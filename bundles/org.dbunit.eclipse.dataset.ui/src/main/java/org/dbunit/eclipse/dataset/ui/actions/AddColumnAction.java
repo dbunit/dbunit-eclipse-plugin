@@ -23,7 +23,6 @@ package org.dbunit.eclipse.dataset.ui.actions;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.ui.DatasetImages;
@@ -34,7 +33,6 @@ import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.jface.dialogs.IInputValidator;
 import org.eclipse.jface.dialogs.InputDialog;
 import org.eclipse.jface.window.Window;
-import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.widgets.Shell;
 
 /**
@@ -60,9 +58,7 @@ public class AddColumnAction extends GridAction
     protected void runOnGrid(final DatasetGridContext context)
     {
         final GridSelection selection = context.getSelection();
-        final DatasetTable table = context.getDatasetDocument().getModel().findTable(selection.tableKey())
-                .orElseThrow(() -> new DatasetEditException(
-                        NLS.bind(Messages.Edit_noSuchTable, selection.tableKey())));
+        final DatasetTable table = context.getDatasetDocument().requireTable(selection.tableKey());
         final List<String> existingNames = new ArrayList<>();
         for (final DatasetColumn column : table.getColumns())
         {

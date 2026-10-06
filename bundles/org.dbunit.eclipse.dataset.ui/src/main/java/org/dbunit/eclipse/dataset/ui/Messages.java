@@ -209,12 +209,6 @@ public final class Messages extends NLS
     public static String Action_redo;
 
     /**
-     * The error for an action whose selection names a table that no longer exists in the model; {0} is the
-     * table key.
-     */
-    public static String Edit_noSuchTable;
-
-    /**
      * The title of the dialog that asks for a new column's name.
      */
     public static String ColumnDialog_addTitle;

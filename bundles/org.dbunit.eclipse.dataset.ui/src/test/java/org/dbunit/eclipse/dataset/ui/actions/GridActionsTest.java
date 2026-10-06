@@ -24,8 +24,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
 import org.dbunit.eclipse.dataset.core.edit.ChangeOrigin;
@@ -454,18 +457,31 @@ class GridActionsTest
     @Test
     void testRun_whenTheSelectionNamesATableThatNoLongerExists_reportsItAsAnErrorMessage()
     {
-        final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
-        final TestContext context = new TestContext(datasetDocument, "USERS");
-        context.staleSelection =
-                new GridSelection("GONE", 1, 1, 0, 0, List.of(0), List.of(0), false);
-        final AddColumnAction action = new AddColumnAction(context);
+        final List<Function<DatasetGridContext, GridAction>> actionsOfASelectedTable =
+                List.of(AddColumnAction::new, CopyAction::new, DeleteColumnAction::new, DeleteTableAction::new,
+                        FillDownAction::new, PasteAction::new, RenameColumnAction::new, RenameTableAction::new,
+                        SetEmptyStringAction::new, SetNullAction::new);
+        final Map<String, String> errorMessages = new LinkedHashMap<>();
 
-        action.run();
+        for (final Function<DatasetGridContext, GridAction> newAction : actionsOfASelectedTable)
+        {
+            final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
+            final TestContext context = new TestContext(datasetDocument, "USERS");
+            context.staleSelection = new GridSelection("GONE", 1, 1, 0, 0, List.of(0), List.of(0), false);
+            context.clipboardText = "X";
+            final GridAction action = newAction.apply(context);
 
-        assertThat(context.statusErrorMessage)
-                .as("A selection that names a table missing from the model must be reported as the "
-                        + "status line's error message.")
-                .isEqualTo("There is no table 'GONE'.");
+            action.run();
+
+            errorMessages.put(action.getClass().getSimpleName(), context.statusErrorMessage);
+        }
+
+        assertThat(errorMessages).as("Each action that needs the selected table must have been run.")
+                .hasSize(actionsOfASelectedTable.size())
+                .allSatisfy((actionName, errorMessage) -> assertThat(errorMessage)
+                        .as("A selection that names a table missing from the model must be reported as the "
+                                + "status line's error message by " + actionName + ".")
+                        .isEqualTo("There is no table 'GONE'."));
     }
 
     @Test
