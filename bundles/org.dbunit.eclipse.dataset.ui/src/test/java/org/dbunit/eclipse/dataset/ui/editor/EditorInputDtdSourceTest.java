@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.function.Function;
@@ -39,6 +40,7 @@ import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IPersistableElement;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
@@ -77,6 +79,65 @@ class EditorInputDtdSourceTest
 
         assertThat(loaded)
                 .as("A relative system ID must resolve against a non-workspace input's own location.")
+                .contains("<!ELEMENT dataset (USERS*)>");
+    }
+
+    @Test
+    void testLoad_whenTheRelativeSystemIdHasASpace_readsTheFile(@TempDir final Path tempDir) throws Exception
+    {
+        Files.createDirectories(tempDir.resolve("test data"));
+        Files.writeString(tempDir.resolve("test data").resolve("my dtd.dtd"), "<!ELEMENT dataset (USERS*)>");
+        final EditorInputDtdSource source = new EditorInputDtdSource(
+                fileStoreInput(EFS.getStore(tempDir.resolve("dataset.xml").toUri())));
+
+        final Optional<String> loaded = source.load(null, "test data/my dtd.dtd");
+
+        assertThat(loaded).as("An XML parser escapes a space in a system ID and reads the file, so must the "
+                + "editor.").contains("<!ELEMENT dataset (USERS*)>");
+    }
+
+    @Test
+    void testLoad_whenTheRelativeSystemIdHasAnEscapedSpace_readsTheFileWithTheSpace(
+            @TempDir final Path tempDir) throws Exception
+    {
+        Files.createDirectories(tempDir.resolve("test data"));
+        Files.writeString(tempDir.resolve("test data").resolve("my.dtd"), "<!ELEMENT dataset (USERS*)>");
+        final EditorInputDtdSource source = new EditorInputDtdSource(
+                fileStoreInput(EFS.getStore(tempDir.resolve("dataset.xml").toUri())));
+
+        final Optional<String> loaded = source.load(null, "test%20data/my.dtd");
+
+        assertThat(loaded).as("An escape sequence in a system ID is already escaped, and stays so.")
+                .contains("<!ELEMENT dataset (USERS*)>");
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void testLoad_whenTheRelativeSystemIdUsesBackslashesOnWindows_readsTheFile(@TempDir final Path tempDir)
+            throws Exception
+    {
+        Files.createDirectories(tempDir.resolve("dtd"));
+        Files.writeString(tempDir.resolve("dtd").resolve("my.dtd"), "<!ELEMENT dataset (USERS*)>");
+        final EditorInputDtdSource source = new EditorInputDtdSource(
+                fileStoreInput(EFS.getStore(tempDir.resolve("dataset.xml").toUri())));
+
+        final Optional<String> loaded = source.load(null, "dtd\\my.dtd");
+
+        assertThat(loaded).as("On Windows a parser takes a backslash in a system ID for a slash.")
+                .contains("<!ELEMENT dataset (USERS*)>");
+    }
+
+    @Test
+    void testLoad_whenTheFileUriHasASpace_readsTheFile(@TempDir final Path tempDir) throws Exception
+    {
+        Files.createDirectories(tempDir.resolve("test data"));
+        Files.writeString(tempDir.resolve("test data").resolve("my.dtd"), "<!ELEMENT dataset (USERS*)>");
+        final EditorInputDtdSource source = new EditorInputDtdSource(
+                fileStoreInput(EFS.getStore(tempDir.resolve("dataset.xml").toUri())));
+
+        final Optional<String> loaded = source.load(null, tempDir.toUri() + "test data/my.dtd");
+
+        assertThat(loaded).as("A file: URI with a space is escaped like a relative path.")
                 .contains("<!ELEMENT dataset (USERS*)>");
     }
 
@@ -333,9 +394,48 @@ class EditorInputDtdSourceTest
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void testLoad_whenSystemIdIsAUncPath_refusesItBeforeReadingIt() throws Exception
     {
         assertRefusedBeforeReading("\\\\dtd-host.invalid\\share\\dataset.dtd");
+    }
+
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void testLoad_whenSystemIdLooksLikeAUncPathWhereABackslashIsNoSeparator_looksForAFileOfThatName()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                LogRecorder log = new LogRecorder(EditorInputDtdSource.class))
+        {
+            final IFile datasetFile = workspace.createFile("dataset.xml", "<dataset/>");
+            final EditorInputDtdSource source = new EditorInputDtdSource(fileInput(datasetFile));
+
+            final Optional<String> loaded = source.load(null, "\\\\dtd-host.invalid\\share\\dataset.dtd");
+
+            assertThat(loaded).as("No file of that name exists beside the dataset.").isEmpty();
+            assertThat(log.statuses()).as("The missing file must be logged once.").hasSize(1);
+            assertThat(log.statuses().get(0).getException())
+                    .as("Where a backslash is an ordinary character, as the XML parser takes it, the text "
+                            + "names a file beside the dataset, and nothing is on a network share.")
+                    .isInstanceOf(NoSuchFileException.class);
+        }
+    }
+
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void testLoad_whenTheRelativeSystemIdHasABackslashWhereItIsNoSeparator_readsTheFileWithThatName(
+            @TempDir final Path tempDir) throws Exception
+    {
+        Files.writeString(tempDir.resolve("dtd\\my.dtd"), "<!ELEMENT dataset (USERS*)>");
+        final EditorInputDtdSource source = new EditorInputDtdSource(
+                fileStoreInput(EFS.getStore(tempDir.resolve("dataset.xml").toUri())));
+
+        final Optional<String> loaded = source.load(null, "dtd\\my.dtd");
+
+        assertThat(loaded)
+                .as("Where a backslash is an ordinary character, a system ID with one names a file.")
+                .contains("<!ELEMENT dataset (USERS*)>");
     }
 
     @Test

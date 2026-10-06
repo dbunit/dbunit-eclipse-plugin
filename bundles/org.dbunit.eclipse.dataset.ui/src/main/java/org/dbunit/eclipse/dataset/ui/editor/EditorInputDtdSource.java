@@ -21,6 +21,7 @@
 package org.dbunit.eclipse.dataset.ui.editor;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -66,6 +67,8 @@ final class EditorInputDtdSource implements DtdSource
      * The start of the root of a Windows path on a network share, such as {@code \\host\share\}.
      */
     private static final String UNC_ROOT_PREFIX = "\\\\";
+
+    private static final boolean BACKSLASH_IS_SEPARATOR = File.separatorChar == '\\';
 
     private final IEditorInput input;
 
@@ -169,9 +172,9 @@ final class EditorInputDtdSource implements DtdSource
         final URI resolved;
         try
         {
-            resolved = datasetUri.resolve(systemId);
+            resolved = datasetUri.resolve(new SystemIdentifier(systemId, BACKSLASH_IS_SEPARATOR).toUri());
         }
-        catch (final IllegalArgumentException e)
+        catch (final URISyntaxException | IllegalArgumentException e)
         {
             reportFailure(systemId, e);
             return Optional.empty();

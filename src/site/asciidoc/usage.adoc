@@ -313,6 +313,8 @@ The editor reads a DTD file whose system identifier is a path relative to the da
 location on disk, an absolute path in the platform's own syntax such as `C:\dtds\dataset.dtd` or
 `/opt/dtds/dataset.dtd`, or a `file:` URI.
 A relative path resolves the same way dbUnit's own parser resolves it, so it can climb outside the project.
+As in that parser, a space or another character that a URI cannot hold is escaped, and on Windows a backslash is a slash,
+so `test data/dataset.dtd` and `dtd\dataset.dtd` work.
 It never reads a DTD from the network, such as an `http:` URL or, on Windows, a network share
 (`\\host\share\dataset.dtd`, `//host/share/dataset.dtd`, or a `file:` URI that names a host);
 it then reports that the DTD could not be read, and skips the checks that need the DTD.
