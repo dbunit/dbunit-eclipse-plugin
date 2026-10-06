@@ -24,7 +24,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,7 +36,9 @@ import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlOptions;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
+import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.dbunit.eclipse.dataset.ui.actions.DatasetCommandIds;
 import org.dbunit.eclipse.dataset.ui.actions.InsertRowAboveAction;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
@@ -47,6 +51,7 @@ import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.action.IContributionItem;
 import org.eclipse.jface.action.MenuManager;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.config.CellConfigAttributes;
 import org.eclipse.nebula.widgets.nattable.edit.command.EditSelectionCommand;
@@ -58,6 +63,11 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.graphics.Color;
+import org.eclipse.swt.graphics.GC;
+import org.eclipse.swt.graphics.Image;
+import org.eclipse.swt.graphics.ImageData;
+import org.eclipse.swt.graphics.ImageLoader;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
@@ -65,16 +75,27 @@ import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.actions.ActionFactory;
 import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.handlers.IHandlerService;
+import org.eclipse.ui.intro.IIntroManager;
+import org.eclipse.ui.intro.IIntroPart;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.ITextEditorActionConstants;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 
 /**
- * Tests {@link TablesPage} against the Tables Page layout, reconciliation, and refresh-scheduling rules.
+ * Tests {@link TablesPage} against the Tables Page layout, reconciliation, and refresh-scheduling rules. Some
+ * of the tests work end to end through a real editor and show that the page displays the problems of the
+ * dataset model: the decoration of the column headers and tabs, the problems section, the navigation by
+ * double-click, and the clearing of a problem once it is fixed. The nested class {@code Screenshots}
+ * captures the page for a handful of states as images, for visual review.
  */
 class TablesPageTest
 {
@@ -1315,5 +1336,323 @@ class TablesPageTest
     {
         final ITextEditor sourceEditor = editor.getSourceEditor();
         return sourceEditor.getDocumentProvider().getDocument(sourceEditor.getEditorInput());
+    }
+
+    @Test
+    void testProblemDisplay_endToEnd_decoratesTheTabListsTheProblemAndSelectsTheCellOnDoubleClick()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final FlatXmlDatasetDocument datasetDocument = editor.getDatasetDocument();
+
+            assertThat(tablesPage.getTabFolder().getItem(0).getImage())
+                    .as("A table with a problem must show a warning or error image on its tab.")
+                    .isNotNull();
+            assertThat(tablesPage.getProblemsSection().getControl().getVisible())
+                    .as("A dataset with a problem must show the problems section.").isTrue();
+            assertThat(tablesPage.getProblemsSection().getHeaderText())
+                    .as("The header must count the problems.").isEqualTo("Problems (1)");
+
+            final DatasetProblem problem = datasetDocument.getModel().getProblems().get(0);
+            tablesPage.selectProblem(problem);
+
+            assertThat(tablesPage.getTabFolder().getSelectionIndex())
+                    .as("Selecting the problem must select its table's tab.").isEqualTo(0);
+            assertThat(tablesPage.getSelection().anchorColumnIndex())
+                    .as("Selecting the problem must select its column.").isEqualTo(1);
+            assertThat(tablesPage.getSelection().anchorRowIndex())
+                    .as("Selecting the problem must select its row.").isEqualTo(problem.rowIndex());
+
+            datasetDocument.setCells("USERS", List.of(new CellChange(0, "NAME", "Alice")));
+            UiTestWorkspace.processEvents();
+
+            assertThat(datasetDocument.getModel().getProblems())
+                    .as("Fixing the first row must remove the problem.").isEmpty();
+            assertThat(tablesPage.getProblemsSection().getControl().getVisible())
+                    .as("With no problems, the problems section must hide again.").isFalse();
+            assertThat(tablesPage.getTabFolder().getItem(0).getImage())
+                    .as("With no problems, the tab image must clear.").isNull();
+        }
+    }
+
+    @Test
+    void testSelectProblem_whenTheProblemHasATableButNoColumn_revealsItsTextOnTheSourcePage()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final String text = "<dataset><ORDERS ID=\"1\"/><USERS ID=\"1\"/><USERS/></dataset>";
+            final IFile file = workspace.createFile("dataset.xml", text);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final DatasetProblem problem = editor.getDatasetDocument().getModel().getProblems().get(0);
+
+            tablesPage.selectProblem(problem);
+            UiTestWorkspace.processEvents();
+
+            final ITextSelection selection =
+                    (ITextSelection) editor.getSourceEditor().getSelectionProvider().getSelection();
+            assertThat(List.of(problem.code(), editor.isSourcePageActive(),
+                    tablesPage.getTabFolder().getSelection().getText(), selection.getOffset(),
+                    selection.getLength()))
+                    .as("A redundant empty element has a table and no column, so double-clicking it must "
+                            + "show its text on the Source page, with its table's tab selected for the way "
+                            + "back.")
+                    .containsExactly(ProblemCode.REDUNDANT_EMPTY_ELEMENT, true, "USERS",
+                            text.indexOf("<USERS/>"), "<USERS/>".length());
+        }
+    }
+
+    @Test
+    void testProblemDisplay_whenFileIsBlank_hidesTheProblemsSection() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("blank.xml", "");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.openInDatasetEditor(file);
+
+            assertThat(editor.getTablesPage().getProblemsSection().getControl().getVisible())
+                    .as("A blank file must not list its missing root element, as the blank state "
+                            + "explains it.")
+                    .isFalse();
+        }
+    }
+
+    /**
+     * Captures the Tables page for a handful of states as PNGs under {@code target/screenshots}, for visual
+     * review after a build. Each case asserts that its image was saved and is not empty; the value is the
+     * image itself, so review the PNGs after changing anything these states render. The build directory comes
+     * from the {@code dbunit.build.directory} system property that the bundle's pom.xml sets; without it, as
+     * in a PDE JUnit launch, the images go to a temporary directory. The group closes the intro for the
+     * captures and opens it again afterwards, so that the test classes that run after it find the workbench
+     * as they would without it, and the other tests of the page are not affected by the closed intro.
+     */
+    @Nested
+    @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+    class Screenshots
+    {
+        private static final String BUILD_DIRECTORY_PROPERTY = "dbunit.build.directory";
+
+        private boolean introClosed;
+
+        private boolean introWasInStandby;
+
+        private Path screenshotDirectory;
+
+        @BeforeAll
+        void closeIntro()
+        {
+            final IWorkbench workbench = PlatformUI.getWorkbench();
+            final IIntroManager introManager = workbench.getIntroManager();
+            final IIntroPart intro = introManager.getIntro();
+            if (intro != null)
+            {
+                introWasInStandby = introManager.isIntroStandby(intro);
+                introClosed = introManager.closeIntro(intro);
+            }
+            UiTestWorkspace.processEvents();
+        }
+
+        @BeforeAll
+        void createScreenshotDirectory() throws IOException
+        {
+            final String buildDirectory = System.getProperty(BUILD_DIRECTORY_PROPERTY);
+            if (buildDirectory == null)
+            {
+                screenshotDirectory = Files.createTempDirectory("dbunit-screenshots");
+            }
+            else
+            {
+                screenshotDirectory = Files.createDirectories(Path.of(buildDirectory, "screenshots"));
+            }
+        }
+
+        @AfterAll
+        void reopenIntro()
+        {
+            if (introClosed)
+            {
+                final IWorkbench workbench = PlatformUI.getWorkbench();
+                final IIntroManager introManager = workbench.getIntroManager();
+                introManager.showIntro(workbench.getActiveWorkbenchWindow(), introWasInStandby);
+                UiTestWorkspace.processEvents();
+                assertThat(introManager.getIntro())
+                        .as("The intro must be open again for the test classes that run after this one.")
+                        .isNotNull();
+            }
+        }
+
+        @Test
+        void testCapture_whenTheFileIsEmpty_savesANonEmptyImage() throws Exception
+        {
+            try (UiTestWorkspace workspace = new UiTestWorkspace())
+            {
+                final IFile file = workspace.createFile("empty.xml", "");
+                final FlatXmlDatasetEditor editor =
+                        (FlatXmlDatasetEditor) workspace.openInDatasetEditor(file);
+
+                final Path screenshot = capture(editor, "empty-file.png");
+
+                assertThat(screenshot).as("The screenshot of an empty file must be saved and not be empty.")
+                        .exists().isNotEmptyFile();
+            }
+        }
+
+        @Test
+        void testCapture_whenTheEmptyFileIsReadOnly_savesANonEmptyImage() throws Exception
+        {
+            try (UiTestWorkspace workspace = new UiTestWorkspace())
+            {
+                final FlatXmlDatasetEditor editor =
+                        (FlatXmlDatasetEditor) workspace.openReadOnlyExternalFile("");
+
+                final Path screenshot = capture(editor, "read-only-empty-file.png");
+
+                assertThat(screenshot)
+                        .as("The screenshot of a read-only empty file must be saved and not be empty.")
+                        .exists().isNotEmptyFile();
+            }
+        }
+
+        @Test
+        void testCapture_whenTheDatasetHasNoTables_savesANonEmptyImage() throws Exception
+        {
+            try (UiTestWorkspace workspace = new UiTestWorkspace())
+            {
+                final IFile file = workspace.createFile("dataset.xml", "<dataset/>");
+                final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+
+                final Path screenshot = capture(editor, "no-tables.png");
+
+                assertThat(screenshot)
+                        .as("The screenshot of a dataset without tables must be saved and not be empty.")
+                        .exists().isNotEmptyFile();
+            }
+        }
+
+        @Test
+        void testCapture_whenTheTablesHaveData_savesANonEmptyImage() throws Exception
+        {
+            try (UiTestWorkspace workspace = new UiTestWorkspace())
+            {
+                final IFile file = workspace.createFile("dataset.xml",
+                        "<dataset>"
+                                + "<USERS ID=\"1\" NAME=\"Alice\" EMAIL=\"alice@example.com\"/>"
+                                + "<USERS ID=\"2\" NAME=\"Bob\" EMAIL=\"bob@example.com\"/>"
+                                + "<ORDERS ID=\"100\" USER_ID=\"1\" TOTAL=\"19.99\"/>"
+                                + "</dataset>");
+                final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+
+                final Path screenshot = capture(editor, "tables-with-data.png");
+
+                assertThat(screenshot)
+                        .as("The screenshot of tables with data must be saved and not be empty.").exists()
+                        .isNotEmptyFile();
+            }
+        }
+
+        @Test
+        void testCapture_whenTheSourceHasABlockingError_savesANonEmptyImage() throws Exception
+        {
+            try (UiTestWorkspace workspace = new UiTestWorkspace())
+            {
+                final IFile file = workspace.createFile("broken.xml", "<dataset><USERS ID=\"1\"</dataset>");
+                final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+
+                final Path screenshot = capture(editor, "blocking-error.png");
+
+                assertThat(screenshot)
+                        .as("The screenshot of a source with a blocking error must be saved and not be "
+                                + "empty.")
+                        .exists().isNotEmptyFile();
+            }
+        }
+
+        @Test
+        void testCapture_whenADtdTableHasNoRows_savesANonEmptyImage() throws Exception
+        {
+            try (UiTestWorkspace workspace = new UiTestWorkspace())
+            {
+                final IFile file = workspace.createFile("dataset.xml",
+                        "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*,ORDERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                                + "<!ATTLIST USERS ID CDATA #REQUIRED NAME CDATA #REQUIRED>\n"
+                                + "<!ELEMENT ORDERS EMPTY>\n<!ATTLIST ORDERS ID CDATA #REQUIRED>\n]>\n"
+                                + "<dataset>\n<USERS ID=\"1\" NAME=\"Alice\"/>\n</dataset>\n");
+                final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+                selectTab(editor.getTablesPage().getTabFolder(), "ORDERS");
+
+                final Path screenshot = capture(editor, "table-with-no-rows.png");
+
+                assertThat(screenshot)
+                        .as("The screenshot of a DTD table without rows must be saved and not be empty.")
+                        .exists().isNotEmptyFile();
+            }
+        }
+
+        @Test
+        void testCapture_whenTheDatasetHasProblems_savesANonEmptyImage() throws Exception
+        {
+            try (UiTestWorkspace workspace = new UiTestWorkspace())
+            {
+                final IFile file = workspace.createFile("dataset.xml",
+                        "<dataset><USERS ID=\"1\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+                final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+
+                final Path screenshot = capture(editor, "problems-warning.png");
+
+                assertThat(screenshot)
+                        .as("The screenshot of a dataset with problems must be saved and not be empty.")
+                        .exists().isNotEmptyFile();
+            }
+        }
+
+        private static void selectTab(final CTabFolder tabFolder, final String tableName)
+        {
+            for (final CTabItem item : tabFolder.getItems())
+            {
+                if (item.getText().equals(tableName))
+                {
+                    tabFolder.setSelection(item);
+                    return;
+                }
+            }
+        }
+
+        private Path capture(final FlatXmlDatasetEditor editor, final String fileName) throws Exception
+        {
+            final Composite page = (Composite) editor.getTablesPage().getControl();
+            page.setSize(800, 600);
+            page.layout(true, true);
+            UiTestWorkspace.processEvents();
+
+            final Point size = page.getSize();
+            final Image image = new Image(page.getDisplay(), size.x, size.y);
+            try
+            {
+                final GC gc = new GC(image);
+                try
+                {
+                    page.print(gc);
+                }
+                finally
+                {
+                    gc.dispose();
+                }
+                final Path screenshot = screenshotDirectory.resolve(fileName);
+                final ImageLoader loader = new ImageLoader();
+                loader.data = new ImageData[] { image.getImageData() };
+                loader.save(screenshot.toString(), SWT.IMAGE_PNG);
+                return screenshot;
+            }
+            finally
+            {
+                image.dispose();
+            }
+        }
     }
 }
