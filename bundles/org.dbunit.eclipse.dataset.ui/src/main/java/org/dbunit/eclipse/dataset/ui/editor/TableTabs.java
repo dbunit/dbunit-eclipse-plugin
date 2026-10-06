@@ -64,9 +64,7 @@ final class TableTabs
 
     private final Runnable gridStateChanged;
 
-    private final Map<String, CTabItem> tabsByKey = new LinkedHashMap<>();
-
-    private final Map<String, DatasetGrid> gridsByKey = new LinkedHashMap<>();
+    private final Map<String, TableTab> tabsByKey = new LinkedHashMap<>();
 
     /**
      * Creates the tabs of a page.
@@ -96,9 +94,9 @@ final class TableTabs
     boolean commitActiveCellEditor()
     {
         boolean noEditorLeft = true;
-        for (final DatasetGrid grid : gridsByKey.values())
+        for (final TableTab tab : tabsByKey.values())
         {
-            final boolean closed = grid.commitActiveCellEditor();
+            final boolean closed = tab.grid().commitActiveCellEditor();
             noEditorLeft = noEditorLeft && closed;
         }
         return noEditorLeft;
@@ -110,9 +108,9 @@ final class TableTabs
      */
     void cancelActiveCellEditor()
     {
-        for (final DatasetGrid grid : gridsByKey.values())
+        for (final TableTab tab : tabsByKey.values())
         {
-            grid.cancelActiveCellEditor();
+            tab.grid().cancelActiveCellEditor();
         }
     }
 
@@ -121,9 +119,9 @@ final class TableTabs
      */
     void repaintGrids()
     {
-        for (final DatasetGrid grid : gridsByKey.values())
+        for (final TableTab tab : tabsByKey.values())
         {
-            grid.repaint();
+            tab.grid().repaint();
         }
     }
 
@@ -132,24 +130,20 @@ final class TableTabs
      */
     void updateThemes()
     {
-        for (final DatasetGrid grid : gridsByKey.values())
+        for (final TableTab tab : tabsByKey.values())
         {
-            grid.updateTheme();
+            tab.grid().updateTheme();
         }
     }
 
     DatasetGrid activeGrid()
     {
         final CTabItem selected = tabFolder.getSelection();
-        if (selected == null)
+        for (final TableTab tab : tabsByKey.values())
         {
-            return null;
-        }
-        for (final DatasetGrid grid : gridsByKey.values())
-        {
-            if (grid.getControl().equals(selected.getControl()))
+            if (tab.item().equals(selected))
             {
-                return grid;
+                return tab.grid();
             }
         }
         return null;
@@ -157,18 +151,17 @@ final class TableTabs
 
     void selectCell(final CellAddress address)
     {
-        final CTabItem item = tabsByKey.get(address.tableKey());
-        if (item != null)
-        {
-            tabFolder.setSelection(item);
-            gridStateChanged.run();
-        }
-        final DatasetGrid grid = gridsByKey.get(address.tableKey());
-        if (grid == null || address.columnIndex() < 0)
+        final TableTab tab = tabsByKey.get(address.tableKey());
+        if (tab == null)
         {
             return;
         }
-        grid.selectCell(address.columnIndex(), address.rowIndex());
+        tabFolder.setSelection(tab.item());
+        gridStateChanged.run();
+        if (address.columnIndex() >= 0)
+        {
+            tab.grid().selectCell(address.columnIndex(), address.rowIndex());
+        }
     }
 
     /**
@@ -204,10 +197,9 @@ final class TableTabs
         int index = 0;
         for (final DatasetTable table : tables.values())
         {
-            final String key = table.getKey();
-            final CTabItem item = placeTab(key, index);
-            gridsByKey.get(key).tableChanged(table);
-            updateTab(item, table, model);
+            final TableTab tab = placeTab(table.getKey(), index);
+            tab.grid().tableChanged(table);
+            updateTab(tab.item(), table, model);
             index++;
         }
         selectTab(selectedGrid, selectedIndex, tableKeyToSelect);
@@ -233,57 +225,55 @@ final class TableTabs
                     && !tabsByKey.containsKey(newKey);
             if (renameApplies)
             {
-                final CTabItem item = tabsByKey.remove(oldKey);
-                tabsByKey.put(newKey, item);
-                final DatasetGrid grid = gridsByKey.remove(oldKey);
-                grid.tableRenamed(newKey);
-                gridsByKey.put(newKey, grid);
+                final TableTab tab = tabsByKey.remove(oldKey);
+                tab.grid().tableRenamed(newKey);
+                tabsByKey.put(newKey, tab);
             }
         }
     }
 
     private void disposeStaleTabs(final Set<String> tableKeys)
     {
-        final Iterator<Map.Entry<String, CTabItem>> iterator = tabsByKey.entrySet().iterator();
+        final Iterator<Map.Entry<String, TableTab>> iterator = tabsByKey.entrySet().iterator();
         while (iterator.hasNext())
         {
-            final Map.Entry<String, CTabItem> entry = iterator.next();
+            final Map.Entry<String, TableTab> entry = iterator.next();
             if (!tableKeys.contains(entry.getKey()))
             {
-                entry.getValue().getControl().dispose();
-                entry.getValue().dispose();
+                final CTabItem item = entry.getValue().item();
+                item.getControl().dispose();
+                item.dispose();
                 iterator.remove();
-                gridsByKey.remove(entry.getKey());
             }
         }
     }
 
-    private CTabItem placeTab(final String key, final int index)
+    private TableTab placeTab(final String key, final int index)
     {
-        CTabItem item = tabsByKey.get(key);
-        if (item == null)
+        TableTab tab = tabsByKey.get(key);
+        if (tab == null)
         {
-            item = createTab(key, index);
+            tab = createTab(key, index);
         }
-        else if (tabFolder.indexOf(item) != index)
+        else if (tabFolder.indexOf(tab.item()) != index)
         {
-            item = moveTab(item, index);
-            tabsByKey.put(key, item);
+            tab = new TableTab(moveTab(tab.item(), index), tab.grid());
+            tabsByKey.put(key, tab);
         }
-        return item;
+        return tab;
     }
 
-    private CTabItem createTab(final String key, final int index)
+    private TableTab createTab(final String key, final int index)
     {
         final DatasetGrid grid = new DatasetGrid(tabFolder, context, key);
         grid.selectCell(0, 0);
         grid.addSelectionListener(gridStateChanged);
         grid.addCellEditorListener(gridStateChanged);
-        gridsByKey.put(key, grid);
         final CTabItem item = new CTabItem(tabFolder, SWT.NONE, index);
         item.setControl(grid.getControl());
-        tabsByKey.put(key, item);
-        return item;
+        final TableTab tab = new TableTab(item, grid);
+        tabsByKey.put(key, tab);
+        return tab;
     }
 
     // A tab folder cannot move a tab, so the tab is created again at its new index. The new tab shares the
@@ -304,29 +294,27 @@ final class TableTabs
     private void selectTab(final DatasetGrid previousGrid, final int previousIndex,
             final String tableKeyToSelect)
     {
-        final CTabItem tabToSelect = tabsByKey.get(tableKeyToSelect);
+        final TableTab tabToSelect = tabsByKey.get(tableKeyToSelect);
         if (tabToSelect != null)
         {
-            tabFolder.setSelection(tabToSelect);
+            tabFolder.setSelection(tabToSelect.item());
         }
-        else if (tabOf(previousGrid) == null)
+        else if (!showsGrid(previousGrid))
         {
             selectTabNearIndex(previousIndex);
         }
     }
 
-    private CTabItem tabOf(final DatasetGrid grid)
+    private boolean showsGrid(final DatasetGrid grid)
     {
-        CTabItem tab = null;
-        for (final Map.Entry<String, DatasetGrid> entry : gridsByKey.entrySet())
+        for (final TableTab tab : tabsByKey.values())
         {
-            if (entry.getValue().equals(grid))
+            if (tab.grid().equals(grid))
             {
-                tab = tabsByKey.get(entry.getKey());
-                break;
+                return true;
             }
         }
-        return tab;
+        return false;
     }
 
     private void selectTabNearIndex(final int index)
@@ -385,5 +373,12 @@ final class TableTabs
     private static Image sharedImage(final String key)
     {
         return PlatformUI.getWorkbench().getSharedImages().getImage(key);
+    }
+
+    /**
+     * The tab of a table with the grid that it shows.
+     */
+    private record TableTab(CTabItem item, DatasetGrid grid)
+    {
     }
 }

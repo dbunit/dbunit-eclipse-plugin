@@ -39,6 +39,7 @@ import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
+import org.dbunit.eclipse.dataset.ui.grid.DatasetGrid;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.jface.resource.LocalResourceManager;
@@ -71,6 +72,8 @@ class TableTabsTest
     private static final String USERS_AND_ORDERS = "<dataset><USERS ID=\"1\"/><ORDERS ID=\"1\"/></dataset>";
 
     private static final String A_B_C = "<dataset><A ID=\"1\"/><B ID=\"1\"/><C ID=\"1\"/></dataset>";
+
+    private static final String C_A_B = "<dataset><C ID=\"1\"/><A ID=\"1\"/><B ID=\"1\"/></dataset>";
 
     private static final String USERS_WITH_TWO_ROWS =
             "<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>";
@@ -163,6 +166,20 @@ class TableTabsTest
 
         assertThat(tabTexts()).as("Only the remaining table may have a tab.").containsExactly("ORDERS");
         assertThat(usersGrid.isDisposed()).as("The removed table's grid must be disposed.").isTrue();
+    }
+
+    @Test
+    void testReconcile_whenATableIsRemovedAfterItsTabMoved_disposesItsTabAndGrid()
+    {
+        tabs.reconcile(show(A_B_C));
+        tabs.reconcile(show(C_A_B));
+        final Control gridOfC = tabFolder.getItem(0).getControl();
+
+        tabs.reconcile(show("<dataset><A ID=\"1\"/><B ID=\"1\"/></dataset>"));
+
+        assertThat(tabTexts()).as("Only the remaining tables may have a tab.").containsExactly("A", "B");
+        assertThat(gridOfC.isDisposed())
+                .as("The grid of the table that moved and was removed must be disposed.").isTrue();
     }
 
     @Test
@@ -334,7 +351,7 @@ class TableTabsTest
         tabFolder.setSelection(2);
         final Control gridOfC = tabFolder.getItem(2).getControl();
 
-        tabs.reconcile(show("<dataset><C ID=\"1\"/><A ID=\"1\"/><B ID=\"1\"/></dataset>"));
+        tabs.reconcile(show(C_A_B));
 
         assertThat(tabTexts()).as("The tabs must follow the order of the model.")
                 .containsExactly("C", "A", "B");
@@ -353,10 +370,25 @@ class TableTabsTest
         final AtomicInteger hides = new AtomicInteger();
         tabFolder.getItem(2).getControl().addListener(SWT.Hide, event -> hides.incrementAndGet());
 
-        tabs.reconcile(show("<dataset><C ID=\"1\"/><A ID=\"1\"/><B ID=\"1\"/></dataset>"));
+        tabs.reconcile(show(C_A_B));
 
         assertThat(hides.get()).as("A grid that is hidden while its tab moves loses the keyboard focus.")
                 .isZero();
+    }
+
+    @Test
+    void testReconcile_whenATabMovesTwice_keepsItsGridAndFollowsTheModelOrder()
+    {
+        tabs.reconcile(show(A_B_C));
+        final Control gridOfC = tabFolder.getItem(2).getControl();
+        tabs.reconcile(show(C_A_B));
+
+        tabs.reconcile(show(A_B_C));
+
+        assertThat(tabTexts()).as("The tabs must follow the order of the model.")
+                .containsExactly("A", "B", "C");
+        assertThat(tabFolder.getItem(2).getControl()).as("The tab that moved twice must keep its grid.")
+                .isSameAs(gridOfC);
     }
 
     @Test
@@ -571,6 +603,21 @@ class TableTabsTest
     }
 
     @Test
+    void testSelectCell_whenTheTabOfTheTableMoved_selectsTheMovedTabAndTheCell()
+    {
+        tabs.reconcile(show("<dataset><A ID=\"1\"/><B ID=\"1\"/><C ID=\"1\"/><C ID=\"2\"/></dataset>"));
+        tabs.reconcile(show("<dataset><C ID=\"1\"/><C ID=\"2\"/><A ID=\"1\"/><B ID=\"1\"/></dataset>"));
+
+        tabs.selectCell(new CellAddress("C", 1, 0));
+
+        assertThat(tabFolder.getSelection().getText()).as("The tab that moved must be selected.")
+                .isEqualTo("C");
+        assertThat(anchorOf(tabs.activeGrid().getSelection()))
+                .as("The cell must be selected in the grid of the moved tab.")
+                .isEqualTo(new CellAddress("C", 1, 0));
+    }
+
+    @Test
     void testSelectCell_whenTheColumnIsUnknown_selectsOnlyTheTab()
     {
         tabs.reconcile(show(USERS_AND_ORDERS));
@@ -626,6 +673,21 @@ class TableTabsTest
 
         assertThat(List.of(firstActive, secondActive)).as("The active grid must follow the selected tab.")
                 .containsExactly(usersGrid, ordersGrid);
+    }
+
+    @Test
+    void testActiveGrid_whenTheSelectedTabMoved_isTheGridOfTheMovedTab()
+    {
+        tabs.reconcile(show(A_B_C));
+        tabFolder.setSelection(2);
+        final Control gridOfC = tabFolder.getItem(2).getControl();
+        tabs.reconcile(show(C_A_B));
+
+        final DatasetGrid activeGrid = tabs.activeGrid();
+
+        assertThat(activeGrid).as("The selected tab that moved must still have its grid.").isNotNull();
+        assertThat(activeGrid.getControl()).as("The active grid must be the grid of the tab that moved.")
+                .isSameAs(gridOfC);
     }
 
     @Test
