@@ -77,6 +77,32 @@ class FlatXmlContentDescriberTest
     }
 
     @Test
+    void testDescribe_whenAFlatTableIsNamedTableAndHasANameColumn_returnsValid() throws IOException
+    {
+        final String content = "<dataset><table id=\"1\" name=\"x\"/><table id=\"2\" name=\"y\"/></dataset>";
+        assertThat(describe(content))
+                .as("A flat table named table that has more columns than name is no full XML table.")
+                .isEqualTo(VALID);
+    }
+
+    @Test
+    void testDescribe_whenAFlatTableIsNamedTableAndHasNoNameColumn_returnsValid() throws IOException
+    {
+        assertThat(describe("<dataset><table id=\"1\"/></dataset>"))
+                .as("A flat table named table without a name attribute is not the full XML format.")
+                .isEqualTo(VALID);
+    }
+
+    @Test
+    void testDescribe_whenTheFirstTableElementHasOnlyANameAttribute_returnsInvalid() throws IOException
+    {
+        final String content = "<dataset><table name=\"USERS\"/></dataset>";
+        assertThat(describe(content))
+                .as("A table element with only a name attribute is read as the full XML format.")
+                .isEqualTo(INVALID);
+    }
+
+    @Test
     void testDescribe_whenRootIsNotDataset_returnsInvalid() throws IOException
     {
         assertThat(describe("<notADataset/>")).as("A root other than dataset must be invalid.")

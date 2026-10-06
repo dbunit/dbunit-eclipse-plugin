@@ -189,10 +189,19 @@ public final class FlatXmlContentDescriber extends XMLContentDescriber
             }
             if (depth == 2)
             {
-                final boolean isFullXmlDataSetTable =
-                        "table".equals(qName) && attributes.getValue("name") != null;
-                throw new DescriptionKnown(isFullXmlDataSetTable ? INVALID : VALID);
+                throw new DescriptionKnown(isFullXmlDataSetTable(qName, attributes) ? INVALID : VALID);
             }
+        }
+
+        /**
+         * Tells whether the first element inside the root starts a table of the full XML format, which is
+         * {@code <table name="...">} with that one attribute. A flat table that is named {@code table} has
+         * other attributes, because dbUnit takes a flat table's columns from the attributes of its rows.
+         */
+        private static boolean isFullXmlDataSetTable(final String qName, final Attributes attributes)
+        {
+            final boolean hasOnlyAName = attributes.getLength() == 1 && attributes.getValue("name") != null;
+            return "table".equals(qName) && hasOnlyAName;
         }
     }
 }

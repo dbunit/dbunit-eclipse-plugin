@@ -482,7 +482,9 @@ Right-click for the commands that apply to what you clicked.
 [[limitations]]
 == Known Limitations
 
-* The editor supports only the flat XML format (`FlatXmlDataSet`), not dbUnit's other dataset formats.
+* dbUnit's full XML format (`XmlDataSet`) is not supported.
+Eclipse takes a file whose first table element is `<table name="...">` with no other attribute for that format
+and does not open it in this editor by default; choose *Open With* to open it anyway.
 * The grid never sorts or filters rows, because their order matters to dbUnit.
 * Columns and tables cannot be reordered in the grid; reorder them on the Source page.
 * The Tables page has no find or replace across cells; use the Source page's Find/Replace instead.
