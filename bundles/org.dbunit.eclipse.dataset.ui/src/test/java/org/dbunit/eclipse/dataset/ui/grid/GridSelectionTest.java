@@ -193,26 +193,49 @@ class GridSelectionTest
     }
 
     @Test
+    void testBounds_whenNothingIsSelected_areMinusOne()
+    {
+        final GridSelection none = GridSelection.NONE;
+
+        assertThat(List.of(none.firstRowIndex(), none.lastRowIndex(), none.firstColumnIndex(),
+                none.lastColumnIndex())).as("Without a selected row or column, every bound must be -1.")
+                .containsExactly(-1, -1, -1, -1);
+    }
+
+    @Test
+    void testBounds_whenRowsAndColumnsAreSelected_areTheLowestAndTheHighest()
+    {
+        final GridSelection selection =
+                new GridSelection("USERS", 6, 4, 0, 1, List.of(1, 3, 4), List.of(0, 2), false);
+
+        assertThat(List.of(selection.firstRowIndex(), selection.lastRowIndex(), selection.firstColumnIndex(),
+                selection.lastColumnIndex())).as("The bounds must be the ends of the sorted indexes.")
+                .containsExactly(1, 4, 0, 2);
+        assertThat(selection.isContiguousRowSelection())
+                .as("Rows 1, 3, and 4 have a gap, which the bounds must show.").isFalse();
+        assertThat(selection.columnSpan()).as("The columns 0 to 2 span three columns.").isEqualTo(3);
+    }
+
+    @Test
     void testConstructor_whenTheGivenListsChangeAfterwards_keepsTheIndexesItWasGiven()
     {
         final List<Integer> rowIndexes = new ArrayList<>(List.of(1, 2));
         final List<Integer> columnIndexes = new ArrayList<>(List.of(0));
         final GridSelection selection =
-                new GridSelection("USERS", 3, 1, 0, 1, rowIndexes, columnIndexes, 1, 2, 0, 0, true);
+                new GridSelection("USERS", 3, 1, 0, 1, rowIndexes, columnIndexes, true);
 
         rowIndexes.add(3);
         columnIndexes.add(1);
 
         assertThat(selection).as("A later change to the caller's lists must not change the selection.")
-                .isEqualTo(new GridSelection("USERS", 3, 1, 0, 1, List.of(1, 2), List.of(0), 1, 2, 0, 0,
-                        true));
+                .isEqualTo(new GridSelection("USERS", 3, 1, 0, 1, List.of(1, 2), List.of(0), true));
     }
 
     @Test
     void testIndexes_whenAReturnedListIsModified_throws()
     {
         final GridSelection selection = new GridSelection("USERS", 3, 1, 0, 1,
-                new ArrayList<>(List.of(1, 2)), new ArrayList<>(List.of(0)), 1, 2, 0, 0, true);
+                new ArrayList<>(List.of(1, 2)), new ArrayList<>(List.of(0)), true);
 
         assertThatThrownBy(() -> selection.rowIndexes().add(3))
                 .as("The returned row indexes must not let a caller change the selection.")

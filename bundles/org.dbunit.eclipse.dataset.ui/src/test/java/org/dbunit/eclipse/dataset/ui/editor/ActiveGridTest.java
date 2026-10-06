@@ -110,7 +110,7 @@ class ActiveGridTest
         show(USERS);
 
         assertThat(activeGrid.getSelection()).as("The first cell is selected when the grid opens.")
-                .isEqualTo(new GridSelection("USERS", 2, 2, 0, 0, List.of(0), List.of(0), 0, 0, 0, 0, false));
+                .isEqualTo(new GridSelection("USERS", 2, 2, 0, 0, List.of(0), List.of(0), false));
     }
 
     @Test
@@ -121,8 +121,7 @@ class ActiveGridTest
         activeGrid.selectRegion(0, 0, 2, 2);
 
         assertThat(activeGrid.getSelection()).as("Both rows and both columns must be selected.")
-                .isEqualTo(new GridSelection("USERS", 2, 2, 0, 0, List.of(0, 1), List.of(0, 1), 0, 1, 0, 1,
-                        true));
+                .isEqualTo(new GridSelection("USERS", 2, 2, 0, 0, List.of(0, 1), List.of(0, 1), true));
     }
 
     @Test

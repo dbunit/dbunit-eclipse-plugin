@@ -731,16 +731,14 @@ class TablesPageTest
 
             assertThat(tablesPage.getSelection())
                     .as("Insert Row Below must select the new row's cell in the anchor column.")
-                    .isEqualTo(new GridSelection("USERS", 3, 2, 1, 1, List.of(1), List.of(1), 1, 1, 1, 1,
-                            false));
+                    .isEqualTo(new GridSelection("USERS", 3, 2, 1, 1, List.of(1), List.of(1), false));
 
             tablesPage.selectRegion(0, 0, 2, 2);
             handlerService.executeCommand(DatasetCommandIds.DELETE_ROWS, null);
 
             assertThat(tablesPage.getSelection())
                     .as("Delete Rows must select the row that takes the place of the deleted ones.")
-                    .isEqualTo(new GridSelection("USERS", 1, 2, 0, 0, List.of(0), List.of(0), 0, 0, 0, 0,
-                            false));
+                    .isEqualTo(new GridSelection("USERS", 1, 2, 0, 0, List.of(0), List.of(0), false));
         }
     }
 
@@ -837,8 +835,7 @@ class TablesPageTest
 
             assertThat(tablesPage.getSelection())
                     .as("Move Rows Up must keep the moved rows selected, so that they can move again.")
-                    .isEqualTo(new GridSelection("T", 3, 1, 0, 0, List.of(0, 1), List.of(0), 0, 1, 0, 0,
-                            true));
+                    .isEqualTo(new GridSelection("T", 3, 1, 0, 0, List.of(0, 1), List.of(0), true));
         }
     }
 
@@ -1151,8 +1148,7 @@ class TablesPageTest
 
             assertThat(tablesPage.getSelection())
                     .as("Opening a dataset must select the first cell of the first table.")
-                    .isEqualTo(new GridSelection("USERS", 2, 2, 0, 0, List.of(0), List.of(0), 0, 0, 0, 0,
-                            false));
+                    .isEqualTo(new GridSelection("USERS", 2, 2, 0, 0, List.of(0), List.of(0), false));
         }
     }
 
@@ -1169,8 +1165,7 @@ class TablesPageTest
 
             assertThat(tablesPage.getSelection())
                     .as("A table without rows must start with no cell selected.")
-                    .isEqualTo(new GridSelection("ORDERS", 0, 1, -1, -1, List.of(), List.of(), -1, -1, -1,
-                            -1, false));
+                    .isEqualTo(new GridSelection("ORDERS", 0, 1, -1, -1, List.of(), List.of(), false));
         }
     }
 

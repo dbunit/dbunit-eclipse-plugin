@@ -40,23 +40,18 @@ import org.eclipse.nebula.widgets.nattable.selection.SelectionLayer;
  * @param anchorRowIndex The selection anchor's row index, or {@code SelectionLayer.NO_SELECTION}.
  * @param rowIndexes The selected row indexes, sorted ascending.
  * @param columnIndexes The selected column indexes, sorted ascending.
- * @param firstRowIndex The lowest selected row index, or -1 when {@code rowIndexes} is empty.
- * @param lastRowIndex The highest selected row index, or -1 when {@code rowIndexes} is empty.
- * @param firstColumnIndex The lowest selected column index, or -1 when {@code columnIndexes} is empty.
- * @param lastColumnIndex The highest selected column index, or -1 when {@code columnIndexes} is empty.
  * @param wholeRowsSelected True when every selected row is selected in full, and at least one row is
  *                          selected.
  * @since 1.0.0
  */
 public record GridSelection(String tableKey, int rowCount, int columnCount, int anchorColumnIndex,
-        int anchorRowIndex, List<Integer> rowIndexes, List<Integer> columnIndexes, int firstRowIndex,
-        int lastRowIndex, int firstColumnIndex, int lastColumnIndex, boolean wholeRowsSelected)
+        int anchorRowIndex, List<Integer> rowIndexes, List<Integer> columnIndexes, boolean wholeRowsSelected)
 {
     /**
      * The selection of a page with no active grid: no table, no anchor, no selected rows or columns.
      */
     public static final GridSelection NONE = new GridSelection(null, 0, 0, SelectionLayer.NO_SELECTION,
-            SelectionLayer.NO_SELECTION, List.of(), List.of(), -1, -1, -1, -1, false);
+            SelectionLayer.NO_SELECTION, List.of(), List.of(), false);
 
     /**
      * Creates a snapshot with its own unmodifiable copies of the selected row and column indexes, so that
@@ -106,8 +101,47 @@ public record GridSelection(String tableKey, int rowCount, int columnCount, int 
             }
         }
         return new GridSelection(tableKey, rowCount, columnCount, anchor.columnPosition, anchor.rowPosition,
-                rowIndexes, columnIndexes, boundStart(rowIndexes), boundEnd(rowIndexes),
-                boundStart(columnIndexes), boundEnd(columnIndexes), wholeRowsSelected);
+                rowIndexes, columnIndexes, wholeRowsSelected);
+    }
+
+    /**
+     * Returns the lowest selected row index.
+     *
+     * @return The lowest selected row index, or -1 when no row is selected.
+     */
+    public int firstRowIndex()
+    {
+        return boundStart(rowIndexes);
+    }
+
+    /**
+     * Returns the highest selected row index.
+     *
+     * @return The highest selected row index, or -1 when no row is selected.
+     */
+    public int lastRowIndex()
+    {
+        return boundEnd(rowIndexes);
+    }
+
+    /**
+     * Returns the lowest selected column index.
+     *
+     * @return The lowest selected column index, or -1 when no column is selected.
+     */
+    public int firstColumnIndex()
+    {
+        return boundStart(columnIndexes);
+    }
+
+    /**
+     * Returns the highest selected column index.
+     *
+     * @return The highest selected column index, or -1 when no column is selected.
+     */
+    public int lastColumnIndex()
+    {
+        return boundEnd(columnIndexes);
     }
 
     /**
@@ -117,7 +151,7 @@ public record GridSelection(String tableKey, int rowCount, int columnCount, int 
      */
     public boolean isContiguousRowSelection()
     {
-        return !rowIndexes.isEmpty() && lastRowIndex - firstRowIndex + 1 == rowIndexes.size();
+        return !rowIndexes.isEmpty() && lastRowIndex() - firstRowIndex() + 1 == rowIndexes.size();
     }
 
     /**
@@ -139,7 +173,7 @@ public record GridSelection(String tableKey, int rowCount, int columnCount, int 
      */
     public int columnSpan()
     {
-        return columnIndexes.isEmpty() ? 0 : lastColumnIndex - firstColumnIndex + 1;
+        return columnIndexes.isEmpty() ? 0 : lastColumnIndex() - firstColumnIndex() + 1;
     }
 
     private static int boundStart(final List<Integer> indexes)

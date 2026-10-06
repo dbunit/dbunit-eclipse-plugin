@@ -95,7 +95,7 @@ class TablesPageActionsTest
             DatasetCommandIds.EDIT_CELL_IN_DIALOG, DatasetCommandIds.SHOW_IN_SOURCE);
 
     private static final GridSelection USERS_CELL_SELECTED =
-            new GridSelection("USERS", 2, 2, 0, 0, List.of(0), List.of(0), 0, 0, 0, 0, false);
+            new GridSelection("USERS", 2, 2, 0, 0, List.of(0), List.of(0), false);
 
     private Shell shell;
 

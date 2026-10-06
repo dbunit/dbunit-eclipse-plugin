@@ -457,7 +457,7 @@ class GridActionsTest
         final FlatXmlDatasetDocument datasetDocument = create("<dataset><USERS ID=\"1\"/></dataset>");
         final TestContext context = new TestContext(datasetDocument, "USERS");
         context.staleSelection =
-                new GridSelection("GONE", 1, 1, 0, 0, List.of(0), List.of(0), 0, 0, 0, 0, false);
+                new GridSelection("GONE", 1, 1, 0, 0, List.of(0), List.of(0), false);
         final AddColumnAction action = new AddColumnAction(context);
 
         action.run();
@@ -2439,14 +2439,8 @@ class GridActionsTest
             final DatasetTable table = datasetDocument.getModel().findTable(tableKey).orElseThrow();
             final int rowCount = table.getRows().size();
             final int columnCount = table.getColumns().size();
-            final int firstRow = rowIndexes.isEmpty() ? -1 : rowIndexes.get(0);
-            final int lastRow = rowIndexes.isEmpty() ? -1 : rowIndexes.get(rowIndexes.size() - 1);
-            final int firstColumn = columnIndexes.isEmpty() ? -1 : columnIndexes.get(0);
-            final int lastColumn =
-                    columnIndexes.isEmpty() ? -1 : columnIndexes.get(columnIndexes.size() - 1);
             return new GridSelection(tableKey, rowCount, columnCount, anchorColumnIndex, anchorRowIndex,
-                    rowIndexes, columnIndexes, firstRow, lastRow, firstColumn, lastColumn,
-                    wholeRowsSelected);
+                    rowIndexes, columnIndexes, wholeRowsSelected);
         }
 
         @Override
