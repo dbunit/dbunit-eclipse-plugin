@@ -79,6 +79,11 @@ public final class Messages extends NLS
     public static String Validator_dtdTableWithoutDeclaration;
 
     /**
+     * The DTD declares the dataset element as EMPTY, which dbUnit cannot load.
+     */
+    public static String Validator_dtdEmptyContentModel;
+
+    /**
      * The DOCTYPE's external DTD could not be read.
      */
     public static String Validator_dtdNotLoaded;

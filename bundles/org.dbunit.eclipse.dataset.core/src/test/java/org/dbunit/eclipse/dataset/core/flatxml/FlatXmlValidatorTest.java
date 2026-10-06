@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.TestDatasets;
 import org.dbunit.eclipse.dataset.core.dtd.DtdDeclarations;
 import org.dbunit.eclipse.dataset.core.dtd.DtdReader;
@@ -251,6 +252,34 @@ class FlatXmlValidatorTest
         assertThat(onlyCode(problems, ProblemCode.DTD_TABLE_WITHOUT_DECLARATION))
                 .as("ORDERS is named in the content model but has neither ELEMENT nor ATTLIST.")
                 .hasSize(1);
+    }
+
+    @Test
+    void testValidate_whenTheContentModelIsEmpty_reportsDtdEmptyContentModelOnTheDoctype()
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ELEMENT dataset EMPTY>\n]>\n<dataset/>";
+
+        final List<DatasetProblem> problems = validate(text, FlatXmlOptions.DBUNIT_DEFAULTS, false);
+
+        assertThat(problems).as("dbUnit cannot load an EMPTY content model, and no table name is missing.")
+                .extracting(DatasetProblem::code, DatasetProblem::severity, DatasetProblem::message,
+                        DatasetProblem::offset)
+                .containsExactly(tuple(ProblemCode.DTD_EMPTY_CONTENT_MODEL, ProblemSeverity.ERROR,
+                        Messages.Validator_dtdEmptyContentModel, 0));
+    }
+
+    @Test
+    void testValidate_whenTheContentModelHasAParameterEntityReference_reportsNoMissingDeclaration()
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ELEMENT dataset (%tables;)*>\n<!ELEMENT USERS EMPTY>\n"
+                + "<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n<dataset><USERS ID=\"1\"/></dataset>";
+
+        final List<DatasetProblem> problems = validate(text, FlatXmlOptions.DBUNIT_DEFAULTS, false);
+
+        assertThat(problems).extracting(DatasetProblem::code)
+                .as("The reference is ignored with an info, and neither a phantom table nor a table that "
+                        + "the entity may list is reported.")
+                .containsExactly(ProblemCode.UNSUPPORTED_DTD_CONSTRUCT);
     }
 
     @Test

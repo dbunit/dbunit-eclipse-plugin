@@ -92,6 +92,12 @@ public enum ProblemCode
     DTD_TABLE_WITHOUT_DECLARATION(false),
 
     /**
+     * The DTD declares the {@code dataset} element as {@code EMPTY}, which dbUnit cannot load: it reads
+     * the table names from the content model's text without its first and last character.
+     */
+    DTD_EMPTY_CONTENT_MODEL(false),
+
+    /**
      * The DOCTYPE's external DTD could not be read.
      */
     DTD_NOT_LOADED(false),

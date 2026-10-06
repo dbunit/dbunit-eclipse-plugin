@@ -316,6 +316,8 @@ It never reads a DTD from the network, such as an `http:` URL or, on Windows, a 
 it then reports that the DTD could not be read, and skips the checks that need the DTD.
 When you edit the DTD file, the editor reads it again the next time you activate the editor.
 Parameter entities and conditional sections in a DTD are not supported and are ignored.
+When the content model of the `dataset` element refers to a parameter entity, which may list the tables,
+the editor takes every element that the DTD declares as a table, in the order of the declarations.
 
 [[problems]]
 == Problems
@@ -370,6 +372,9 @@ or, with column sensing, fails to load the dataset.
 
 |*The DTD content model names ..., which the DTD does not declare, so dbUnit fails to load the dataset.*
 |Declare the element with `ELEMENT` or `ATTLIST` in the DTD, or remove it from the content model.
+
+|*The DTD declares the dataset element as EMPTY, so dbUnit fails to load the dataset.*
+|List the tables in the content model of the `dataset` element, or use `ANY`.
 
 |*The DOCTYPE's external DTD could not be read.*
 The editor skips the checks that need the DTD.

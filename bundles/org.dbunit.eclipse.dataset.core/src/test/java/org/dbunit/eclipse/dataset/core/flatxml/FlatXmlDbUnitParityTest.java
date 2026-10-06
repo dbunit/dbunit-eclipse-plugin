@@ -33,6 +33,7 @@ import java.util.Locale;
 import java.util.Map;
 
 import org.dbunit.dataset.Column;
+import org.dbunit.dataset.DataSetException;
 import org.dbunit.dataset.IDataSet;
 import org.dbunit.dataset.ITable;
 import org.dbunit.dataset.NoSuchColumnException;
@@ -42,7 +43,9 @@ import org.dbunit.eclipse.dataset.core.dtd.DtdDeclarations;
 import org.dbunit.eclipse.dataset.core.dtd.DtdReader;
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
 import org.dbunit.eclipse.dataset.core.model.DatasetModel;
+import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IDocument;
 import org.junit.jupiter.api.Test;
@@ -74,11 +77,31 @@ class FlatXmlDbUnitParityTest
     @ParameterizedTest
     @ValueSource(strings = { "flatXmlTableTest.xml", "flatXmlDataSetDtdDifferentCaseTest.xml",
             "internal-subset.xml", "column-name-case-dtd.xml", "dtd-defaults-internal.xml",
-            "dtd-defaults-external.xml" })
+            "dtd-defaults-external.xml", "dtd-parameter-entity.xml" })
     void testBuild_whenFixtureHasADoctype_matchesDbUnitOnDeclaredColumns(final String fixtureName)
             throws Exception
     {
         assertParity(TestDatasets.read(fixtureName), datasetsFile(fixtureName), false, false);
+    }
+
+    @Test
+    void testBuild_whenTheContentModelIsEmpty_dbUnitFailsToLoadTheDatasetAndTheModelReportsIt()
+            throws Exception
+    {
+        final String text = "<!DOCTYPE dataset [\n<!ELEMENT dataset EMPTY>\n]>\n<dataset/>\n";
+        final Path file = tempDir.resolve("empty-content-model.xml");
+        Files.writeString(file, text, StandardCharsets.UTF_8);
+        final FlatXmlDatasetDocument datasetDocument = new FlatXmlDatasetDocument(new Document(text),
+                DtdSource.NONE, FlatXmlOptions.DBUNIT_DEFAULTS, () -> StandardCharsets.UTF_8);
+        datasetDocument.refresh();
+
+        assertThatThrownBy(() -> new FlatXmlDataSetBuilder().build(file.toFile()))
+                .as("dbUnit must fail to load a dataset whose DTD declares the dataset element EMPTY.")
+                .isInstanceOf(DataSetException.class);
+        assertThat(datasetDocument.getModel().getProblems()).extracting(DatasetProblem::code)
+                .as("The model must report the failure, and not as a table named EMPTY.")
+                .containsExactly(ProblemCode.DTD_EMPTY_CONTENT_MODEL);
+        assertThat(datasetDocument.getModel().getTables()).as("The keyword EMPTY is no table.").isEmpty();
     }
 
     @Test

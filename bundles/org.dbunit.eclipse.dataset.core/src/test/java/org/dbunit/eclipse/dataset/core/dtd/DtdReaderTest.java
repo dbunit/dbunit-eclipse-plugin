@@ -244,6 +244,91 @@ class DtdReaderTest
     }
 
     @Test
+    void testRead_whenContentModelIsEmpty_hasNoTablesAndIsReportedEmpty()
+    {
+        final DtdDeclarations declarations = DtdReader.read(
+                "<!ELEMENT dataset EMPTY>\n<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #IMPLIED>");
+
+        assertThat(List.of(declarations.tables(), declarations.missingDeclarations(),
+                declarations.hasEmptyContentModel()))
+                .as("EMPTY is a keyword, not a table name, and dbUnit cannot load such a dataset.")
+                .containsExactly(List.of(), List.of(), true);
+    }
+
+    @Test
+    void testRead_whenContentModelIsNotEmpty_isNotReportedEmpty()
+    {
+        final DtdDeclarations declarations =
+                DtdReader.read("<!ELEMENT dataset (EMPTY*)>\n<!ELEMENT EMPTY ANY>");
+
+        assertThat(List.of(declarations.hasEmptyContentModel(),
+                declarations.tables().stream().map(DtdTable::name).toList()))
+                .as("An element that is named EMPTY is a table, because only the whole model is the keyword.")
+                .containsExactly(false, List.of("EMPTY"));
+    }
+
+    @Test
+    void testRead_whenContentModelHasAParameterEntityReference_ignoresItAndReadsTheModelLikeAny()
+    {
+        final String prefix = "<!ELEMENT dataset (";
+
+        final DtdDeclarations declarations = DtdReader.read(
+                prefix + "%tables;)*>\n<!ELEMENT USERS EMPTY>\n<!ELEMENT ORDERS EMPTY>");
+
+        assertThat(declarations.tables()).as("The reference is no table, and the tables it may list are the "
+                + "declared elements.").extracting(DtdTable::name).containsExactly("USERS", "ORDERS");
+        assertThat(declarations.getProblems()).as("The reference must be reported as ignored, where it is.")
+                .containsExactly(new DatasetProblem(ProblemCode.UNSUPPORTED_DTD_CONSTRUCT,
+                        ProblemSeverity.INFO, Messages.Dtd_parameterEntityReferencesIgnored, null, null, -1,
+                        prefix.length(), "%tables;".length()));
+        assertThat(declarations.missingDeclarations())
+                .as("A content model that the reader cannot read whole names no table without a declaration.")
+                .isEmpty();
+    }
+
+    @Test
+    void testRead_whenContentModelMixesNamesAndAParameterEntityReference_everyDeclaredElementIsATable()
+    {
+        final DtdDeclarations declarations = DtdReader.read("<!ELEMENT dataset (USERS*, %more;)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ELEMENT ORDERS EMPTY>\n<!ELEMENT AUDIT EMPTY>");
+
+        assertThat(declarations.tables()).as("The entity may list the other tables.")
+                .extracting(DtdTable::name).containsExactly("USERS", "ORDERS", "AUDIT");
+    }
+
+    @Test
+    void testRead_whenContentModelHasATokenThatIsNoName_addsNoTableForIt()
+    {
+        final DtdDeclarations declarations = DtdReader
+                .read("<!ELEMENT dataset (#PCDATA | USERS | 1BAD | #OTHER)*>\n<!ELEMENT USERS EMPTY>");
+
+        assertThat(declarations.tables()).as("Only a name can be a table.").extracting(DtdTable::name)
+                .containsExactly("USERS");
+    }
+
+    @Test
+    void testMerge_whenTheInternalSubsetHasNoContentModelAndTheExternalOneIsEmpty_isReportedEmpty()
+    {
+        final DtdDeclarations internal = DtdReader.read("<!ATTLIST USERS ID CDATA #IMPLIED>");
+        final DtdDeclarations external = DtdReader.read("<!ELEMENT dataset EMPTY>");
+
+        assertThat(List.of(internal.merge(external).hasEmptyContentModel(),
+                external.merge(internal).hasEmptyContentModel()))
+                .as("The content model that is declared wins, wherever it is declared.")
+                .containsExactly(true, true);
+    }
+
+    @Test
+    void testMerge_whenTheInternalSubsetDeclaresAContentModel_theExternalEmptyOneIsNotUsed()
+    {
+        final DtdDeclarations internal = DtdReader.read("<!ELEMENT dataset (USERS*)>");
+        final DtdDeclarations external = DtdReader.read("<!ELEMENT dataset EMPTY>");
+
+        assertThat(internal.merge(external).hasEmptyContentModel())
+                .as("The internal subset's declaration is binding.").isFalse();
+    }
+
+    @Test
     void testRead_whenAnElementIsDeclaredOutsideTheContentModel_isNotATable()
     {
         final DtdDeclarations declarations = DtdReader.read(
@@ -540,6 +625,17 @@ class DtdReaderTest
                 .as("#PCDATA is no element name, and a name is found whole, not as the prefix of another.")
                 .containsExactly(new DtdElementName("USERS", dtd.indexOf("USERS |")),
                         new DtdElementName("USERS_AUDIT", dtd.indexOf("USERS_AUDIT")));
+    }
+
+    @Test
+    void testLocateElementNames_whenTheContentModelHasAParameterEntityReference_findsOnlyTheNames()
+    {
+        final String dtd = "<!ELEMENT dataset (%first;, USERS)>\n<!ELEMENT USERS EMPTY>";
+
+        assertThat(DtdReader.locateElementNames(dtd))
+                .as("A parameter entity reference is no element name, so it is not renamed.")
+                .containsExactly(new DtdElementName("USERS", dtd.indexOf("USERS")),
+                        new DtdElementName("USERS", dtd.lastIndexOf("USERS")));
     }
 
     @Test

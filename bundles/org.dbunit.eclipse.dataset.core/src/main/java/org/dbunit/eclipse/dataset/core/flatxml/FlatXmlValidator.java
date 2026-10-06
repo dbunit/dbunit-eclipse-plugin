@@ -84,6 +84,7 @@ final class FlatXmlValidator
             validateRedundantEmptyElement(problems, index, table);
         }
         validateDtdTableWithoutDeclaration(problems, index, dtdState, dtd);
+        validateDtdEmptyContentModel(problems, index, dtdState, dtd);
         validateDtdNotLoaded(problems, index, dtdState);
         return List.copyOf(problems);
     }
@@ -268,6 +269,18 @@ final class FlatXmlValidator
                     ProblemSeverity.ERROR, NLS.bind(Messages.Validator_dtdTableWithoutDeclaration, name),
                     null, null, -1, doctypeOffset(index), doctypeLength(index)));
         }
+    }
+
+    private static void validateDtdEmptyContentModel(final List<DatasetProblem> problems,
+            final FlatXmlIndex index, final DtdState dtdState, final DtdDeclarations dtd)
+    {
+        if (dtdState != DtdState.LOADED || dtd == null || !dtd.hasEmptyContentModel())
+        {
+            return;
+        }
+        problems.add(new DatasetProblem(ProblemCode.DTD_EMPTY_CONTENT_MODEL, ProblemSeverity.ERROR,
+                Messages.Validator_dtdEmptyContentModel, null, null, -1, doctypeOffset(index),
+                doctypeLength(index)));
     }
 
     private static void validateDtdNotLoaded(final List<DatasetProblem> problems,

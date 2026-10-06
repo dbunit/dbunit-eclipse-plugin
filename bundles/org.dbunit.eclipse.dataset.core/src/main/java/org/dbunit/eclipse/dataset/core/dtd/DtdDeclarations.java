@@ -42,6 +42,8 @@ public final class DtdDeclarations
 
     private final boolean contentModelAny;
 
+    private final boolean contentModelEmpty;
+
     private final List<String> contentModelNames;
 
     private final Map<String, List<String>> declaredElements;
@@ -57,7 +59,10 @@ public final class DtdDeclarations
      *
      * @param contentModelDeclared True when the {@code dataset} element has an {@code ELEMENT}
      *                             declaration.
-     * @param contentModelAny True when that content model is {@code ANY}; meaningless otherwise.
+     * @param contentModelAny True when that content model is {@code ANY}, or holds a parameter entity
+     *                        reference, which can list any element and which the reader does not expand;
+     *                        meaningless otherwise.
+     * @param contentModelEmpty True when that content model is {@code EMPTY}; meaningless otherwise.
      * @param contentModelNames The content model's names, in order; empty when contentModelAny is true
      *                          or contentModelDeclared is false.
      * @param declaredElements Each declared element's columns, in declaration order, keyed by element
@@ -67,11 +72,12 @@ public final class DtdDeclarations
      * @param problems The problems found while reading, copied defensively.
      */
     DtdDeclarations(final boolean contentModelDeclared, final boolean contentModelAny,
-            final List<String> contentModelNames, final Map<String, List<String>> declaredElements,
+            final boolean contentModelEmpty, final List<String> contentModelNames,
+            final Map<String, List<String>> declaredElements,
             final Map<String, Map<String, String>> attributeDefaults, final List<DatasetProblem> problems)
     {
-        this(contentModelDeclared, contentModelAny, contentModelNames, declaredElements, attributeDefaults,
-                problems, Set.of());
+        this(contentModelDeclared, contentModelAny, contentModelEmpty, contentModelNames, declaredElements,
+                attributeDefaults, problems, Set.of());
     }
 
     /**
@@ -79,7 +85,10 @@ public final class DtdDeclarations
      *
      * @param contentModelDeclared True when the {@code dataset} element has an {@code ELEMENT}
      *                             declaration.
-     * @param contentModelAny True when that content model is {@code ANY}; meaningless otherwise.
+     * @param contentModelAny True when that content model is {@code ANY}, or holds a parameter entity
+     *                        reference, which can list any element and which the reader does not expand;
+     *                        meaningless otherwise.
+     * @param contentModelEmpty True when that content model is {@code EMPTY}; meaningless otherwise.
      * @param contentModelNames The content model's names, in order; empty when contentModelAny is true
      *                          or contentModelDeclared is false.
      * @param declaredElements Each declared element's columns, in declaration order, keyed by element
@@ -92,12 +101,14 @@ public final class DtdDeclarations
      *                             defensively.
      */
     private DtdDeclarations(final boolean contentModelDeclared, final boolean contentModelAny,
-            final List<String> contentModelNames, final Map<String, List<String>> declaredElements,
+            final boolean contentModelEmpty, final List<String> contentModelNames,
+            final Map<String, List<String>> declaredElements,
             final Map<String, Map<String, String>> attributeDefaults, final List<DatasetProblem> problems,
             final Set<String> externalElementNames)
     {
         this.contentModelDeclared = contentModelDeclared;
         this.contentModelAny = contentModelAny;
+        this.contentModelEmpty = contentModelEmpty;
         this.contentModelNames = List.copyOf(contentModelNames);
         final Map<String, List<String>> copy = new LinkedHashMap<>();
         for (final Map.Entry<String, List<String>> entry : declaredElements.entrySet())
@@ -155,8 +166,8 @@ public final class DtdDeclarations
                     problem.tableKey(), problem.columnName(), problem.rowIndex(),
                     problem.offset() + delta, problem.length()));
         }
-        return new DtdDeclarations(contentModelDeclared, contentModelAny, contentModelNames,
-                declaredElements, attributeDefaults, relocated, externalElementNames);
+        return new DtdDeclarations(contentModelDeclared, contentModelAny, contentModelEmpty,
+                contentModelNames, declaredElements, attributeDefaults, relocated, externalElementNames);
     }
 
     /**
@@ -176,13 +187,27 @@ public final class DtdDeclarations
             relocated.add(new DatasetProblem(problem.code(), problem.severity(), problem.message(),
                     problem.tableKey(), problem.columnName(), problem.rowIndex(), offset, length));
         }
-        return new DtdDeclarations(contentModelDeclared, contentModelAny, contentModelNames,
-                declaredElements, attributeDefaults, relocated, externalElementNames);
+        return new DtdDeclarations(contentModelDeclared, contentModelAny, contentModelEmpty,
+                contentModelNames, declaredElements, attributeDefaults, relocated, externalElementNames);
+    }
+
+    /**
+     * Returns whether the {@code dataset} element is declared {@code EMPTY}. dbUnit cannot load such a
+     * dataset: it reads the table names from the content model's text without its first and last
+     * character, so it looks for a table named {@code MPT}.
+     *
+     * @return True when the content model is {@code EMPTY}.
+     */
+    public boolean hasEmptyContentModel()
+    {
+        return contentModelDeclared && contentModelEmpty;
     }
 
     /**
      * Returns the DTD's tables, as dbUnit's {@code FlatDtdProducer} derives them: the content
-     * model's names in order, or, for {@code ANY}, every declared element in declaration order.
+     * model's names in order, or, for {@code ANY} and for a content model with a parameter entity
+     * reference, which can list any element and which the reader does not expand, every declared element
+     * in declaration order.
      *
      * @return An unmodifiable list of tables, one per distinct name, each with the columns of its
      *         element and their default values. Empty when the {@code dataset} element has no content
@@ -252,6 +277,7 @@ public final class DtdDeclarations
     {
         final boolean mergedDeclared = contentModelDeclared || later.contentModelDeclared;
         final boolean mergedAny = contentModelDeclared ? contentModelAny : later.contentModelAny;
+        final boolean mergedEmpty = contentModelDeclared ? contentModelEmpty : later.contentModelEmpty;
         final List<String> mergedNames = contentModelDeclared ? contentModelNames : later.contentModelNames;
         final Map<String, List<String>> mergedElements = new LinkedHashMap<>();
         final Map<String, Map<String, String>> mergedDefaults = new LinkedHashMap<>();
@@ -261,8 +287,8 @@ public final class DtdDeclarations
         mergedProblems.addAll(later.problems);
         final Set<String> mergedExternalNames = new LinkedHashSet<>(externalElementNames);
         mergedExternalNames.addAll(later.declaredElementNames());
-        return new DtdDeclarations(mergedDeclared, mergedAny, mergedNames, mergedElements, mergedDefaults,
-                mergedProblems, mergedExternalNames);
+        return new DtdDeclarations(mergedDeclared, mergedAny, mergedEmpty, mergedNames, mergedElements,
+                mergedDefaults, mergedProblems, mergedExternalNames);
     }
 
     /**

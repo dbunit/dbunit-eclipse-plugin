@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dataset SYSTEM "dtd/parameter-entity.dtd">
+<dataset>
+    <USERS ID="1" NAME="Alice"/>
+    <ORDERS ID="10" TOTAL="5"/>
+</dataset>

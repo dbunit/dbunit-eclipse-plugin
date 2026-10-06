@@ -28,6 +28,7 @@ import java.util.Map;
 import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.flatxml.AttributeValueCodec;
 import org.dbunit.eclipse.dataset.core.flatxml.AttributeValueException;
+import org.dbunit.eclipse.dataset.core.flatxml.XmlNames;
 import org.dbunit.eclipse.dataset.core.model.DatasetProblem;
 import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.dbunit.eclipse.dataset.core.model.ProblemSeverity;
@@ -97,6 +98,8 @@ public final class DtdReader
 
         private boolean contentModelAny;
 
+        private boolean contentModelEmpty;
+
         private List<String> contentModelNames = List.of();
 
         private Scanner(final DtdLexer lexer)
@@ -134,8 +137,8 @@ public final class DtdReader
 
         private DtdDeclarations declarations()
         {
-            return new DtdDeclarations(contentModelDeclared, contentModelAny, contentModelNames, elements,
-                    attributeDefaults, problems);
+            return new DtdDeclarations(contentModelDeclared, contentModelAny, contentModelEmpty,
+                    contentModelNames, elements, attributeDefaults, problems);
         }
 
         private List<DtdElementName> elementNames()
@@ -197,12 +200,7 @@ public final class DtdReader
             lexer.skipCharacter('>');
             if ("dataset".equals(name))
             {
-                contentModelDeclared = true;
-                contentModelAny = "ANY".equals(contentSpec);
-                final List<DtdElementName> contentModel = contentModelAny ? List.of()
-                        : extractContentModelNames(contentSpec, contentSpecOffset);
-                contentModelNames = contentModel.stream().map(DtdElementName::name).toList();
-                elementNames.addAll(contentModel);
+                scanRootContentModel(contentSpec, contentSpecOffset);
             }
             else if (!name.isEmpty())
             {
@@ -214,6 +212,22 @@ public final class DtdReader
         private String scanContentSpec()
         {
             return lexer.atCharacter('(') ? lexer.scanParenthesizedContentSpec() : lexer.scanBareWord();
+        }
+
+        /**
+         * Reads the content model of the {@code dataset} element, which lists the tables. {@code ANY} and
+         * {@code EMPTY} list none by name.
+         */
+        private void scanRootContentModel(final String contentSpec, final int contentSpecOffset)
+        {
+            contentModelDeclared = true;
+            contentModelAny = "ANY".equals(contentSpec);
+            contentModelEmpty = "EMPTY".equals(contentSpec);
+            final boolean listsNoNames = contentModelAny || contentModelEmpty;
+            final List<DtdElementName> contentModel =
+                    listsNoNames ? List.of() : extractContentModelNames(contentSpec, contentSpecOffset);
+            contentModelNames = contentModel.stream().map(DtdElementName::name).toList();
+            elementNames.addAll(contentModel);
         }
 
         private void scanAttlistDeclaration()
@@ -362,7 +376,7 @@ public final class DtdReader
             addInfoProblem(Messages.Dtd_parameterEntityReferencesIgnored, start, end - start);
         }
 
-        private static List<DtdElementName> extractContentModelNames(final String contentSpec,
+        private List<DtdElementName> extractContentModelNames(final String contentSpec,
                 final int contentSpecOffset)
         {
             final List<DtdElementName> names = new ArrayList<>();
@@ -389,21 +403,35 @@ public final class DtdReader
         }
 
         /**
-         * Adds the token that ends at an offset to the names, unless it is {@code #PCDATA}, and empties the
-         * token.
+         * Adds the token that ends at an offset to the names when it is a name, which {@code #PCDATA} is
+         * not, and empties the token. A parameter entity reference is not a name; it is ignored.
          */
-        private static void addToken(final List<DtdElementName> names, final StringBuilder token,
-                final int tokenEnd)
+        private void addToken(final List<DtdElementName> names, final StringBuilder token, final int tokenEnd)
         {
             if (token.length() > 0)
             {
                 final String value = token.toString();
-                if (!"#PCDATA".equals(value))
+                final int tokenStart = tokenEnd - value.length();
+                if (value.startsWith("%"))
                 {
-                    names.add(new DtdElementName(value, tokenEnd - value.length()));
+                    ignoreParameterEntityReferenceInContentModel(tokenStart, value.length());
+                }
+                else if (XmlNames.isValidName(value))
+                {
+                    names.add(new DtdElementName(value, tokenStart));
                 }
                 token.setLength(0);
             }
+        }
+
+        /**
+         * Ignores a parameter entity reference in the content model. The entity can list any element, and
+         * this reader does not expand it, so the content model is read like {@code ANY}.
+         */
+        private void ignoreParameterEntityReferenceInContentModel(final int offset, final int tokenLength)
+        {
+            contentModelAny = true;
+            addInfoProblem(Messages.Dtd_parameterEntityReferencesIgnored, offset, tokenLength);
         }
 
         private void addInfoProblem(final String message, final int offset, final int problemLength)
