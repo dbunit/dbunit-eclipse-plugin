@@ -108,6 +108,33 @@ class FlatXmlTextLayoutTest
     }
 
     @Test
+    void testLineExtent_whenWhitespacePrecedesTheElementButSomethingFollowsIt_returnsTheElementAlone()
+    {
+        final String text = "<dataset>\n    <USERS ID=\"1\"/>  <ORDERS ID=\"2\"/>\n</dataset>\n";
+        final FlatXmlElement element = FlatXmlParser.parse(text).elements().get(0);
+        final FlatXmlTextLayout layout = new FlatXmlTextLayout(text, "\n");
+
+        final IRegion region = layout.lineExtent(element);
+
+        assertThat(substringOf(text, region))
+                .as("An element that something follows on its line must be removed alone, not with the line.")
+                .isEqualTo("<USERS ID=\"1\"/>");
+    }
+
+    @Test
+    void testLineExtent_whenWhitespaceSurroundsTheElementOnItsLine_returnsTheWholeLine()
+    {
+        final String text = "<dataset>\n  \t<USERS ID=\"1\"/>  \t\n</dataset>\n";
+        final FlatXmlElement element = FlatXmlParser.parse(text).elements().get(0);
+        final FlatXmlTextLayout layout = new FlatXmlTextLayout(text, "\n");
+
+        final IRegion region = layout.lineExtent(element);
+
+        assertThat(substringOf(text, region)).as("The whitespace around the element belongs to its line.")
+                .isEqualTo("  \t<USERS ID=\"1\"/>  \t\n");
+    }
+
+    @Test
     void testLineExtent_whenElementSharesItsLineWithOtherContent_returnsTheElementAlone()
     {
         final String text = "<dataset><USERS ID=\"1\"/><ORDERS ID=\"2\"/></dataset>\n";

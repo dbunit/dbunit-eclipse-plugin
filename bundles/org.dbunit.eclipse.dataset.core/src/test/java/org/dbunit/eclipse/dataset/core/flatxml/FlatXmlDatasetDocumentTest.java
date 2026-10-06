@@ -21,16 +21,19 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 import org.dbunit.eclipse.dataset.core.TestDatasets;
 import org.dbunit.eclipse.dataset.core.dtd.DtdSource;
@@ -1392,6 +1395,28 @@ class FlatXmlDatasetDocumentTest
                 .isInstanceOf(DatasetEditException.class)
                 .hasMessage("Row 5 is out of range for table 'USERS'.");
         assertThat(document.get()).as("The document must be unchanged.").isEqualTo(original);
+    }
+
+    @Test
+    void testDeleteRows_whenTheDatasetIsOneLongLine_doesNotScanTheLineForEachRow()
+    {
+        final StringBuilder text = new StringBuilder("<dataset>");
+        for (int row = 0; row < 40_000; row++)
+        {
+            text.append("<USERS ID=\"").append(row).append("\" NAME=\"user").append(row).append("\"/>");
+        }
+        text.append("</dataset>");
+        final IDocument document = new Document(text.toString());
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        final int[] evenRows = IntStream.range(0, 20_000).map(row -> row * 2).toArray();
+
+        assertTimeoutPreemptively(Duration.ofSeconds(10),
+                () -> datasetDocument.deleteRows("USERS", evenRows),
+                "Deleting rows must not read the whole line before each row, which takes minutes.");
+
+        assertThat(datasetDocument.getModel().findTable("USERS").orElseThrow().getRows())
+                .as("Half of the rows must be left.").hasSize(20_000);
     }
 
     @Test

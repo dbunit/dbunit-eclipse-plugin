@@ -84,13 +84,13 @@ final class FlatXmlTextLayout
      */
     IRegion lineExtent(final FlatXmlElement element)
     {
-        final int lineStart = lineStartOffset(element.offset());
-        if (!isBlank(text, lineStart, element.offset()))
+        final int lineStart = lineStartWhenOnlyWhitespacePrecedes(element.offset());
+        if (lineStart < 0)
         {
             return elementRegion(element);
         }
-        final int lineEnd = lineEndOffset(element.endOffset());
-        if (!isBlank(text, element.endOffset(), lineEnd))
+        final int lineEnd = lineEndWhenOnlyWhitespaceFollows(element.endOffset());
+        if (lineEnd < 0)
         {
             return elementRegion(element);
         }
@@ -111,7 +111,7 @@ final class FlatXmlTextLayout
      */
     boolean isAtStartOfItsLine(final int offset)
     {
-        return isBlank(text, lineStartOffset(offset), offset);
+        return lineStartWhenOnlyWhitespacePrecedes(offset) >= 0;
     }
 
     /**
@@ -150,8 +150,45 @@ final class FlatXmlTextLayout
 
     private String leadingWhitespaceOf(final int offset)
     {
-        final int lineStart = lineStartOffset(offset);
-        return isBlank(text, lineStart, offset) ? text.substring(lineStart, offset) : "";
+        final int lineStart = lineStartWhenOnlyWhitespacePrecedes(offset);
+        return lineStart < 0 ? "" : text.substring(lineStart, offset);
+    }
+
+    /**
+     * Returns the start of the line that holds an offset when only whitespace precedes the offset on it, or
+     * -1 when something else does. It reads back only as far as the whitespace reaches, so that an element
+     * on a line of many elements, which the character before it already rules out, costs nothing.
+     */
+    private int lineStartWhenOnlyWhitespacePrecedes(final int offset)
+    {
+        int index = offset;
+        while (index > 0 && !isLineBreakChar(text.charAt(index - 1)))
+        {
+            if (!Character.isWhitespace(text.charAt(index - 1)))
+            {
+                return -1;
+            }
+            index--;
+        }
+        return index;
+    }
+
+    /**
+     * Returns the end of the line that holds an offset when only whitespace follows the offset on it, or -1
+     * when something else does. It reads on only as far as the whitespace reaches.
+     */
+    private int lineEndWhenOnlyWhitespaceFollows(final int offset)
+    {
+        int index = offset;
+        while (index < text.length() && !isLineBreakChar(text.charAt(index)))
+        {
+            if (!Character.isWhitespace(text.charAt(index)))
+            {
+                return -1;
+            }
+            index++;
+        }
+        return index;
     }
 
     private int lineStartOffset(final int offset)
@@ -160,16 +197,6 @@ final class FlatXmlTextLayout
         while (index > 0 && !isLineBreakChar(text.charAt(index - 1)))
         {
             index--;
-        }
-        return index;
-    }
-
-    private int lineEndOffset(final int offset)
-    {
-        int index = offset;
-        while (index < text.length() && !isLineBreakChar(text.charAt(index)))
-        {
-            index++;
         }
         return index;
     }
@@ -190,17 +217,5 @@ final class FlatXmlTextLayout
     private static boolean isLineBreakChar(final char ch)
     {
         return ch == '\n' || ch == '\r';
-    }
-
-    private static boolean isBlank(final String value, final int start, final int end)
-    {
-        for (int index = start; index < end; index++)
-        {
-            if (!Character.isWhitespace(value.charAt(index)))
-            {
-                return false;
-            }
-        }
-        return true;
     }
 }
