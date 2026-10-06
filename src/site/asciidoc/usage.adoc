@@ -205,6 +205,8 @@ element.
 Column names must each be a valid XML name and not repeat another, case-insensitively, the same
 rules *Add Column* applies.
 dbUnit treats such an element as an empty table, which operations such as `DELETE_ALL` and `CLEAN_INSERT` still process.
+The first row that you insert into such a table replaces the element, except for what the element holds,
+such as a comment, which stays.
 *Rename Table* renames every element of the table.
 When the DOCTYPE has an internal subset that declares the table,
 the table is renamed there too, in its `ELEMENT` and `ATTLIST` declarations and in the content model of the

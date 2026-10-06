@@ -1155,6 +1155,61 @@ class FlatXmlDatasetDocumentTest
     }
 
     @Test
+    void testInsertRows_whenTheMarkerHoldsAComment_keepsTheCommentAndUndoRestoresTheMarker() throws Exception
+    {
+        final String declarations = "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n";
+        final IDocument document = new Document(declarations
+                + "<dataset>\n    <USERS>\n        <!-- TODO add users -->\n    </USERS>\n</dataset>\n");
+        final String original = document.get();
+        withUndoManager(document, undoManager ->
+        {
+            final FlatXmlDatasetDocument datasetDocument = create(document);
+            datasetDocument.refresh();
+
+            datasetDocument.insertRows("USERS", 0, List.of(List.of("1"), List.of("2")));
+
+            assertThat(document.get()).as("The comment of the marker must stay, after the new rows.")
+                    .isEqualTo(declarations + "<dataset>\n    <USERS ID=\"1\"/>\n    <USERS ID=\"2\"/>\n"
+                            + "        <!-- TODO add users -->\n</dataset>\n");
+            undoManager.undo();
+            assertThat(document.get()).as("Undo must bring the marker back.").isEqualTo(original);
+        });
+    }
+
+    @Test
+    void testInsertRows_whenTheMarkerHoldsOnlyWhitespace_replacesTheWholeElement()
+    {
+        final String declarations = "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n";
+        final IDocument document =
+                new Document(declarations + "<dataset>\n    <USERS>\n    </USERS>\n</dataset>\n");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.insertRows("USERS", 0, List.of(List.of("1")));
+
+        assertThat(document.get()).as("An element with nothing in it is replaced whole, without leftovers.")
+                .isEqualTo(declarations + "<dataset>\n    <USERS ID=\"1\"/>\n</dataset>\n");
+    }
+
+    @Test
+    void testInsertRows_whenTheMarkerHoldsTextAndAProcessingInstruction_keepsBoth()
+    {
+        final String declarations = "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #REQUIRED>\n]>\n";
+        final IDocument document = new Document(
+                declarations + "<dataset>\n  <USERS>note <?target data?></USERS>\n</dataset>\n");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+
+        datasetDocument.insertRows("USERS", 0, List.of(List.of("1")));
+
+        assertThat(document.get()).as("Whatever the marker held stays.")
+                .isEqualTo(declarations + "<dataset>\n  <USERS ID=\"1\"/>note <?target data?>\n</dataset>\n");
+    }
+
+    @Test
     void testInsertRows_whenTableIsDtdOnly_addsTheElementBeforeTheEndTag() throws Exception
     {
         final IDocument document = new Document(

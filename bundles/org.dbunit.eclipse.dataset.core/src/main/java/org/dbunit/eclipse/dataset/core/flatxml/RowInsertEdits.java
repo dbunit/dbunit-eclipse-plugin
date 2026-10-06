@@ -29,6 +29,7 @@ import org.dbunit.eclipse.dataset.core.Messages;
 import org.dbunit.eclipse.dataset.core.edit.DatasetEditException;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
 import org.eclipse.osgi.util.NLS;
+import org.eclipse.text.edits.DeleteEdit;
 import org.eclipse.text.edits.InsertEdit;
 import org.eclipse.text.edits.ReplaceEdit;
 import org.eclipse.text.edits.TextEdit;
@@ -82,8 +83,7 @@ final class RowInsertEdits
             rowTexts.add(buildRowText(table, values, encoder));
         }
 
-        final TextEdit edit = insertEdit(tableKey, rowElements, rowIndex, rowTexts);
-        return List.of(edit);
+        return insertEdits(tableKey, rowElements, rowIndex, rowTexts);
     }
 
     /**
@@ -159,14 +159,14 @@ final class RowInsertEdits
     }
 
     /**
-     * Returns the edit that inserts the texts of new rows before the row at rowIndex, after the last row
+     * Returns the edits that insert the texts of new rows before the row at rowIndex, after the last row
      * when rowIndex is the row count, or into the table's empty element or the root when it has no rows.
      */
-    private TextEdit insertEdit(final String tableKey, final List<FlatXmlElement> rowElements,
+    private List<TextEdit> insertEdits(final String tableKey, final List<FlatXmlElement> rowElements,
             final int rowIndex, final List<String> rowTexts)
     {
         final String delimiter = layout.getLineDelimiter();
-        final TextEdit edit;
+        final List<TextEdit> edits;
         if (rowIndex < rowElements.size())
         {
             final FlatXmlElement anchor = rowElements.get(rowIndex);
@@ -176,7 +176,7 @@ final class RowInsertEdits
             {
                 insertText.append(rowText).append(delimiter).append(indent);
             }
-            edit = new InsertEdit(anchor.offset(), insertText.toString());
+            edits = List.of(new InsertEdit(anchor.offset(), insertText.toString()));
         }
         else if (!rowElements.isEmpty())
         {
@@ -187,22 +187,54 @@ final class RowInsertEdits
             {
                 insertText.append(delimiter).append(indent).append(rowText);
             }
-            edit = new InsertEdit(last.endOffset(), insertText.toString());
+            edits = List.of(new InsertEdit(last.endOffset(), insertText.toString()));
         }
         else if (!index.getMarkerElements(tableKey).isEmpty())
         {
             final FlatXmlElement marker = index.getMarkerElements(tableKey).get(0);
             final String indent = layout.indentOf(marker);
-            final String joined = String.join(delimiter + indent, rowTexts);
-            edit = new ReplaceEdit(marker.offset(), marker.endOffset() - marker.offset(), joined);
+            edits = markerEdits(marker, String.join(delimiter + indent, rowTexts));
         }
         else
         {
             final String indent = layout.childIndentation(index.getRoot(), index.getElements());
             final String joined = String.join(delimiter + indent, rowTexts);
-            edit = layout.insertAsLastChildOfRoot(index.getRoot(), index.getElements(), joined);
+            edits = List.of(layout.insertAsLastChildOfRoot(index.getRoot(), index.getElements(), joined));
         }
-        return edit;
+        return edits;
+    }
+
+    /**
+     * Returns the edits that turn a table's empty element into its first rows. The rows take the place of
+     * the start tag, and the end tag goes, with the whitespace before it, so that whatever the element held,
+     * such as a comment, stays where it was.
+     */
+    private List<TextEdit> markerEdits(final FlatXmlElement marker, final String rowsText)
+    {
+        if (marker.selfClosing())
+        {
+            return List.of(new ReplaceEdit(marker.offset(), marker.endOffset() - marker.offset(), rowsText));
+        }
+        final int contentEnd = endOfContent(marker);
+        final TextEdit startTag =
+                new ReplaceEdit(marker.offset(), marker.startTagEndOffset() - marker.offset(), rowsText);
+        final TextEdit endTag = new DeleteEdit(contentEnd, marker.endOffset() - contentEnd);
+        return List.of(startTag, endTag);
+    }
+
+    /**
+     * Returns the offset after the last character that is not whitespace between an element's tags, or the
+     * end of its start tag when it holds only whitespace.
+     */
+    private int endOfContent(final FlatXmlElement element)
+    {
+        final String text = context.text();
+        int end = element.endTagOffset();
+        while (end > element.startTagEndOffset() && XmlLexer.isWhitespace(text.charAt(end - 1)))
+        {
+            end--;
+        }
+        return end;
     }
 
     /**
