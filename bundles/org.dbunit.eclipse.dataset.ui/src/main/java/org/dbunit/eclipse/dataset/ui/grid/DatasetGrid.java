@@ -26,6 +26,7 @@ import java.util.Locale;
 
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.eclipse.jface.action.MenuManager;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.config.DefaultNatTableStyleConfiguration;
@@ -80,6 +81,8 @@ public final class DatasetGrid
 
     private final ColumnWidths columnWidths = new ColumnWidths();
 
+    private final DialogTextCellEditor dialogEditor = new DialogTextCellEditor();
+
     private DatasetTable currentTable;
 
     /**
@@ -123,12 +126,13 @@ public final class DatasetGrid
 
         natTable = new NatTable(parent, NatTable.DEFAULT_STYLE_OPTIONS, gridLayer, false);
         natTable.addConfiguration(new DefaultNatTableStyleConfiguration());
-        natTable.addConfiguration(new GridEditConfiguration(context));
+        natTable.addConfiguration(new GridEditConfiguration(context, dialogEditor));
         natTable.addConfiguration(new SpreadsheetEditBindings(selectionLayer));
         natTable.addConfiguration(new GridStyleConfiguration());
         natTable.configure();
         natTable.setTheme(context.isDarkTheme() ? new DarkNatTableThemeConfiguration()
                 : new ModernNatTableThemeConfiguration());
+        natTable.addDisposeListener(event -> dialogEditor.cancelDialog());
         columnHeaderTooltip = new ColumnHeaderTooltip(natTable, bodyDataProvider);
         wireContextMenu(context);
     }
@@ -362,12 +366,30 @@ public final class DatasetGrid
             return;
         }
 
+        cancelEditsOfTheOldStructure();
+
         // Copy the anchor: the refresh clears the selection, which resets the layer's anchor object.
         final PositionCoordinate oldAnchor = new PositionCoordinate(selectionLayer.getSelectionAnchor());
         currentTable = newTable;
         natTable.refresh(true);
         columnWidths.applyTo(newTable, bodyDataLayer, natTable);
         reselect(oldAnchor, newTable);
+    }
+
+    /**
+     * Cancels an open cell editor and an open edit dialog, because each commits to the position of the cell
+     * it was opened for, which another row or column may fill after the structure changed.
+     */
+    private void cancelEditsOfTheOldStructure()
+    {
+        final boolean editing = natTable.getActiveCellEditor() != null || dialogEditor.isDialogOpen();
+        if (editing)
+        {
+            cancelActiveCellEditor();
+            dialogEditor.cancelDialog();
+            final DatasetGridContext context = bodyDataProvider.getContext();
+            context.setStatusMessage(Messages.DatasetGrid_editCancelledTableChanged);
+        }
     }
 
     private void reselect(final PositionCoordinate oldAnchor, final DatasetTable newTable)

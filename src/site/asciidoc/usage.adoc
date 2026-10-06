@@ -82,6 +82,12 @@ or press *F2* or double-click to edit the value in place.
 *Enter* saves the value and moves down, *Tab* and *Shift+Tab* save it and move right and left,
 *Up* and *Down* save it and move up and down, and *Escape* discards the change.
 
+If the table gains or loses rows or columns while you edit a cell,
+for example because the file was reloaded after it changed on disk,
+the editor discards the edit instead of writing it into a cell that may be another one now,
+and the status line says so.
+This closes the dialog of *Edit Cell in Dialog* too.
+
 [[null-values]]
 === NULL and Empty Strings
 

@@ -26,7 +26,6 @@ import org.eclipse.nebula.widgets.nattable.config.EditableRule;
 import org.eclipse.nebula.widgets.nattable.config.IConfigRegistry;
 import org.eclipse.nebula.widgets.nattable.edit.EditConfigAttributes;
 import org.eclipse.nebula.widgets.nattable.edit.config.DialogErrorHandling;
-import org.eclipse.nebula.widgets.nattable.edit.editor.MultiLineTextCellEditor;
 import org.eclipse.nebula.widgets.nattable.edit.editor.TextCellEditor;
 import org.eclipse.nebula.widgets.nattable.grid.GridRegion;
 import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
@@ -40,9 +39,12 @@ final class GridEditConfiguration extends AbstractRegistryConfiguration
 {
     private final DatasetGridContext context;
 
-    GridEditConfiguration(final DatasetGridContext context)
+    private final DialogTextCellEditor dialogEditor;
+
+    GridEditConfiguration(final DatasetGridContext context, final DialogTextCellEditor dialogEditor)
     {
         this.context = context;
+        this.dialogEditor = dialogEditor;
     }
 
     @Override
@@ -58,13 +60,12 @@ final class GridEditConfiguration extends AbstractRegistryConfiguration
         });
         configRegistry.registerConfigAttribute(EditConfigAttributes.CELL_EDITOR,
                 new TextCellEditor(true, true), DisplayMode.EDIT);
-        configRegistry.registerConfigAttribute(EditConfigAttributes.CELL_EDITOR,
-                new MultiLineTextCellEditor(false), DisplayMode.EDIT,
-                DatasetCellLabels.MULTI_LINE_VALUE);
+        configRegistry.registerConfigAttribute(EditConfigAttributes.CELL_EDITOR, dialogEditor,
+                DisplayMode.EDIT, DatasetCellLabels.MULTI_LINE_VALUE);
         configRegistry.registerConfigAttribute(EditConfigAttributes.OPEN_IN_DIALOG, Boolean.TRUE,
                 DisplayMode.EDIT, DatasetCellLabels.MULTI_LINE_VALUE);
-        configRegistry.registerConfigAttribute(EditConfigAttributes.CELL_EDITOR,
-                new MultiLineTextCellEditor(false), DisplayMode.EDIT, DatasetCellLabels.EDIT_IN_DIALOG);
+        configRegistry.registerConfigAttribute(EditConfigAttributes.CELL_EDITOR, dialogEditor,
+                DisplayMode.EDIT, DatasetCellLabels.EDIT_IN_DIALOG);
         configRegistry.registerConfigAttribute(EditConfigAttributes.OPEN_IN_DIALOG, Boolean.TRUE,
                 DisplayMode.EDIT, DatasetCellLabels.EDIT_IN_DIALOG);
         configRegistry.registerConfigAttribute(EditConfigAttributes.DATA_VALIDATOR,

@@ -36,10 +36,12 @@ import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.data.validate.ValidationFailedException;
+import org.eclipse.nebula.widgets.nattable.edit.EditConfigAttributes;
 import org.eclipse.nebula.widgets.nattable.edit.command.EditSelectionCommand;
 import org.eclipse.nebula.widgets.nattable.edit.editor.ICellEditor;
 import org.eclipse.nebula.widgets.nattable.selection.SelectionLayer.MoveDirectionEnum;
 import org.eclipse.nebula.widgets.nattable.selection.command.SelectCellCommand;
+import org.eclipse.nebula.widgets.nattable.style.DisplayMode;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.KeyEvent;
 import org.eclipse.swt.graphics.Point;
@@ -60,6 +62,19 @@ class GridEditingTest
     private static final String DEFAULTS_DATASET = "<!DOCTYPE dataset [\n<!ELEMENT dataset (USERS*)>\n"
             + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #IMPLIED STATUS CDATA \"ACTIVE\">\n]>\n"
             + "<dataset><USERS ID=\"1\"/><USERS STATUS=\"x\"/></dataset>";
+
+    private static final String FOUR_USERS = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/>"
+            + "<USERS ID=\"2\" NAME=\"Bob\"/><USERS ID=\"3\" NAME=\"Carol\"/><USERS ID=\"4\" NAME=\"Dave\"/>"
+            + "</dataset>";
+
+    private static final String USERS_WITHOUT_ALICE = "<dataset><USERS ID=\"2\" NAME=\"Bob\"/>"
+            + "<USERS ID=\"3\" NAME=\"Carol\"/><USERS ID=\"4\" NAME=\"Dave\"/></dataset>";
+
+    private static final String CELL_GONE_MESSAGE =
+            "The cell is no longer in the table, so its new value was not saved.";
+
+    private static final String EDIT_CANCELLED_MESSAGE =
+            "The table changed while a cell was being edited, so the edit was cancelled.";
 
     private Shell shell;
 
@@ -249,6 +264,70 @@ class GridEditingTest
         provider.setDataValue(1, 0, "Carol");
 
         assertThat(document.get()).as("A read-only input must reject the edit.").isEqualTo(originalText);
+    }
+
+    @Test
+    void testSetDataValue_whenTheRowIsPastTheEnd_leavesTheDocumentUnchangedAndSetsTheStatusLineError()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
+        final IDocument document = new Document(originalText);
+        final TestContext context = new TestContext(create(document));
+        final TableBodyDataProvider provider = new TableBodyDataProvider(context, "USERS");
+
+        provider.setDataValue(1, 1, "Carol");
+
+        assertThat(document.get()).as("An edit of a row that is gone must leave the document unchanged.")
+                .isEqualTo(originalText);
+        assertThat(context.lastErrorMessage).as("The user must be told that the edit was not saved.")
+                .isEqualTo(CELL_GONE_MESSAGE);
+    }
+
+    @Test
+    void testSetDataValue_whenNatTableFoundNoRow_leavesTheDocumentUnchangedAndSetsTheStatusLineError()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
+        final IDocument document = new Document(originalText);
+        final TestContext context = new TestContext(create(document));
+        final TableBodyDataProvider provider = new TableBodyDataProvider(context, "USERS");
+
+        provider.setDataValue(1, -1, "Carol");
+
+        assertThat(document.get()).as("NatTable passes -1 for a position that is out of range.")
+                .isEqualTo(originalText);
+        assertThat(context.lastErrorMessage).as("The user must be told that the edit was not saved.")
+                .isEqualTo(CELL_GONE_MESSAGE);
+    }
+
+    @Test
+    void testSetDataValue_whenTheColumnIsPastTheEnd_leavesTheDocumentUnchangedAndSetsTheStatusLineError()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
+        final IDocument document = new Document(originalText);
+        final TestContext context = new TestContext(create(document));
+        final TableBodyDataProvider provider = new TableBodyDataProvider(context, "USERS");
+
+        provider.setDataValue(2, 0, "Carol");
+
+        assertThat(document.get()).as("An edit of a column that is gone must leave the document unchanged.")
+                .isEqualTo(originalText);
+        assertThat(context.lastErrorMessage).as("The user must be told that the edit was not saved.")
+                .isEqualTo(CELL_GONE_MESSAGE);
+    }
+
+    @Test
+    void testSetDataValue_whenNatTableFoundNoColumn_leavesTheDocumentUnchangedAndSetsTheStatusLineError()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
+        final IDocument document = new Document(originalText);
+        final TestContext context = new TestContext(create(document));
+        final TableBodyDataProvider provider = new TableBodyDataProvider(context, "USERS");
+
+        provider.setDataValue(-1, 0, "Carol");
+
+        assertThat(document.get()).as("NatTable passes -1 for a position that is out of range.")
+                .isEqualTo(originalText);
+        assertThat(context.lastErrorMessage).as("The user must be told that the edit was not saved.")
+                .isEqualTo(CELL_GONE_MESSAGE);
     }
 
     @Test
@@ -451,6 +530,246 @@ class GridEditingTest
     }
 
     @Test
+    void testTableChanged_whenARowAboveTheEditedCellIsRemoved_closesTheEditorWithoutWritingItsValue()
+    {
+        final IDocument document = new Document(FOUR_USERS);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final DatasetGrid grid = openGrid(datasetDocument, "USERS");
+        final NatTable natTable = grid.getNatTable();
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 2, false, false));
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+        natTable.getActiveCellEditor().setEditorValue("Zed");
+
+        changeDocument(datasetDocument, document, grid, USERS_WITHOUT_ALICE);
+        grid.commitActiveCellEditor();
+
+        assertThat(natTable.getActiveCellEditor())
+                .as("A table whose rows changed must close the open editor.").isNull();
+        assertThat(document.get())
+                .as("The value of Bob's cell must not land in the row that took Bob's place.")
+                .isEqualTo(USERS_WITHOUT_ALICE);
+    }
+
+    @Test
+    void testTableChanged_whenTheEditedColumnIsRemoved_closesTheEditor()
+    {
+        final IDocument document = new Document(
+                "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final DatasetGrid grid = openGrid(datasetDocument, "USERS");
+        final NatTable natTable = grid.getNatTable();
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 2, false, false));
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+        natTable.getActiveCellEditor().setEditorValue("Zed");
+        final String changedText = "<dataset><USERS ID=\"1\"/><USERS ID=\"2\"/></dataset>";
+
+        changeDocument(datasetDocument, document, grid, changedText);
+        grid.commitActiveCellEditor();
+
+        assertThat(natTable.getActiveCellEditor())
+                .as("A table that lost the edited column must close the editor.").isNull();
+        assertThat(document.get()).as("The value of a column that is gone must not be written.")
+                .isEqualTo(changedText);
+    }
+
+    @Test
+    void testTableChanged_whenTheEditorIsCancelled_tellsTheUserOnTheStatusLine()
+    {
+        final IDocument document = new Document(FOUR_USERS);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final TestContext context = new TestContext(datasetDocument);
+        final DatasetGrid grid = openGrid(datasetDocument, "USERS", context);
+        final NatTable natTable = grid.getNatTable();
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 2, false, false));
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+
+        changeDocument(datasetDocument, document, grid, USERS_WITHOUT_ALICE);
+
+        assertThat(context.lastStatusMessage).as("The user must be told why the edit went away.")
+                .isEqualTo(EDIT_CANCELLED_MESSAGE);
+    }
+
+    @Test
+    void testTableChanged_whenNoCellIsBeingEdited_leavesTheStatusLineAlone()
+    {
+        final IDocument document = new Document(FOUR_USERS);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final TestContext context = new TestContext(datasetDocument);
+        final DatasetGrid grid = openGrid(datasetDocument, "USERS", context);
+
+        changeDocument(datasetDocument, document, grid, USERS_WITHOUT_ALICE);
+
+        assertThat(context.lastStatusMessage).as("Without an edit there is nothing to report.").isNull();
+    }
+
+    @Test
+    void testTableChanged_afterTheDialogWasConfirmed_leavesTheStatusLineAlone()
+    {
+        final IDocument document = new Document(FOUR_USERS);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final TestContext context = new TestContext(datasetDocument);
+        final DatasetGrid grid = openGrid(datasetDocument, "USERS", context);
+        grid.selectRegion(1, 1, 1, 1);
+        dialogDriver.confirmNextDialogWithText("Zed");
+        grid.editCellInDialog();
+
+        changeDocument(datasetDocument, document, grid, USERS_WITHOUT_ALICE);
+
+        assertThat(context.lastStatusMessage).as("A dialog that is closed has no edit left to cancel.")
+                .isNull();
+    }
+
+    @Test
+    void testTableChanged_whenOnlyAnotherValueChanges_keepsTheEditorOpenAndWritesItsValue()
+    {
+        final IDocument document = new Document(FOUR_USERS);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final DatasetGrid grid = openGrid(datasetDocument, "USERS");
+        final NatTable natTable = grid.getNatTable();
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 2, false, false));
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+        natTable.getActiveCellEditor().setEditorValue("Zed");
+
+        changeDocument(datasetDocument, document, grid, FOUR_USERS.replace("Dave", "David"));
+
+        assertThat(natTable.getActiveCellEditor())
+                .as("A change that keeps the table's rows and columns must not close the editor.")
+                .isNotNull();
+        grid.commitActiveCellEditor();
+        assertThat(document.get()).as("The edited cell must still get its value.")
+                .isEqualTo(FOUR_USERS.replace("Dave", "David").replace("Bob", "Zed"));
+    }
+
+    @Test
+    void testEditCellInDialog_whenARowIsRemovedWhileTheDialogIsOpen_closesTheDialogWithoutWritingItsValue()
+    {
+        final IDocument document = new Document(FOUR_USERS);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final TestContext context = new TestContext(datasetDocument);
+        final DatasetGrid grid = openGrid(datasetDocument, "USERS", context);
+        grid.selectRegion(1, 1, 1, 1);
+        dialogDriver.changeThenConfirmNextDialogWithText(
+                () -> changeDocument(datasetDocument, document, grid, USERS_WITHOUT_ALICE), "Zed");
+
+        grid.editCellInDialog();
+
+        assertThat(dialogDriver.hasOpened()).as("The dialog must open.").isTrue();
+        assertThat(dialogDriver.hasConfirmed())
+                .as("The dialog of a cell whose table changed shape must be closed.").isFalse();
+        assertThat(document.get()).as("The value must not land in the row that took Bob's place.")
+                .isEqualTo(USERS_WITHOUT_ALICE);
+        assertThat(context.lastStatusMessage).as("The user must be told why the dialog went away.")
+                .isEqualTo(EDIT_CANCELLED_MESSAGE);
+        assertThat(dialogCellEditor(grid).isClosed())
+                .as("The editor must be closed as the dialog's Cancel button closes it, to release its "
+                        + "resources.")
+                .isTrue();
+    }
+
+    @Test
+    void testEditCellInDialog_whenOnlyAnotherValueChangesWhileTheDialogIsOpen_stillStoresTheNewValue()
+    {
+        final IDocument document = new Document(FOUR_USERS);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final DatasetGrid grid = openGrid(datasetDocument, "USERS");
+        grid.selectRegion(1, 1, 1, 1);
+        dialogDriver.changeThenConfirmNextDialogWithText(
+                () -> changeDocument(datasetDocument, document, grid, FOUR_USERS.replace("Dave", "David")),
+                "Zed");
+
+        grid.editCellInDialog();
+
+        assertThat(dialogDriver.hasConfirmed())
+                .as("A change that keeps the table's rows and columns must not close the dialog.").isTrue();
+        assertThat(document.get()).as("The edited cell must still get its value.")
+                .isEqualTo(FOUR_USERS.replace("Dave", "David").replace("Bob", "Zed"));
+    }
+
+    @Test
+    void testEdit_whenAMultiLineCellOpensItsDialogAndARowIsRemoved_closesTheDialogWithoutWritingItsValue()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NOTE=\"first&#xA;second\"/>"
+                + "<USERS ID=\"2\" NOTE=\"third&#xA;fourth\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final DatasetGrid grid = openGrid(datasetDocument, "USERS");
+        final NatTable natTable = grid.getNatTable();
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 2, false, false));
+        final String changedText = "<dataset><USERS ID=\"2\" NOTE=\"third&#xA;fourth\"/></dataset>";
+        dialogDriver.changeThenConfirmNextDialogWithText(
+                () -> changeDocument(datasetDocument, document, grid, changedText), "other");
+
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+
+        assertThat(dialogDriver.hasOpened()).as("A multi-line value must open in the dialog.").isTrue();
+        assertThat(dialogDriver.hasConfirmed()).as("The dialog of a table that changed shape must be closed.")
+                .isFalse();
+        assertThat(document.get()).as("The dialog's value must not be written.").isEqualTo(changedText);
+    }
+
+    @Test
+    void testTableChanged_ofAnotherGridWhileTheDialogIsOpen_leavesTheDialogOpen()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><ORDERS ID=\"1\"/></dataset>";
+        final IDocument document = new Document(originalText);
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final DatasetGrid users = openGrid(datasetDocument, "USERS");
+        final DatasetGrid orders = openGrid(datasetDocument, "ORDERS");
+        users.selectRegion(1, 0, 1, 1);
+        dialogDriver.changeThenConfirmNextDialogWithText(() ->
+        {
+            datasetDocument.insertRows("ORDERS", 1, List.of(List.of("2")));
+            users.tableChanged(datasetDocument.getModel().findTable("USERS").orElseThrow());
+            orders.tableChanged(datasetDocument.getModel().findTable("ORDERS").orElseThrow());
+        }, "Bob");
+
+        users.editCellInDialog();
+
+        assertThat(dialogDriver.hasConfirmed())
+                .as("A change to another table's rows must not close this table's dialog.").isTrue();
+        assertThat(document.get()).as("Both the other table's new row and the dialog's value must be there.")
+                .contains("<USERS ID=\"1\" NAME=\"Bob\"/>", "<ORDERS ID=\"2\"/>");
+    }
+
+    @Test
+    void testTableChanged_whenAMultiLineCellIsEditedInPlace_closesTheEditorAndLeavesTheWindowOpen()
+    {
+        final IDocument document = new Document("<dataset><USERS ID=\"1\" NOTE=\"first&#xA;second\"/>"
+                + "<USERS ID=\"2\" NOTE=\"third&#xA;fourth\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        final DatasetGrid grid = openGrid(datasetDocument, "USERS");
+        final NatTable natTable = grid.getNatTable();
+        natTable.getConfigRegistry().registerConfigAttribute(EditConfigAttributes.OPEN_IN_DIALOG,
+                Boolean.FALSE, DisplayMode.EDIT, DatasetCellLabels.MULTI_LINE_VALUE);
+        natTable.doCommand(new SelectCellCommand(natTable, 2, 2, false, false));
+        natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+        final String changedText = "<dataset><USERS ID=\"2\" NOTE=\"third&#xA;fourth\"/></dataset>";
+
+        changeDocument(datasetDocument, document, grid, changedText);
+
+        assertThat(natTable.getActiveCellEditor()).as("The editor of a table that changed shape must close.")
+                .isNull();
+        assertThat(shell.isDisposed())
+                .as("Closing an editor that is not in a dialog must not close a window.").isFalse();
+    }
+
+    @Test
+    void testDispose_whileTheDialogIsOpen_closesTheDialogWithoutWritingItsValue()
+    {
+        final String originalText = "<dataset><USERS ID=\"1\" NAME=\"Alice\"/></dataset>";
+        final IDocument document = new Document(originalText);
+        final DatasetGrid grid = openGrid(create(document), "USERS");
+        grid.selectRegion(1, 0, 1, 1);
+        dialogDriver.changeThenConfirmNextDialogWithText(() -> grid.getControl().dispose(), "Bob");
+
+        grid.editCellInDialog();
+
+        assertThat(dialogDriver.hasOpened()).as("The dialog must open.").isTrue();
+        assertThat(dialogDriver.hasConfirmed()).as("The dialog of a grid that is gone must be closed.")
+                .isFalse();
+        assertThat(document.get()).as("The dialog's value must not be written.").isEqualTo(originalText);
+    }
+
+    @Test
     void testValidate_whenTheValueContainsANonXmlCharacter_throwsNamingTheCharacter()
     {
         final XmlCharacterValidator validator = new XmlCharacterValidator();
@@ -540,10 +859,35 @@ class GridEditingTest
         return new KeyEvent(event);
     }
 
+    /**
+     * Replaces the document's text as a reload from disk does, then refreshes the model and the grid as the
+     * Tables page does after a text change.
+     */
+    private static void changeDocument(final FlatXmlDatasetDocument datasetDocument, final IDocument document,
+            final DatasetGrid grid, final String newText)
+    {
+        document.set(newText);
+        datasetDocument.refresh();
+        final String tableKey = grid.getBodyDataProvider().getTableKey();
+        grid.tableChanged(datasetDocument.getModel().findTable(tableKey).orElseThrow());
+    }
+
+    private static ICellEditor dialogCellEditor(final DatasetGrid grid)
+    {
+        return grid.getNatTable().getConfigRegistry().getConfigAttribute(EditConfigAttributes.CELL_EDITOR,
+                DisplayMode.EDIT, DatasetCellLabels.EDIT_IN_DIALOG);
+    }
+
     private DatasetGrid openGrid(final FlatXmlDatasetDocument datasetDocument, final String tableKey)
     {
+        return openGrid(datasetDocument, tableKey, new TestContext(datasetDocument));
+    }
+
+    private DatasetGrid openGrid(final FlatXmlDatasetDocument datasetDocument, final String tableKey,
+            final TestContext context)
+    {
         shell.setSize(400, 300);
-        final DatasetGrid grid = new DatasetGrid(shell, new TestContext(datasetDocument), tableKey);
+        final DatasetGrid grid = new DatasetGrid(shell, context, tableKey);
         grid.tableChanged(datasetDocument.getModel().findTable(tableKey).orElseThrow());
         grid.getControl().setBounds(shell.getClientArea());
         shell.open();
@@ -570,6 +914,8 @@ class GridEditingTest
         private final boolean editable;
 
         private String lastErrorMessage;
+
+        private String lastStatusMessage;
 
         TestContext(final DatasetDocument datasetDocument)
         {
@@ -711,6 +1057,7 @@ class GridEditingTest
         @Override
         public void setStatusMessage(final String message)
         {
+            lastStatusMessage = message;
         }
 
         @Override

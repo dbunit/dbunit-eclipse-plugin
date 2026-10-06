@@ -38,6 +38,8 @@ import org.eclipse.core.commands.NotEnabledException;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.nebula.widgets.nattable.NatTable;
+import org.eclipse.nebula.widgets.nattable.edit.command.EditSelectionCommand;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
@@ -731,6 +733,39 @@ class TablesPageTest
                     .as("A table without rows must start with no cell selected.")
                     .isEqualTo(new GridSelection("ORDERS", 0, 1, -1, -1, List.of(), List.of(), -1, -1, -1,
                             -1, false));
+        }
+    }
+
+    @Test
+    void testTablesPage_whenTheTextLosesARowDuringACellEdit_closesTheCellEditorWithoutWritingItsValue()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml",
+                    "<dataset><USERS ID=\"1\" NAME=\"A\"/><USERS ID=\"2\" NAME=\"B\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            final Composite page = (Composite) tablesPage.getControl();
+            page.setSize(800, 600);
+            page.layout(true, true);
+            UiTestWorkspace.processEvents();
+            final NatTable natTable = (NatTable) tablesPage.getTabFolder().getSelection().getControl();
+            tablesPage.selectRegion(1, 1, 1, 1);
+            natTable.doCommand(new EditSelectionCommand(natTable, natTable.getConfigRegistry()));
+            natTable.getActiveCellEditor().setEditorValue("Zed");
+            final String reloadedText = "<dataset><USERS ID=\"2\" NAME=\"B\"/></dataset>";
+
+            sourceDocument(editor).set(reloadedText);
+            UiTestWorkspace.processEvents();
+
+            assertThat(tablesPage.hasActiveCellEditor())
+                    .as("A reload that removes a row must close the editor, whose cell is another row now.")
+                    .isFalse();
+            natTable.commitAndCloseActiveCellEditor();
+            UiTestWorkspace.processEvents();
+            assertThat(sourceDocument(editor).get())
+                    .as("The cancelled value must not land in the reloaded text.").isEqualTo(reloadedText);
         }
     }
 

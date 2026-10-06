@@ -51,6 +51,8 @@ final class ModalDialogDriver
 
     private boolean armed;
 
+    private boolean opened;
+
     private boolean confirmed;
 
     ModalDialogDriver(final Shell parent)
@@ -64,7 +66,9 @@ final class ModalDialogDriver
      */
     void confirmNextDialog()
     {
-        arm(text ->
+        arm(() ->
+        {
+        }, text ->
         {
         });
     }
@@ -77,7 +81,32 @@ final class ModalDialogDriver
      */
     void confirmNextDialogWithText(final String newText)
     {
-        arm(text -> text.setText(newText));
+        arm(() ->
+        {
+        }, text -> text.setText(newText));
+    }
+
+    /**
+     * Runs an action while the next dialog that opens on the parent shell is open, as a change that arrives
+     * from outside the dialog would, then replaces the text of the dialog's text field and confirms it,
+     * unless the action closed the dialog.
+     *
+     * @param whileOpen The action to run once the dialog is open.
+     * @param newText The text to enter into the dialog's text field.
+     */
+    void changeThenConfirmNextDialogWithText(final Runnable whileOpen, final String newText)
+    {
+        arm(whileOpen, text -> text.setText(newText));
+    }
+
+    /**
+     * Tells whether a dialog opened.
+     *
+     * @return True once the dialog was found open.
+     */
+    boolean hasOpened()
+    {
+        return opened;
     }
 
     /**
@@ -100,14 +129,14 @@ final class ModalDialogDriver
         display.timerExec(-1, giveUp);
     }
 
-    private void arm(final Consumer<Text> edit)
+    private void arm(final Runnable whileOpen, final Consumer<Text> edit)
     {
         armed = true;
         display.timerExec(GIVE_UP_MILLIS, giveUp);
-        display.asyncExec(() -> poll(edit));
+        display.asyncExec(() -> poll(whileOpen, edit));
     }
 
-    private void poll(final Consumer<Text> edit)
+    private void poll(final Runnable whileOpen, final Consumer<Text> edit)
     {
         if (!armed || parent.isDisposed())
         {
@@ -118,15 +147,21 @@ final class ModalDialogDriver
                 .findFirst();
         if (dialog.isEmpty())
         {
-            display.timerExec(POLL_MILLIS, () -> poll(edit));
+            display.timerExec(POLL_MILLIS, () -> poll(whileOpen, edit));
             return;
         }
-        confirm(dialog.get(), edit);
+        confirm(dialog.get(), whileOpen, edit);
     }
 
-    private void confirm(final Shell dialog, final Consumer<Text> edit)
+    private void confirm(final Shell dialog, final Runnable whileOpen, final Consumer<Text> edit)
     {
         armed = false;
+        opened = true;
+        whileOpen.run();
+        if (dialog.isDisposed())
+        {
+            return;
+        }
         final Optional<Text> text = findText(dialog);
         edit.accept(text.orElseThrow(() -> new AssertionError("The dialog has no text field.")));
         confirmed = true;

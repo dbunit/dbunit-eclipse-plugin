@@ -448,6 +448,17 @@ public final class Messages extends NLS
      */
     public static String XmlCharacterValidator_invalidCharacter;
 
+    /**
+     * The error for a new cell value whose cell is no longer in the table, because the table changed while
+     * the cell was being edited.
+     */
+    public static String TableBodyDataProvider_cellNoLongerInTable;
+
+    /**
+     * The status message after a table changed shape while a cell was being edited, which cancels the edit.
+     */
+    public static String DatasetGrid_editCancelledTableChanged;
+
     static
     {
         NLS.initializeMessages(BUNDLE_NAME, Messages.class);

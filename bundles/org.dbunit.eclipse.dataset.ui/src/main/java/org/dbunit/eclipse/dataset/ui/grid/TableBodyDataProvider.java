@@ -27,6 +27,7 @@ import java.util.Optional;
 import org.dbunit.eclipse.dataset.core.edit.CellChange;
 import org.dbunit.eclipse.dataset.core.model.DatasetColumn;
 import org.dbunit.eclipse.dataset.core.model.DatasetTable;
+import org.dbunit.eclipse.dataset.ui.Messages;
 import org.eclipse.nebula.widgets.nattable.data.IDataProvider;
 
 /**
@@ -104,6 +105,11 @@ final class TableBodyDataProvider implements IDataProvider
         final Optional<DatasetTable> table = table();
         if (table.isEmpty())
         {
+            return;
+        }
+        if (!isCell(table.get(), columnIndex, rowIndex))
+        {
+            context.setStatusErrorMessage(Messages.TableBodyDataProvider_cellNoLongerInTable);
             return;
         }
         final Object currentValue = getDataValue(columnIndex, rowIndex);
