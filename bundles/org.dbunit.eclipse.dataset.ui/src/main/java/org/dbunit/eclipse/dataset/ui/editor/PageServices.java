@@ -75,7 +75,24 @@ final class PageServices
 
     boolean executeEdit(final Runnable edit)
     {
-        if (!editable.getAsBoolean() || !inputStateValid.getAsBoolean())
+        if (!editable.getAsBoolean())
+        {
+            return false;
+        }
+        return executeWithValidInput(edit);
+    }
+
+    /**
+     * Runs an edit that the page allows although the page is not editable, such as the creation of the first
+     * content of a blank document, when the input of the editor can be edited. A refusal of the edit is
+     * shown in the status line.
+     *
+     * @param edit The edit to run.
+     * @return True when the edit ran and was not refused.
+     */
+    boolean executeWithValidInput(final Runnable edit)
+    {
+        if (!inputStateValid.getAsBoolean())
         {
             return false;
         }

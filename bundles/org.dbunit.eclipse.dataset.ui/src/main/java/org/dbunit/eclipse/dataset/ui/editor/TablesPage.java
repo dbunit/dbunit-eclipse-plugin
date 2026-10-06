@@ -615,10 +615,7 @@ final class TablesPage implements DatasetGridContext
 
     private void createEmptyDataset()
     {
-        if (editor.getSourceEditor().validateEditorInputState())
-        {
-            datasetDocument.createEmptyDataset();
-        }
+        services.executeWithValidInput(datasetDocument::createEmptyDataset);
     }
 
     private void runAddTableAction()

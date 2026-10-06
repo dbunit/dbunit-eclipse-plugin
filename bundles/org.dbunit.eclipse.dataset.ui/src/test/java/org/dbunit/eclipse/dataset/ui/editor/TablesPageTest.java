@@ -37,6 +37,7 @@ import org.dbunit.eclipse.dataset.ui.actions.DatasetCommandIds;
 import org.dbunit.eclipse.dataset.ui.grid.GridSelection;
 import org.eclipse.core.commands.NotEnabledException;
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.runtime.IStatus;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.nebula.widgets.nattable.NatTable;
@@ -285,6 +286,32 @@ class TablesPageTest
                     .as("Clicking Create Empty Dataset must create the dataset.").isFalse();
             assertThat(tablesPage.isShowingBlankState())
                     .as("The page must switch away from the blank-document state.").isFalse();
+        }
+    }
+
+    @Test
+    void testTablesPage_whenTextArrivesBeforeTheBlankStateIsLeftAndTheButtonIsPressed_changesNothingAndThrowsNothing()
+            throws Exception
+    {
+        final String arrivedText = "<dataset><USERS ID=\"1\"/></dataset>";
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                LogRecorder log = new LogRecorder(PlatformUI.class))
+        {
+            final IFile file = workspace.createFile("blank.xml", "");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.openInDatasetEditor(file);
+            final TablesPage tablesPage = editor.getTablesPage();
+            sourceDocument(editor).set(arrivedText);
+
+            tablesPage.getCreateEmptyDatasetButton().notifyListeners(SWT.Selection, new Event());
+            UiTestWorkspace.processEvents();
+
+            assertThat(log.statuses()).filteredOn(status -> status.matches(IStatus.ERROR))
+                    .extracting(IStatus::getMessage)
+                    .as("The button of the blank state that is still shown when text has arrived must be "
+                            + "refused with a message, not throw into the event loop.")
+                    .isEmpty();
+            assertThat(sourceDocument(editor).get()).as("The text that arrived must stay as it is.")
+                    .isEqualTo(arrivedText);
         }
     }
 

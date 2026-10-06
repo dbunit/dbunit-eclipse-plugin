@@ -158,6 +158,55 @@ class PageServicesTest
     }
 
     @Test
+    void testExecuteWithValidInput_whenNotEditableAndTheInputIsValid_runsTheEditClearsTheErrorAndReturnsTrue()
+    {
+        editable.set(false);
+        final AtomicBoolean ran = new AtomicBoolean();
+
+        final boolean executed = services.executeWithValidInput(() -> ran.set(true));
+
+        assertThat(executed).as("An edit that runs is reported as executed.").isTrue();
+        assertThat(ran.get()).as("The edit must run although the page is not editable.").isTrue();
+        assertThat(statusLine.calls).as("A successful edit must clear the error message.")
+                .containsExactly("error: null");
+    }
+
+    @Test
+    void testExecuteWithValidInput_whenTheInputStateIsNotValid_doesNotRunTheEdit()
+    {
+        inputStateValid.set(false);
+        final AtomicBoolean ran = new AtomicBoolean();
+
+        final boolean executed = services.executeWithValidInput(() -> ran.set(true));
+
+        assertThat(executed).as("An edit on an input that cannot be edited is refused.").isFalse();
+        assertThat(ran.get()).as("The edit must not run.").isFalse();
+    }
+
+    @Test
+    void testExecuteWithValidInput_whenTheEditIsRefused_showsItsMessageInTheStatusLineAndReturnsFalse()
+    {
+        final boolean executed = services.executeWithValidInput(() ->
+        {
+            throw new DatasetEditException("The document is not blank.");
+        });
+
+        assertThat(executed).as("A refused edit is reported as not executed.").isFalse();
+        assertThat(statusLine.calls).as("The refusal must reach the status line, and nothing must clear it.")
+                .containsExactly("error: The document is not blank.");
+    }
+
+    @Test
+    void testExecuteWithValidInput_whenTheEditFailsForAnotherReason_letsTheExceptionThrough()
+    {
+        assertThatThrownBy(() -> services.executeWithValidInput(() ->
+        {
+            throw new IllegalStateException("broken");
+        })).as("Only a refusal is reported; a defect must not be hidden.")
+                .isInstanceOf(IllegalStateException.class).hasMessage("broken");
+    }
+
+    @Test
     void testExecuteMultiCellEdit_whenEditableAndTheInputIsValid_runsTheEditClearsTheErrorAndReturnsTrue()
     {
         final AtomicBoolean ran = new AtomicBoolean();
