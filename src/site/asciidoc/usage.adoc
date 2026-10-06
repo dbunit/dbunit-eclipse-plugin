@@ -206,6 +206,9 @@ A table name must be a valid XML name, must not already be used by another table
 element.
 Column names must each be a valid XML name and not repeat another, case-insensitively, the same
 rules *Add Column* applies.
+An XML name is what the XML parser of the Java runtime, which dbUnit loads a dataset with, takes for one:
+it follows the fourth edition of XML 1.0, so it holds letters, digits, and a few marks, and no character beyond
+U+FFFF and no symbol such as an arrow, which later editions of XML allow.
 dbUnit treats such an element as an empty table, which operations such as `DELETE_ALL` and `CLEAN_INSERT` still process.
 The first row that you insert into such a table replaces the element, except for what the element holds,
 such as a comment, which stays.
@@ -346,7 +349,8 @@ an element inside a row element, an entity other than `&amp;`, `&lt;`, `&gt;`, `
 in an attribute value, an `&` in text that does not start a reference, `]]>` in text,
 a reference in text to an entity that no DTD can declare,
 a character that XML 1.0 does not allow in text, a comment, or a processing instruction,
-`--` in a comment, or an XML declaration (`<?xml ...?>`) that is not at the very start of the file.
+`--` in a comment, an XML declaration (`<?xml ...?>`) that is not at the very start of the file,
+or a table or column name with a character that the XML parser of the Java runtime does not take in names.
 The grid is read-only.
 |Fix the XML on the Source page; *Show in Source* on the banner takes you to the error.
 

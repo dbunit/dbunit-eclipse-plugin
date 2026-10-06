@@ -205,12 +205,12 @@ class XmlLexerTest
     }
 
     @Test
-    void testAtNameStart_whenASupplementaryNameStartCharacterIsNext_isTrue()
+    void testAtNameStart_whenASupplementaryCharacterIsNext_isFalse()
     {
         final XmlLexer lexer = lexerFor(new String(Character.toChars(0x10000)) + "a");
 
-        assertThat(lexer.atNameStart()).as("A supplementary name start character must be read whole.")
-                .isTrue();
+        assertThat(lexer.atNameStart()).as("The parser takes no character beyond U+FFFF at the start of a "
+                + "name, and the lexer asks about the whole code point, not its first surrogate.").isFalse();
     }
 
     @Test
@@ -636,13 +636,14 @@ class XmlLexerTest
     }
 
     @Test
-    void testScanName_whenTheNameHoldsASupplementaryCharacter_consumesItWhole()
+    void testScanName_whenASupplementaryCharacterFollowsTheName_stopsBeforeIt()
     {
         final String supplementary = new String(Character.toChars(0x10000));
         final Scan scan = scan("a" + supplementary + "b c", XmlLexer::scanName);
 
-        assertThat(scan).as("A supplementary character must be consumed as one code point.")
-                .isEqualTo(new Scan("a" + supplementary + "b", " c"));
+        assertThat(scan).as("The parser takes no character beyond U+FFFF in a name, so the name ends before "
+                + "it, whole, not in the middle of its surrogate pair.")
+                .isEqualTo(new Scan("a", supplementary + "b c"));
     }
 
     @Test

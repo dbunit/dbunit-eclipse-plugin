@@ -52,6 +52,22 @@ class FlatXmlWellFormednessParityTest
 
     private static final String EMOJI = new String(Character.toChars(0x1F600));
 
+    private static final String ARROW = String.valueOf((char) 0x2190);
+
+    private static final String COMMA = String.valueOf((char) 0x3001);
+
+    private static final String COMPATIBILITY_IDEOGRAPH = String.valueOf((char) 0xF900);
+
+    private static final String COMBINING_GRAVE_ACCENT = String.valueOf((char) 0x300);
+
+    private static final String COMBINING_LETTER_X = String.valueOf((char) 0x36F);
+
+    private static final String THAI_LETTER = String.valueOf((char) 0xE01);
+
+    private static final String IDEOGRAPH = String.valueOf((char) 0x4E00);
+
+    private static final String MIDDLE_DOT = String.valueOf((char) 0xB7);
+
     private static final String XML_DECLARATION = "<?xml version=\"1.0\"?>\n";
 
     private static final String EXTERNAL_DOCTYPE =
@@ -76,6 +92,11 @@ class FlatXmlWellFormednessParityTest
     private static String body(final String content)
     {
         return "<dataset>\n    " + content + "\n    <USERS ID=\"1\"/>\n</dataset>\n";
+    }
+
+    private static String rowOf(final String tableName, final String columnName)
+    {
+        return "<dataset>\n    <" + tableName + " " + columnName + "=\"1\"/>\n</dataset>\n";
     }
 
     private static String rowText(final String content)
@@ -151,7 +172,17 @@ class FlatXmlWellFormednessParityTest
                 Arguments.of("a processing instruction without a target", body("<? data?>")),
                 Arguments.of("a processing instruction target that does not start with a name character",
                         body("<?1abc data?>")),
-                Arguments.of("a processing instruction target followed by a quote", body("<?target\"x\"?>")));
+                Arguments.of("a processing instruction target followed by a quote", body("<?target\"x\"?>")),
+                Arguments.of("a table name that starts with an arrow", rowOf(ARROW + "T", "ID")),
+                Arguments.of("a column name with an arrow in it", rowOf("T", "A" + ARROW + "B")),
+                Arguments.of("a table name that starts with an ideographic comma", rowOf(COMMA + "T", "ID")),
+                Arguments.of("a column name that starts with a compatibility ideograph",
+                        rowOf("T", COMPATIBILITY_IDEOGRAPH + "ID")),
+                Arguments.of("a column name with a supplementary character in it",
+                        rowOf("T", "A" + EMOJI + "B")),
+                Arguments.of("a table name that is a supplementary character", rowOf(EMOJI, "ID")),
+                Arguments.of("a column name with a combining character that the fourth edition lacks",
+                        rowOf("T", "A" + COMBINING_LETTER_X)));
     }
 
     private static Stream<Arguments> wellFormedTexts()
@@ -206,7 +237,14 @@ class FlatXmlWellFormednessParityTest
                 Arguments.of("a comment with a hyphen before its end", body("<!-- a- -->")),
                 Arguments.of("a comment of hyphens and spaces", body("<!-- - - - -->")),
                 Arguments.of("a comment in the internal subset",
-                        INTERNAL_SUBSET_START + "<!-- a - b -->\n]>\n" + body("")));
+                        INTERNAL_SUBSET_START + "<!-- a - b -->\n]>\n" + body("")),
+                Arguments.of("a column name that starts with a Thai letter",
+                        rowOf("USERS", THAI_LETTER + "ID")),
+                Arguments.of("a column name that starts with an ideograph", rowOf("USERS", IDEOGRAPH + "ID")),
+                Arguments.of("a column name with a middle dot and a combining accent in it",
+                        rowOf("USERS", "A" + MIDDLE_DOT + "B" + COMBINING_GRAVE_ACCENT)),
+                Arguments.of("a column name with a hyphen, a dot, and digits in it",
+                        rowOf("USERS", "A-1.2")));
     }
 
     @ParameterizedTest(name = "{0}")
