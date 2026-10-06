@@ -218,6 +218,34 @@ final class PendingColumns
     }
 
     /**
+     * Moves the pending columns of each table to the key that the table has under new options, such as
+     * other case sensitivity of table names, and forgets the snapshots, whose keys are the old ones. Two
+     * tables whose keys become one keep the columns of both, in order and without repeats. An entry whose
+     * table is not among the keys keeps its key, because that table may come back.
+     *
+     * @param newKeysByOldKey The new key of each table of the model, by the key that it has had.
+     */
+    void rekey(final Map<String, String> newKeysByOldKey)
+    {
+        final Map<String, List<String>> rekeyed = new LinkedHashMap<>();
+        for (final Map.Entry<String, List<String>> entry : pendingColumns.entrySet())
+        {
+            final String newKey = newKeysByOldKey.getOrDefault(entry.getKey(), entry.getKey());
+            final List<String> columns = rekeyed.computeIfAbsent(newKey, unused -> new ArrayList<>());
+            for (final String column : entry.getValue())
+            {
+                if (!columns.contains(column))
+                {
+                    columns.add(column);
+                }
+            }
+        }
+        pendingColumns.clear();
+        pendingColumns.putAll(rekeyed);
+        forgetHistory();
+    }
+
+    /**
      * Forgets the snapshots of earlier document states, because the dataset document is bound to another
      * text document, whose modification stamps have nothing to do with them.
      */

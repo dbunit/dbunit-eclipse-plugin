@@ -22,6 +22,7 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -194,6 +195,46 @@ class FlatXmlDatasetDocumentTest
 
         assertThat(datasetDocument.getModel().getTables())
                 .as("setOptions must refresh immediately with the new options.").hasSize(2);
+    }
+
+    @Test
+    void testSetOptions_whenTableNamesBecomeCaseSensitiveAndThenInsensitiveAgain_keepsThePendingColumns()
+    {
+        final IDocument document = new Document("<dataset><users ID=\"1\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.refresh();
+        datasetDocument.addColumn("USERS", "EXTRA");
+        final DatasetColumn pendingExtra = new DatasetColumn("EXTRA", false, false, true);
+
+        datasetDocument.setOptions(new FlatXmlOptions(true, false));
+        final List<DatasetColumn> whenCaseSensitive =
+                datasetDocument.getModel().findTable("users").orElseThrow().getColumns();
+        datasetDocument.setOptions(FlatXmlOptions.DBUNIT_DEFAULTS);
+        final List<DatasetColumn> whenCaseInsensitiveAgain =
+                datasetDocument.getModel().findTable("USERS").orElseThrow().getColumns();
+
+        assertThat(List.of(whenCaseSensitive.contains(pendingExtra),
+                whenCaseInsensitiveAgain.contains(pendingExtra)))
+                .as("The pending column must stay with its table when the key of the table changes, "
+                        + "and when it changes back.")
+                .containsExactly(true, true);
+    }
+
+    @Test
+    void testSetOptions_whenTwoSpellingsOfATableBecomeOne_mergesTheirPendingColumns()
+    {
+        final IDocument document = new Document("<dataset><users ID=\"1\"/><USERS ID=\"2\"/></dataset>");
+        final FlatXmlDatasetDocument datasetDocument = create(document);
+        datasetDocument.setOptions(new FlatXmlOptions(true, false));
+        datasetDocument.addColumn("users", "FIRST");
+        datasetDocument.addColumn("USERS", "SECOND");
+
+        datasetDocument.setOptions(FlatXmlOptions.DBUNIT_DEFAULTS);
+
+        final DatasetTable table = datasetDocument.getModel().findTable("USERS").orElseThrow();
+        assertThat(table.getColumns()).extracting(DatasetColumn::name, DatasetColumn::pending)
+                .as("Both spellings are one table now, which keeps the pending columns of both.")
+                .containsExactly(tuple("ID", false), tuple("FIRST", true), tuple("SECOND", true));
     }
 
     @Test

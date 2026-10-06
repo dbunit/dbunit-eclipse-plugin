@@ -680,6 +680,68 @@ class PendingColumnsTest
     }
 
     @Test
+    void testRekey_whenATableHasANewKey_movesItsColumnsToIt()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        pending.addTable("USERS", List.of("A", "B"));
+        pending.addTable("ORDERS", List.of("C"));
+
+        pending.rekey(Map.of("USERS", "users"));
+
+        assertThat(pending.asMap())
+                .as("The columns of a table that has a new key must follow it, and those of another stay.")
+                .containsExactly(Map.entry("users", List.of("A", "B")), Map.entry("ORDERS", List.of("C")));
+    }
+
+    @Test
+    void testRekey_whenTwoKeysBecomeOne_mergesTheirColumnsInOrderWithoutRepeats()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        pending.addTable("users", List.of("A", "B"));
+        pending.addTable("USERS", List.of("B", "C"));
+
+        pending.rekey(Map.of("users", "USERS", "USERS", "USERS"));
+
+        assertThat(pending.asMap()).as("Both spellings become one table, whose columns are listed once.")
+                .containsExactly(Map.entry("USERS", List.of("A", "B", "C")));
+    }
+
+    @Test
+    void testRekey_whenAKeyIsNotInTheMapping_keepsItsEntry()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        pending.addTable("GONE", List.of("A"));
+
+        pending.rekey(Map.of("USERS", "users"));
+
+        assertThat(pending.asMap()).as("A table that the model lacks may come back, so it keeps its entry.")
+                .containsExactly(Map.entry("GONE", List.of("A")));
+    }
+
+    @Test
+    void testRekey_whenSnapshotsWereRecorded_forgetsThemBecauseTheirKeysAreOld()
+    {
+        final PendingColumns pending = new PendingColumns(() ->
+        {
+        });
+        pending.addTable("USERS", List.of("A"));
+        pending.record(1L);
+        pending.record(2L);
+
+        pending.rekey(Map.of("USERS", "users"));
+        pending.deleteTable("users");
+        pending.restore(1L);
+
+        assertThat(pending.asMap()).as("A snapshot with the old key must not come back.").isEmpty();
+    }
+
+    @Test
     void testForgetHistory_whenSnapshotsWereRecorded_forgetsThem()
     {
         final PendingColumns pending = new PendingColumns(() ->

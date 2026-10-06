@@ -22,6 +22,7 @@ package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -476,13 +477,21 @@ public final class FlatXmlDatasetDocument implements TextDatasetDocument
     }
 
     /**
-     * Changes the case-sensitivity and column-sensing options, then refreshes.
+     * Changes the case-sensitivity and column-sensing options, then refreshes. The pending columns of each
+     * table follow it to the key that its name has under the new options.
      *
      * @param newOptions The new options.
      */
     public void setOptions(final FlatXmlOptions newOptions)
     {
+        final List<DatasetTable> tables = model.getTables();
         this.options = newOptions;
+        final Map<String, String> newKeysByOldKey = new HashMap<>();
+        for (final DatasetTable table : tables)
+        {
+            newKeysByOldKey.put(table.getKey(), tableKeyOf(table.getName()));
+        }
+        pendingColumns.rekey(newKeysByOldKey);
         stale = true;
         refresh();
     }
