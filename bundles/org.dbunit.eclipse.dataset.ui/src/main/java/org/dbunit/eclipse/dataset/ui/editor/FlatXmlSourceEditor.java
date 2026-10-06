@@ -20,6 +20,8 @@
  */
 package org.dbunit.eclipse.dataset.ui.editor;
 
+import java.util.function.Consumer;
+
 import org.dbunit.eclipse.dataset.ui.source.XmlDocumentSetupParticipant;
 import org.dbunit.eclipse.dataset.ui.source.XmlSourceViewerConfiguration;
 import org.dbunit.eclipse.dataset.ui.source.XmlTokenColors;
@@ -33,8 +35,9 @@ import org.eclipse.ui.themes.IThemeManager;
 
 /**
  * The Source page of {@link FlatXmlDatasetEditor}: a text editor over the same document that colors the
- * XML syntax, with the two additions the multi-page editor needs: to detect changes made outside the
- * workbench, and to let the Tables page drop a cell edit in progress before the document is reverted.
+ * XML syntax, with the additions the multi-page editor needs: to detect changes made outside the
+ * workbench, to let the Tables page drop a cell edit in progress before the document is reverted, and to
+ * close the whole dataset editor when it is asked to close itself.
  *
  * @since 1.0.0
  */
@@ -44,16 +47,21 @@ public class FlatXmlSourceEditor extends TextEditor
 
     private final Runnable beforeRevert;
 
+    private final Consumer<Boolean> closeDatasetEditor;
+
     /**
      * Creates the Source page editor, which colors the XML syntax with the current theme's colors.
      *
-     * @param beforeRevert Runs before the editor reverts its document to the text of the last save, so that
-     *                     a cell edit in progress on the Tables page does not write its value into the
-     *                     reverted document.
+     * @param beforeRevert       Runs before the editor reverts its document to the text of the last save, so
+     *                           that a cell edit in progress on the Tables page does not write its value
+     *                           into the reverted document.
+     * @param closeDatasetEditor Closes the dataset editor that holds this page, saving its changes first
+     *                           when it is given true.
      */
-    public FlatXmlSourceEditor(final Runnable beforeRevert)
+    public FlatXmlSourceEditor(final Runnable beforeRevert, final Consumer<Boolean> closeDatasetEditor)
     {
         this.beforeRevert = beforeRevert;
+        this.closeDatasetEditor = closeDatasetEditor;
         final IThemeManager themeManager = PlatformUI.getWorkbench().getThemeManager();
         tokenColors = new XmlTokenColors(themeManager, this::redrawSyntaxColors);
         setSourceViewerConfiguration(new XmlSourceViewerConfiguration(getPreferenceStore(), tokenColors));
@@ -80,6 +88,21 @@ public class FlatXmlSourceEditor extends TextEditor
     {
         beforeRevert.run();
         super.performRevert();
+    }
+
+    /**
+     * Closes the dataset editor that holds this page, because the workbench page knows only the dataset
+     * editor, so it would ignore a request to close this page alone. Sanity checking is turned off first, as
+     * the inherited implementation does, so that a change outside the workbench does not prompt again for an
+     * editor that is about to close.
+     *
+     * @param save True to save the changes first, false to discard them.
+     */
+    @Override
+    public void close(final boolean save)
+    {
+        enableSanityChecking(false);
+        closeDatasetEditor.accept(save);
     }
 
     /**

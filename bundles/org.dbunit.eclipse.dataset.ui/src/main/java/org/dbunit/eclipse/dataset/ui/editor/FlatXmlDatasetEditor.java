@@ -40,14 +40,13 @@ import org.eclipse.ui.IEditorSite;
 import org.eclipse.ui.IPartListener2;
 import org.eclipse.ui.IPropertyListener;
 import org.eclipse.ui.IWindowListener;
+import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.IWorkbenchPartReference;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.editors.text.IEncodingSupport;
 import org.eclipse.ui.ide.IGotoMarker;
 import org.eclipse.ui.part.MultiPageEditorPart;
-import org.eclipse.ui.texteditor.IDocumentProvider;
-import org.eclipse.ui.texteditor.IElementStateListener;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 /**
@@ -75,46 +74,6 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         if (propertyId == IEditorPart.PROP_INPUT)
         {
             handleInputChanged();
-        }
-    };
-
-    private final IElementStateListener elementStateListener = new IElementStateListener()
-    {
-        @Override
-        public void elementDirtyStateChanged(final Object element, final boolean isDirty)
-        {
-            // Nothing to do: the editor only reacts to its element being deleted or moved.
-        }
-
-        @Override
-        public void elementContentAboutToBeReplaced(final Object element)
-        {
-            // Nothing to do: the editor only reacts to its element being deleted or moved.
-        }
-
-        @Override
-        public void elementContentReplaced(final Object element)
-        {
-            // Nothing to do: the editor only reacts to its element being deleted or moved.
-        }
-
-        @Override
-        public void elementDeleted(final Object element)
-        {
-            if (element != null && element.equals(sourceEditor.getEditorInput()))
-            {
-                closeIfClean();
-            }
-        }
-
-        @Override
-        public void elementMoved(final Object originalElement, final Object movedElement)
-        {
-            if (movedElement == null && originalElement != null
-                    && originalElement.equals(sourceEditor.getEditorInput()))
-            {
-                closeIfClean();
-            }
         }
     };
 
@@ -194,7 +153,7 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
     @Override
     protected void createPages()
     {
-        sourceEditor = new FlatXmlSourceEditor(this::cancelActiveCellEditor);
+        sourceEditor = new FlatXmlSourceEditor(this::cancelActiveCellEditor, this::closeEditor);
         final int sourcePageIndex;
         try
         {
@@ -222,7 +181,6 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         previousPageIndex = getActivePage();
 
         sourceEditor.addPropertyListener(sourceInputListener);
-        sourceEditor.getDocumentProvider().addElementStateListener(elementStateListener);
         getSite().getPage().addPartListener(partListener);
         getSite().getWorkbenchWindow().getWorkbench().addWindowListener(windowListener);
         preferenceStore.addPropertyChangeListener(preferenceListener);
@@ -341,11 +299,6 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         if (sourceEditor != null)
         {
             sourceEditor.removePropertyListener(sourceInputListener);
-            final IDocumentProvider documentProvider = sourceEditor.getDocumentProvider();
-            if (documentProvider != null)
-            {
-                documentProvider.removeElementStateListener(elementStateListener);
-            }
         }
     }
 
@@ -387,13 +340,17 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         }
     }
 
-    private void closeIfClean()
+    private void closeEditor(final boolean save)
     {
-        if (!isDirty())
+        Display.getDefault().asyncExec(() ->
         {
-            Display.getDefault()
-                    .asyncExec(() -> getSite().getPage().closeEditor(FlatXmlDatasetEditor.this, false));
-        }
+            // An earlier request to close the editor may have closed it already, which takes its page away.
+            final IWorkbenchPage page = getSite().getPage();
+            if (page != null)
+            {
+                page.closeEditor(FlatXmlDatasetEditor.this, save);
+            }
+        });
     }
 
     private void refreshExternalState()

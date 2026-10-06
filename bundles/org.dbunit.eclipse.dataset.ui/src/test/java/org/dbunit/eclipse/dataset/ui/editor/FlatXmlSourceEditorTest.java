@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,7 @@ import org.dbunit.eclipse.dataset.ui.source.XmlTokenColors;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IStorage;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.IStatus;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.resource.ColorRegistry;
 import org.eclipse.jface.resource.ImageDescriptor;
@@ -46,6 +48,7 @@ import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IPersistableElement;
 import org.eclipse.ui.IStorageEditorInput;
@@ -55,8 +58,8 @@ import org.eclipse.ui.actions.ActionFactory;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests {@link FlatXmlSourceEditor}, the Source page of a real dataset editor: its syntax coloring, and the
- * revert that the dataset editor offers on both pages.
+ * Tests {@link FlatXmlSourceEditor}, the Source page of a real dataset editor: its syntax coloring, the
+ * revert that the dataset editor offers on both pages, and how it closes the dataset editor.
  */
 class FlatXmlSourceEditorTest
 {
@@ -70,6 +73,9 @@ class FlatXmlSourceEditorTest
 
     private static final String SAVED_USERS =
             "<dataset><USERS ID=\"1\" NAME=\"Alice\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>";
+
+    private static final String EDITED_USERS =
+            "<dataset><USERS ID=\"1\" NAME=\"Carol\"/><USERS ID=\"2\" NAME=\"Bob\"/></dataset>";
 
     @Test
     void testOpen_whenFileIsAFlatXmlDataset_colorsEachXmlConstructWithItsThemeColor() throws Exception
@@ -206,6 +212,135 @@ class FlatXmlSourceEditorTest
         }
     }
 
+    @Test
+    void testClose_whenNotSaving_closesTheDatasetEditorThatHoldsTheSourcePage() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IEditorInput input = editor.getEditorInput();
+
+            editor.getSourceEditor().close(false);
+
+            assertThat(activePage().findEditor(input))
+                    .as("The editor must still be open when the call returns, as it is after the close of "
+                            + "any text editor, because the code that asked for it goes on using the editor.")
+                    .isNotNull();
+
+            UiTestWorkspace.processEvents();
+
+            assertThat(activePage().findEditor(input))
+                    .as("Closing the Source page must close the dataset editor that holds it, because the "
+                            + "workbench page does not know the page of an editor by itself.")
+                    .isNull();
+        }
+    }
+
+    @Test
+    void testClose_whenNotSavingAndTheEditorIsDirty_closesItAndLeavesTheFileAsSaved() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IEditorInput input = editor.getEditorInput();
+            editor.getDatasetDocument().setCells("USERS", List.of(new CellChange(0, "NAME", "Carol")));
+            UiTestWorkspace.processEvents();
+            assertThat(editor.isDirty()).as("A grid edit must make the editor dirty.").isTrue();
+            dialogDriver.expectNoDialog();
+
+            editor.getSourceEditor().close(false);
+            UiTestWorkspace.processEvents();
+
+            assertThat(dialogDriver.unexpectedDialogTitles())
+                    .as("Closing without saving must not ask whether to save.").isEmpty();
+            assertThat(activePage().findEditor(input)).as("Closing without saving must close the editor.")
+                    .isNull();
+            assertThat(fileText(file)).as("Closing without saving must leave the file as it was saved.")
+                    .isEqualTo(SAVED_USERS);
+        }
+    }
+
+    @Test
+    void testClose_whenSavingAndTheEditorIsDirty_savesTheChangesAndCloses() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IEditorInput input = editor.getEditorInput();
+            editor.getDatasetDocument().setCells("USERS", List.of(new CellChange(0, "NAME", "Carol")));
+            UiTestWorkspace.processEvents();
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.SAVE_BUTTON_OF_CLOSE_PROMPT);
+
+            editor.getSourceEditor().close(true);
+            UiTestWorkspace.processEvents();
+
+            assertThat(dialogDriver.hasHandledDialog())
+                    .as("Closing a dirty editor with its changes to be saved must ask whether to save them.")
+                    .isTrue();
+            assertThat(dialogDriver.unexpectedDialogTitles())
+                    .as("The prompt to save must be the only dialog that opens.").isEmpty();
+            assertThat(fileText(file)).as("Choosing Save must write the changes before the editor closes.")
+                    .isEqualTo(EDITED_USERS);
+            assertThat(activePage().findEditor(input)).as("The editor must close once it is saved.")
+                    .isNull();
+        }
+    }
+
+    @Test
+    void testClose_whenAskedAgainBeforeTheEditorCloses_closesTheEditorOnceWithoutAnError() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                LogRecorder log = new LogRecorder(PlatformUI.class))
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IEditorInput input = editor.getEditorInput();
+            final FlatXmlSourceEditor sourceEditor = editor.getSourceEditor();
+
+            sourceEditor.close(false);
+            sourceEditor.close(false);
+            UiTestWorkspace.processEvents();
+
+            assertThat(activePage().findEditor(input)).as("The editor must close.").isNull();
+            assertThat(log.statuses()).filteredOn(status -> status.matches(IStatus.ERROR))
+                    .extracting(IStatus::getMessage)
+                    .as("A second request to close an editor that has already closed must be harmless, "
+                            + "not an exception that the workbench reports.")
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void testClose_whenTheFileIsDeletedBeforeTheEditorCloses_doesNotAskAboutTheFile() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", SAVED_USERS);
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IEditorInput input = editor.getEditorInput();
+            final FlatXmlSourceEditor sourceEditor = editor.getSourceEditor();
+            sourceEditor.checkExternalModification();
+            editor.getDatasetDocument().setCells("USERS", List.of(new CellChange(0, "NAME", "Carol")));
+            UiTestWorkspace.processEvents();
+            dialogDriver.expectNoDialog();
+
+            sourceEditor.close(false);
+            Files.delete(file.getLocation().toFile().toPath());
+            sourceEditor.checkExternalModification();
+            UiTestWorkspace.processEvents();
+
+            assertThat(dialogDriver.unexpectedDialogTitles())
+                    .as("An editor that is about to close must not ask what to do about its file.").isEmpty();
+            assertThat(activePage().findEditor(input)).as("The editor must still close.").isNull();
+        }
+    }
+
     /**
      * Gives the grid a size, which an editor in the test workbench lacks while the intro hides its shell,
      * so that NatTable can place the editor of a cell.
@@ -227,6 +362,19 @@ class FlatXmlSourceEditorTest
     {
         final FlatXmlSourceEditor sourceEditor = editor.getSourceEditor();
         return sourceEditor.getDocumentProvider().getDocument(sourceEditor.getEditorInput()).get();
+    }
+
+    private static String fileText(final IFile file) throws Exception
+    {
+        try (InputStream contents = file.getContents())
+        {
+            return new String(contents.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private static IWorkbenchPage activePage()
+    {
+        return PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
     }
 
     private static StyledText sourceText(final FlatXmlDatasetEditor editor)

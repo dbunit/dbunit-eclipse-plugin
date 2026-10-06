@@ -35,6 +35,7 @@ import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IMarker;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.nebula.widgets.nattable.NatTable;
 import org.eclipse.nebula.widgets.nattable.config.CellConfigAttributes;
@@ -210,6 +211,61 @@ class FlatXmlDatasetEditorTest
     }
 
     @Test
+    void testFileDeleted_whenEditorIsDirty_keepsTheEditorOpen() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IEditorInput input = editor.getEditorInput();
+            final IWorkbenchPage page =
+                    PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
+            makeDirty(editor);
+
+            file.delete(true, null);
+            UiTestWorkspace.processEvents();
+
+            assertThat(page.findEditor(input))
+                    .as("Deleting the file of an editor with unsaved changes must leave the editor open, "
+                            + "so that the changes can still be saved.")
+                    .isNotNull();
+        }
+    }
+
+    @Test
+    void testFileDeleted_whenEditorIsDirtyAndTheUserChoosesClose_closesTheEditorWithoutSaving()
+            throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace();
+                MessageDialogDriver dialogDriver = new MessageDialogDriver())
+        {
+            final IFile file = workspace.createFile("dataset.xml", "<dataset><USERS ID=\"1\"/></dataset>");
+            final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(file);
+            final IEditorInput input = editor.getEditorInput();
+            final IWorkbenchPage page =
+                    PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
+            editor.getSourceEditor().checkExternalModification();
+            workspace.open(workspace.createFile("other.xml", "<dataset><ORDERS ID=\"1\"/></dataset>"));
+            makeDirty(editor);
+            file.delete(true, null);
+            UiTestWorkspace.processEvents();
+            dialogDriver.pressButtonOfNextDialog(MessageDialogDriver.CLOSE_BUTTON_OF_DELETED_FILE_DIALOG);
+
+            page.activate(editor);
+            UiTestWorkspace.processEvents();
+
+            assertThat(dialogDriver.hasHandledDialog())
+                    .as("Activating an editor whose file was deleted must ask whether to save or close.")
+                    .isTrue();
+            assertThat(dialogDriver.unexpectedDialogTitles())
+                    .as("Choosing Close must not lead to another dialog.").isEmpty();
+            assertThat(page.findEditor(input)).as("Choosing Close must close the editor.").isNull();
+            assertThat(file.exists()).as("Closing without saving must not bring the deleted file back.")
+                    .isFalse();
+        }
+    }
+
+    @Test
     void testGetAdapter_forIGotoMarker_leavesTheTablesPageActive() throws Exception
     {
         try (UiTestWorkspace workspace = new UiTestWorkspace())
@@ -352,6 +408,15 @@ class FlatXmlDatasetEditorTest
                     .as("The UI thread must then regroup the open editor's tables.")
                     .containsExactly("USERS", "users");
         }
+    }
+
+    private static void makeDirty(final FlatXmlDatasetEditor editor) throws BadLocationException
+    {
+        final ITextEditor sourceEditor = editor.getSourceEditor();
+        sourceEditor.getDocumentProvider().getDocument(sourceEditor.getEditorInput()).replace(0, 0,
+                "<!--edited-->");
+        UiTestWorkspace.processEvents();
+        assertThat(editor.isDirty()).as("A source edit must make the editor dirty.").isTrue();
     }
 
     private static IPreferenceStore preferenceStore()
