@@ -277,7 +277,7 @@ class TextContentScannerTest
                 problemsAfterFailure("  a" + CONTROL_CHARACTER + "b", ENTITIES_MAY_BE_DECLARED);
 
         assertThat(problems).as("A character that XML forbids must be reported where it is.")
-                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "1"), 3));
+                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "0001"), 3));
     }
 
     @Test

@@ -63,6 +63,19 @@ public final class AttributeValueCodec
     }
 
     /**
+     * Returns the message that says that a code point is not allowed in an XML 1.0 document, which every
+     * place that refuses such a character gives, so that they word it alike.
+     *
+     * @param codePoint The code point that is not an XML 1.0 {@code Char}.
+     * @return The message, which names the code point as {@code U+} and at least four hexadecimal digits.
+     */
+    public static String notXmlCharacterMessage(final int codePoint)
+    {
+        final String hexadecimal = String.format(Locale.ROOT, "%04X", codePoint);
+        return NLS.bind(Messages.Codec_notXmlCharacter, hexadecimal);
+    }
+
+    /**
      * Tells whether a name is one of the five entities that XML predefines, which need no declaration.
      *
      * @param name The entity name, without the ampersand and the semicolon.
@@ -147,9 +160,7 @@ public final class AttributeValueCodec
     {
         if (!isXmlChar(codePoint))
         {
-            final String hexadecimal = Integer.toHexString(codePoint).toUpperCase(Locale.ROOT);
-            throw new AttributeValueException(NLS.bind(Messages.Codec_notXmlCharacter, hexadecimal), offset,
-                    false);
+            throw new AttributeValueException(notXmlCharacterMessage(codePoint), offset, false);
         }
     }
 
@@ -199,8 +210,7 @@ public final class AttributeValueCodec
     {
         if (!isXmlChar(codePoint))
         {
-            final String hexadecimal = Integer.toHexString(codePoint).toUpperCase(Locale.ROOT);
-            throw new DatasetEditException(NLS.bind(Messages.Codec_notXmlCharacter, hexadecimal));
+            throw new DatasetEditException(notXmlCharacterMessage(codePoint));
         }
         final String escape = ESCAPES.get(codePoint);
         if (escape == null)

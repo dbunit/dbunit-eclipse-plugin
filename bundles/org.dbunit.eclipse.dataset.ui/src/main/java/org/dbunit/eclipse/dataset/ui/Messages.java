@@ -444,11 +444,6 @@ public final class Messages extends NLS
     public static String InsertRow_newFirstRow;
 
     /**
-     * The error for a cell value with a character XML does not allow; {0} is the character's code point.
-     */
-    public static String XmlCharacterValidator_invalidCharacter;
-
-    /**
      * The error for a new cell value whose cell is no longer in the table, because the table changed while
      * the cell was being edited.
      */

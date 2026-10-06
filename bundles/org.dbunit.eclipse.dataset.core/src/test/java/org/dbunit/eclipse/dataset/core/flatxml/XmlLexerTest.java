@@ -509,7 +509,7 @@ class XmlLexerTest
                 problemsAfterFailure(text, 0, XmlLexer::skipProcessingInstruction);
 
         assertThat(problems).as("A control character must be reported where it is.")
-                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "1"), 10));
+                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "0001"), 10));
     }
 
     @Test
@@ -520,7 +520,7 @@ class XmlLexerTest
         final List<DatasetProblem> problems = problemsAfterFailure(text, 0, XmlLexer::skipComment);
 
         assertThat(problems).as("A control character must be reported where it is.")
-                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "1"), 6));
+                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "0001"), 6));
     }
 
     @Test
@@ -551,7 +551,7 @@ class XmlLexerTest
         final List<DatasetProblem> problems = problemsAfterFailure(text, 0, XmlLexer::skipCData);
 
         assertThat(problems).as("A control character must be reported where it is.")
-                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "1"), 10));
+                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "0001"), 10));
     }
 
     @Test
@@ -604,7 +604,7 @@ class XmlLexerTest
                 problemsAfterFailure("a" + CONTROL_CHARACTER, 1, XmlLexer::skipXmlCharacter);
 
         assertThat(problems).as("A control character is no XML character and must be reported.")
-                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "1"), 1));
+                .containsExactly(problemInFirstLine(NLS.bind(Messages.Codec_notXmlCharacter, "0001"), 1));
     }
 
     @Test

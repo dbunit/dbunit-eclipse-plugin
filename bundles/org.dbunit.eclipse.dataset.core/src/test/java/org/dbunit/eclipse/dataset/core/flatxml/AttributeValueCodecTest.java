@@ -21,6 +21,7 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import java.nio.ByteBuffer;
@@ -171,6 +172,39 @@ class AttributeValueCodecTest
     }
 
     @Test
+    void testNotXmlCharacterMessage_forACharacterOfOneDigit_padsItToFourDigits()
+    {
+        assertThat(AttributeValueCodec.notXmlCharacterMessage(0xB))
+                .as("The code point must be written as U+ and at least four digits.")
+                .isEqualTo("The character U+000B is not allowed in an XML 1.0 document.");
+    }
+
+    @Test
+    void testNotXmlCharacterMessage_forASurrogate_namesItInUpperCase()
+    {
+        assertThat(AttributeValueCodec.notXmlCharacterMessage(0xD800))
+                .as("The digits must be upper-case hexadecimal.")
+                .isEqualTo("The character U+D800 is not allowed in an XML 1.0 document.");
+    }
+
+    @Test
+    void testNotXmlCharacterMessage_forACharacterBeyondTheBasicPlane_keepsAllItsDigits()
+    {
+        assertThat(AttributeValueCodec.notXmlCharacterMessage(0x10FFFF))
+                .as("Padding must not cut a code point that has more than four digits.")
+                .isEqualTo("The character U+10FFFF is not allowed in an XML 1.0 document.");
+    }
+
+    @Test
+    void testEscape_whenGivenANonXmlCharacter_saysWhichOneInTheSharedMessage()
+    {
+        assertThatThrownBy(() -> AttributeValueCodec.escape("a\u000Bb", StandardCharsets.UTF_8.newEncoder()))
+                .as("The refusal of a character must use the message that the other places use.")
+                .isInstanceOf(DatasetEditException.class)
+                .hasMessage(AttributeValueCodec.notXmlCharacterMessage(0xB));
+    }
+
+    @Test
     void testDecode_whenGivenAReferenceToANonXmlCharacter_throwsAtItsOffset()
     {
         final AttributeValueException exception = catchThrowableOfType(
@@ -190,6 +224,8 @@ class AttributeValueCodecTest
         assertThat(exception).as("U+000B is not an XML 1.0 Char, so a literal one must throw.")
                 .isNotNull();
         assertThat(exception.getOffset()).as("The offset must point at the character.").isEqualTo(0);
+        assertThat(exception.getMessage()).as("The refusal must use the message that the other places use.")
+                .isEqualTo(AttributeValueCodec.notXmlCharacterMessage(0xB));
     }
 
     @Test

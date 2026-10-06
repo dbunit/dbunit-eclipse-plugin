@@ -20,10 +20,9 @@
  */
 package org.dbunit.eclipse.dataset.ui.grid;
 
-import org.dbunit.eclipse.dataset.ui.Messages;
+import org.dbunit.eclipse.dataset.core.flatxml.AttributeValueCodec;
 import org.eclipse.nebula.widgets.nattable.data.validate.DataValidator;
 import org.eclipse.nebula.widgets.nattable.data.validate.ValidationFailedException;
-import org.eclipse.osgi.util.NLS;
 
 /**
  * Rejects an edited value that contains a code point that is not an XML 1.0 {@code Char}.
@@ -43,22 +42,12 @@ final class XmlCharacterValidator extends DataValidator
         for (int offset = 0; offset < text.length();)
         {
             final int codePoint = text.codePointAt(offset);
-            if (!isXmlChar(codePoint))
+            if (!AttributeValueCodec.isXmlChar(codePoint))
             {
-                final String character = String.format("U+%04X", codePoint);
-                throw new ValidationFailedException(
-                        NLS.bind(Messages.XmlCharacterValidator_invalidCharacter, character));
+                throw new ValidationFailedException(AttributeValueCodec.notXmlCharacterMessage(codePoint));
             }
             offset += Character.charCount(codePoint);
         }
         return true;
-    }
-
-    private static boolean isXmlChar(final int codePoint)
-    {
-        return codePoint == 0x9 || codePoint == 0xA || codePoint == 0xD
-                || (codePoint >= 0x20 && codePoint <= 0xD7FF)
-                || (codePoint >= 0xE000 && codePoint <= 0xFFFD)
-                || (codePoint >= 0x10000 && codePoint <= 0x10FFFF);
     }
 }

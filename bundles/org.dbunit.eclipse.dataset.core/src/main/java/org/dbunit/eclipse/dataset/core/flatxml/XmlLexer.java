@@ -21,7 +21,6 @@
 package org.dbunit.eclipse.dataset.core.flatxml;
 
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 
 import org.dbunit.eclipse.dataset.core.Messages;
@@ -286,9 +285,8 @@ final class XmlLexer
         final int codePoint = Character.codePointAt(text, pos);
         if (!AttributeValueCodec.isXmlChar(codePoint))
         {
-            final String hexadecimal = Integer.toHexString(codePoint).toUpperCase(Locale.ROOT);
             throw problems.blockingError(ProblemCode.NOT_WELL_FORMED,
-                    NLS.bind(Messages.Codec_notXmlCharacter, hexadecimal), pos);
+                    AttributeValueCodec.notXmlCharacterMessage(codePoint), pos);
         }
         pos += Character.charCount(codePoint);
     }

@@ -778,7 +778,7 @@ class GridEditingTest
         assertThatThrownBy(() -> validator.validate(0, 0, "a\u0001b"))
                 .as("A code point outside the XML 1.0 Char production must be rejected.")
                 .isInstanceOf(ValidationFailedException.class)
-                .hasMessage("Character U+0001 is not allowed in XML.");
+                .hasMessage("The character U+0001 is not allowed in an XML 1.0 document.");
     }
 
     @Test
