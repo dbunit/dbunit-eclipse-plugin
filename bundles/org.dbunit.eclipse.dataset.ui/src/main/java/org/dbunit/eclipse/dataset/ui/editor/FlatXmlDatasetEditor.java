@@ -22,6 +22,7 @@ package org.dbunit.eclipse.dataset.ui.editor;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 import org.dbunit.eclipse.dataset.core.flatxml.FlatXmlDatasetDocument;
 import org.dbunit.eclipse.dataset.ui.DatasetUiPlugin;
@@ -95,10 +96,7 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
         @Override
         public void windowActivated(final IWorkbenchWindow window)
         {
-            if (FlatXmlDatasetEditor.this.equals(getSite().getPage().getActivePart()))
-            {
-                refreshExternalState();
-            }
+            handleWindowActivated(window);
         }
 
         @Override
@@ -360,6 +358,23 @@ public final class FlatXmlDatasetEditor extends MultiPageEditorPart
                 page.closeEditor(FlatXmlDatasetEditor.this, save);
             }
         });
+    }
+
+    /**
+     * Checks the files that this editor shows when its own window is activated and it is the active part of
+     * its page. The workbench tells every editor of every window about each window that is activated, and
+     * the editor of another window has nothing to check then: a DTD that it read again or a prompt that it
+     * showed would belong to the window that the user left.
+     *
+     * @param window The window that was activated.
+     */
+    void handleWindowActivated(final IWorkbenchWindow window)
+    {
+        final boolean ownWindow = Objects.equals(getSite().getWorkbenchWindow(), window);
+        if (ownWindow && FlatXmlDatasetEditor.this.equals(getSite().getPage().getActivePart()))
+        {
+            refreshExternalState();
+        }
     }
 
     private void refreshExternalState()

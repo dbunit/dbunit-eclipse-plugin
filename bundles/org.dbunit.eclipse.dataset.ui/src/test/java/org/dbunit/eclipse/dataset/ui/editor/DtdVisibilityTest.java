@@ -23,6 +23,7 @@ package org.dbunit.eclipse.dataset.ui.editor;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.ByteArrayInputStream;
+import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -35,6 +36,7 @@ import org.dbunit.eclipse.dataset.core.model.ProblemCode;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabItem;
+import org.eclipse.ui.IWorkbenchWindow;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -78,6 +80,73 @@ class DtdVisibilityTest
             assertThat(ordersTab.getFont().getFontData()[0].getStyle() & SWT.ITALIC)
                     .as("A declared-only table's tab must be italic.").isEqualTo(SWT.ITALIC);
         }
+    }
+
+    @Test
+    void testHandleWindowActivated_whenAnotherWindowIsActivated_doesNotReloadTheDtd() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final FlatXmlDatasetEditor editor = openWithDtdThatThenGainsAColumn(workspace);
+
+            editor.handleWindowActivated(anotherWindow());
+            UiTestWorkspace.processEvents();
+
+            assertThat(columnNamesOfUsers(editor))
+                    .as("Another window that is activated must not make this editor read its files.")
+                    .containsExactly("ID");
+        }
+    }
+
+    @Test
+    void testHandleWindowActivated_whenTheWindowOfTheEditorIsActivated_reloadsTheDtd() throws Exception
+    {
+        try (UiTestWorkspace workspace = new UiTestWorkspace())
+        {
+            final FlatXmlDatasetEditor editor = openWithDtdThatThenGainsAColumn(workspace);
+
+            editor.handleWindowActivated(editor.getEditorSite().getWorkbenchWindow());
+            UiTestWorkspace.processEvents();
+
+            assertThat(columnNamesOfUsers(editor))
+                    .as("The window of the editor that is activated must make it read the changed DTD.")
+                    .containsExactly("ID", "NAME");
+        }
+    }
+
+    /**
+     * Opens a dataset whose external DTD declares the column ID, then changes the DTD on disk so that it
+     * declares NAME too, without telling the editor.
+     */
+    private static FlatXmlDatasetEditor openWithDtdThatThenGainsAColumn(final UiTestWorkspace workspace)
+            throws Exception
+    {
+        final IFile dtdFile = workspace.createFile("my.dtd", "<!ELEMENT dataset (USERS*)>\n"
+                + "<!ELEMENT USERS EMPTY>\n<!ATTLIST USERS ID CDATA #REQUIRED>\n");
+        final IFile datasetFile = workspace.createFile("dataset.xml",
+                "<!DOCTYPE dataset SYSTEM \"my.dtd\">\n<dataset>\n    <USERS ID=\"1\"/>\n</dataset>\n");
+        final FlatXmlDatasetEditor editor = (FlatXmlDatasetEditor) workspace.open(datasetFile);
+        dtdFile.setContents(
+                new ByteArrayInputStream(("<!ELEMENT dataset (USERS*)>\n<!ELEMENT USERS EMPTY>\n"
+                        + "<!ATTLIST USERS ID CDATA #REQUIRED NAME CDATA #IMPLIED>\n")
+                                .getBytes(StandardCharsets.UTF_8)),
+                true, false, null);
+        return editor;
+    }
+
+    private static List<String> columnNamesOfUsers(final FlatXmlDatasetEditor editor)
+    {
+        final DatasetTable users = editor.getDatasetDocument().getModel().findTable("USERS").orElseThrow();
+        return users.getColumns().stream().map(DatasetColumn::name).toList();
+    }
+
+    /**
+     * Returns a window that is not the one of any editor, for an editor to tell it from its own.
+     */
+    private static IWorkbenchWindow anotherWindow()
+    {
+        return (IWorkbenchWindow) Proxy.newProxyInstance(IWorkbenchWindow.class.getClassLoader(),
+                new Class<?>[] { IWorkbenchWindow.class }, (proxy, method, arguments) -> null);
     }
 
     @Test
