@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-The **dbUnit Eclipse Plugin** adds a spreadsheet-like editor for [dbUnit](https://github.com/dbunit/dbunit-extension) dataset files to the Eclipse IDE. Version 1 supports the flat XML format (`FlatXmlDataSet`). It is built with Maven and Eclipse Tycho and published as a PGP-signed p2 repository (Eclipse update site) on GitHub Pages.
+The **dbUnit Eclipse Plugin** adds a spreadsheet-like editor for [dbUnit](https://github.com/dbunit/dbunit-extension) dataset files to the Eclipse IDE. The plugin currently supports the dbUnit flat XML format (`FlatXmlDataSet`); other dataset formats are planned. It is built with Maven and Eclipse Tycho and published as a PGP-signed p2 repository (Eclipse update site) on GitHub Pages.
 
 ## Build Commands
 
