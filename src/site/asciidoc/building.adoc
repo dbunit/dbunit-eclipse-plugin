@@ -57,6 +57,21 @@ The update site is assembled in `releng/org.dbunit.eclipse.repository/target/rep
 and zipped as `releng/org.dbunit.eclipse.repository/target/org.dbunit.eclipse.repository-VERSION.zip`.
 Install either into Eclipse with *Help > Install New Software... > Add... > Local...* (or *Archive...*).
 
+The version qualifier of the bundles and the feature comes from `project.build.outputTimestamp` in the root `pom.xml`,
+which changes only per release, so every build between two releases has the same version,
+and Eclipse does not offer a rebuilt plugin as an update to the one that is installed.
+`build-local.sh` (`build-local.cmd` on Windows) builds with the current UTC time as the qualifier instead,
+so that each build is newer than the one before:
+
+[source,shell]
+----
+# Run clean install
+./build-local.sh
+
+# Run the given Maven arguments instead
+./build-local.sh clean verify -DskipTests
+----
+
 == Generating the Site
 
 `./mvnw -N site` generates this documentation site; open `target/site/index.html` to review it.

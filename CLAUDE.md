@@ -14,6 +14,11 @@ The project uses a Maven wrapper. Always use `./mvnw` instead of `mvn`. Tycho 5 
 # Build, run all tests, and assemble the update site (default goal is verify)
 ./mvnw clean verify
 
+# The same build with the current UTC time as the version qualifier, to install it into Eclipse: the pom pins
+# project.build.outputTimestamp, so a plain build always has the same version, which Eclipse does not offer as an update.
+# Arguments go to ./mvnw (none runs clean install); build-local.cmd is the Windows script.
+./build-local.sh clean verify
+
 # Build and test against the newest Eclipse release instead of the baseline (oldest supported)
 ./mvnw clean verify -Platest-target
 
