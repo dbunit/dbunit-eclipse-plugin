@@ -3,7 +3,13 @@
       id="org.dbunit.eclipse.feature"
       label="%featureName"
       version="1.0.1.qualifier"
-      provider-name="%providerName">
+      provider-name="%providerName"
+      plugin="org.dbunit.eclipse.dataset.ui">
+
+   <!-- The plugin attribute names the branding bundle. Eclipse lists the feature in the About dialog only
+        if that bundle exists (without the attribute it looks for one named like the feature), takes the
+        feature icon from its about.ini, and takes the name and provider from its Bundle-Name and
+        Bundle-Vendor. -->
 
    <description url="%descriptionURL">
       %description

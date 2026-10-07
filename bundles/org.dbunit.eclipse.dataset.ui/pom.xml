@@ -120,6 +120,8 @@
           <systemProperties>
             <!-- TablesPageScreenshotsTest saves its PNGs under this directory. -->
             <dbunit.build.directory>${project.build.directory}</dbunit.build.directory>
+            <!-- BundleBrandingTest compares the bundle with the feature that names it as its branding bundle. -->
+            <dbunit.feature.directory>${project.basedir}/../../features/org.dbunit.eclipse.feature</dbunit.feature.directory>
           </systemProperties>
         </configuration>
       </plugin>
