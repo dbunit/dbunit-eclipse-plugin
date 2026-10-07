@@ -73,7 +73,7 @@ Keep the `1.0.0-SNAPSHOT` version (see <<Overview>>).
 mvnw clean verify
 ----
 
-. Commit the files "Prep release 1.0.0".
+. Commit the files "chore(release): Prep release 1.0.0".
 
 . Tag the commit; prefix the release number with "eclipse-plugin-":
 +
@@ -108,7 +108,7 @@ git push origin main eclipse-plugin-1.0.0
 mvnw -B org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion=1.0.1-SNAPSHOT
 ----
 .. Add a new `<release version="1.0.1" date="TBD" description="">` element to `src/changes/changes.xml`.
-.. Commit the files "Prepare next development iteration" and push them:
+.. Commit the files "build: Prepare next development iteration" and push them:
 +
 ----
 git push origin main
