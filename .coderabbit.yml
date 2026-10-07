@@ -1,0 +1,155 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+
+tone_instructions: >-
+  Prioritize correctness and the CLAUDE.md conventions over style. SpotBugs, Error Prone and PMD
+  already fail the build, so don't re-flag those. The bundles target Java 17, so no newer-JDK
+  APIs. "== not !=" with an else is deliberate.
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  poem: false
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    base_branches:
+      - main
+      - "releases/.*"
+  path_filters:
+    - "!**/target/**"
+    - "!.jackknife/**"
+  path_instructions:
+    - path: "bundles/org.dbunit.eclipse.dataset.core/src/main/java/**"
+      instructions: >-
+        The UI-independent core: dataset model, flat XML parser, text-edit engine, DTD reader, and
+        validation. It must not depend on org.eclipse.ui*, org.eclipse.swt, or org.eclipse.jface,
+        except org.eclipse.jface.text types from the org.eclipse.text bundle. Its unit tests run as
+        plain JUnit without OSGi, where ILog.of throws, so a core class never logs through ILog: it
+        takes a Consumer<IStatus> log sink through its constructor, and the UI bundle passes
+        LOG::log. The IDocument is the single source of truth: edits become minimal text edits
+        applied to the document, so undo/redo, dirty state, and save come from the Eclipse text
+        infrastructure. Follow CLAUDE.md: "==" not "!=" in an if paired with an else; no "utils" or
+        "helper" package or class names; favor immutability, constructor arguments over setters,
+        and constructor injection; never use Eclipse internal packages (*.internal.*). Public
+        classes and methods need complete-sentence Javadoc ending with a period, including @param,
+        @return, and @throws; an override inherits the Javadoc of the method it overrides. Fix
+        static analysis findings instead of suppressing them: a by-design Error Prone or PMD
+        suppression is @SuppressWarnings on the smallest element with a comment that gives the
+        reason, and a SpotBugs exclusion in src/code-audit-rules/spotbugs-exclude.xml names the
+        class, the field, and the pattern, with the reason. New files start with the dbUnit LGPL
+        license header used by the existing sources.
+    - path: "bundles/org.dbunit.eclipse.dataset.ui/src/main/java/**"
+      instructions: >-
+        The multi-page editor (Tables page with Nebula NatTable grids, Source page), commands,
+        preferences, and wizard. The IDocument is the single source of truth: grid edits become
+        minimal text edits applied to the document, so undo/redo, dirty state, save, and file
+        synchronization come from the Eclipse text infrastructure. All SWT access happens on the UI
+        thread, and every Color, Font, Image, and Cursor that is created is disposed (prefer
+        JFaceResources and LocalResourceManager). Clipboard I/O goes through the DatasetGridContext
+        seam (writeClipboardText and readClipboardText), not an SWT Clipboard in an action. Never
+        use Eclipse internal packages (*.internal.*) or classes marked @noextend, @noinstantiate,
+        or @noreference contrary to their restriction. Log through Eclipse's ILog, not a logging
+        framework, and the Logger field comes first: private static final ILog LOG =
+        ILog.of(ClassName.class). Follow CLAUDE.md: "==" not "!=" in an if paired with an else; no
+        "utils" or "helper" package or class names; favor immutability, constructor arguments over
+        setters, and constructor injection. Public classes and methods need complete-sentence
+        Javadoc ending with a period, including @param, @return, and @throws; an override inherits
+        the Javadoc of the method it overrides. Fix static analysis findings instead of
+        suppressing them: a by-design Error Prone or PMD suppression is @SuppressWarnings on the
+        smallest element with a comment that gives the reason, and a SpotBugs exclusion in
+        src/code-audit-rules/spotbugs-exclude.xml names the class, the field, and the pattern,
+        with the reason. New files start with the dbUnit LGPL license header used by the existing
+        sources.
+    - path: "bundles/org.dbunit.eclipse.dataset.core/src/test/java/**"
+      instructions: >-
+        Plain JUnit Jupiter tests that maven-surefire-plugin runs without OSGi; the parity tests
+        compare this plugin's parse results with dbUnit's. Name classes <ClassName>Test (unit),
+        <ClassName>IT (integration), or <ClassName>AT (acceptance), and methods
+        test<MethodName>_<StartingStateConditions>_<AssertedOutcome>. Prefer AssertJ; assert a
+        whole expected object rather than field by field; add .as("...") with a message ending
+        with a period. A test that would still pass without exercising the behavior under test is
+        a bug. New files start with the dbUnit LGPL license header.
+    - path: "bundles/org.dbunit.eclipse.dataset.ui/src/test/java/**"
+      instructions: >-
+        OSGi tests that tycho-surefire-plugin:plugin-test runs inside a real Eclipse workbench
+        (under Xvfb on Linux CI). A test that can reach a modal dialog uses MessageDialogDriver in
+        try-with-resources, which presses the expected button and closes any other dialog at
+        once, so an unexpected dialog cannot block the run. Clipboard I/O goes through
+        DatasetGridContext; a test never touches the SWT Clipboard. The naming, AssertJ, and
+        license header conventions are the same as for the core tests. A new test-only library
+        must also be listed as an extraRequirements entry in the UI pom.xml, or the run reports
+        "No tests found".
+    - path: "**/src/test/resources/datasets/**"
+      instructions: >-
+        Dataset fixtures that the tests compare byte for byte (offsets, line endings, encodings),
+        which is why .gitattributes marks them -text. The files under malformed/ are invalid on
+        purpose. Do not suggest reformatting, normalizing whitespace or line endings,
+        re-encoding, or repairing them.
+    - path: "bundles/org.dbunit.eclipse.dataset.core/META-INF/MANIFEST.MF"
+      instructions: >-
+        The core bundle must stay UI-independent: flag a Require-Bundle or Import-Package for
+        org.eclipse.ui*, org.eclipse.swt, or org.eclipse.jface, other than org.eclipse.jface.text
+        types, which come from the org.eclipse.text bundle.
+    - path: "releng/org.dbunit.eclipse.target/*.target"
+      instructions: >-
+        Target platforms: org.dbunit.eclipse.target.target is the baseline (the oldest supported
+        Eclipse release, used by default) and latest.target is the newest release (profile
+        latest-target). They deliberately ignore p2 repository references
+        (followRepositoryReferences="false" here, referencedRepositoryMode=ignore in the root
+        pom): never re-enable them, because a referenced repository silently pulls in newer
+        Eclipse releases and raises the baseline. Treat a change of the baseline as a change of
+        the oldest supported Eclipse release. The repository URLs are not Maven coordinates, so
+        Dependabot does not update them.
+    - path: "**/pom.xml"
+      instructions: >-
+        Tycho 5 build: it needs JDK 21+ to run, while the bundles target Java 17, and CI builds
+        against both the baseline and the latest Eclipse target platform. The root pom pins
+        project.build.outputTimestamp on purpose, as the reproducible release qualifier that the
+        release prep sets; CI branch builds override the qualifier with -DforceContextQualifier,
+        so do not suggest removing or computing the pin. SpotBugs, Error Prone, and PMD run in
+        verify and fail the build on any finding; do not suggest weakening or skipping them.
+    - path: "src/site/**"
+      instructions: >-
+        The documentation site (install, usage, building, releasing, developer guide), rendered
+        by the Maven site through the Doxia Asciidoctor bridge, not by asciidoctor directly. The
+        bridge drops admonition blocks (NOTE:, IMPORTANT:, and the like) with "Fallback behaviour
+        for node: admonition", so a paragraph with a bold lead is used on purpose; do not suggest
+        an admonition.
+    - path: "README.adoc"
+      instructions: >-
+        Deliberately short: badges, a one-paragraph description, feature bullets that link to the
+        site, and where to get help. Installation, building, and developer detail live on the
+        site pages in src/site, so do not ask for them here.
+    - path: "src/changes/changes.xml"
+      instructions: >-
+        The Maven Changes changelog. The current release is the first <release> element; new
+        <action> entries go at the bottom of its list, one per feature or bug fix, not one per
+        commit or work item. Each entry needs dev, type (one of add, fix, update, remove), issue,
+        system="github", and due-to. The release description stays a one or two sentence summary
+        of the release's overall themes and changes only when a new theme is introduced.
+    - path: ".github/**"
+      instructions: >-
+        actionlint and zizmor (workflow security) run here as the "Lint workflows" CI job, on
+        pull requests that touch .github/ and on a weekly schedule; zizmor's policy lives in
+        .github/zizmor.yml. The one script, .github/scripts/assemble-update-site.sh, is bash under
+        "set -euo pipefail". The `# zizmor: ignore[...]` suppressions, the tag-pinned first-party
+        `actions/*` refs, and the workspace-relative `./.github/actions/...` action syntax are
+        deliberate policy — do not re-raise them in prose review.
+  tools:
+    gitleaks:
+      enabled: true
+    actionlint:
+      enabled: true
+    zizmor:
+      enabled: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "CLAUDE.md"
+  learnings:
+    scope: auto
