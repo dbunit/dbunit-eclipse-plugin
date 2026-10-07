@@ -126,15 +126,6 @@ then confirm https://dbunit.github.io/dbunit-eclipse-plugin/updates/compositeCon
 
 . Update the Eclipse Marketplace listing: see `releng/marketplace/marketplace-listing.adoc`.
 
-. Post an Announcement Discussion https://github.com/dbunit/dbunit-eclipse-plugin/discussions/categories/announcements.
-Consider using the changes plugin's announcement-generate goal:
-+
-----
-mvnw -N changes:announcement-generate -Dchanges.version=1.0.0
-----
-+
-Review and adjust the text as desired before using.
-
 == Raising the Minimum Supported Eclipse Release
 
 The baseline target platform (`releng/org.dbunit.eclipse.target/org.dbunit.eclipse.target.target`)
