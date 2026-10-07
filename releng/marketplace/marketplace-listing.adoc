@@ -1,8 +1,8 @@
 = Eclipse Marketplace Listing
 
 Content for the dbUnit Eclipse Plugin listing on https://marketplace.eclipse.org.
-Create the listing once (Add Content > Solution, signed in with the Eclipse Foundation account that
-maintains dbUnit), then update it after every release (see `src/site/asciidoc/releasing.adoc`).
+Create the listing once (see <<Creating and Updating the Listing>>), then update it after every release
+(see `src/site/asciidoc/releasing.adoc`).
 
 == Listing Fields
 
@@ -14,9 +14,16 @@ maintains dbUnit), then update it after every release (see `src/site/asciidoc/re
 |dbUnit Dataset Editor
 
 |Short description (teaser)
-|Edit dbUnit dataset files like a spreadsheet: tables as sheets, rows as rows, attributes as cells.
+|The opening of the <<Description>>.
+The Marketplace trims the first 200 or so characters of the description into the teaser that it shows in
+lists and search results, so the opening paragraphs are written to work alone.
+If the form has a field for the teaser, enter the first paragraph.
 
-|Organization / Company
+|Logo
+|`src/site/resources/images/dbunit-logo.jpg`, the dbUnit logo of the documentation site.
+The Marketplace shows logos scaled down to about 110 x 80 pixels.
+
+|Organization name
 |dbUnit
 
 |Website
@@ -26,58 +33,70 @@ maintains dbUnit), then update it after every release (see `src/site/asciidoc/re
 |https://github.com/dbunit/dbunit-eclipse-plugin/issues
 
 |License
-|LGPL (GNU Lesser General Public License 2.1)
+|LGPL (GNU Lesser General Public License, version 2.1 or later)
 
-|Categories
-|Database; Testing; Editor
+|Market and categories
+|Tools: Database, Editor, Testing
 
 |Tags
 |dbunit, dataset, xml, spreadsheet, grid, table editor, testing, database, flat xml
 
-|Status
-|Production/Stable (Beta until 1.0.0 is released)
+|Development status
+|Production/Stable (Beta when the listing is created before 1.0.0 is released)
 
-|Solution version
-|The released version, for example 1.0.0
+|Version
+|The released version, for example 1.0.0, not the qualified version of the bundles (`1.0.0.v20261015-1430`)
 
 |Eclipse versions
-|2024-06 and every later release (update when the baseline target platform changes)
+|2024-06 (4.32) and every later release in the list.
+Raise the lowest one only together with the baseline target platform, and add each new Eclipse release once
+the latest-target build passes on it.
 
 |Platforms
 |Windows, Mac, Linux/GTK
 
-|Update site URL
-|https://dbunit.github.io/dbunit-eclipse-plugin/updates/
-
-|Features
-|`org.dbunit.eclipse.feature` (required); `org.dbunit.eclipse.feature.source` (optional)
-
 |Minimum Java version
 |17
+
+|Update site URL
+|https://dbunit.github.io/dbunit-eclipse-plugin/updates/ (the p2 composite repository of every release;
+the nightly builds are not part of it)
+
+|Feature IDs
+|`org.dbunit.eclipse.feature` (required); `org.dbunit.eclipse.feature.source` (optional, not selected by default).
+Enter the plain feature ids, as in `releng/org.dbunit.eclipse.repository/category.xml`, without the
+`.feature.group` suffix of the p2 installable units; the Marketplace Client adds the suffix.
 |===
 
 == Description
 
+The Marketplace stores the description as HTML, and it trims the first 200 or so characters into the teaser,
+so the opening paragraphs carry the pitch.
+Paste this HTML into the description editor's source (HTML) mode.
+When the editor has no source mode, paste the rendered text and apply the bullet list with the editor's toolbar.
+
+The description does not depend on the dataset formats: only the paragraph that begins "The plugin currently
+supports" names them.
+When a format is added, change that sentence here, in `README.adoc`, and in
+`features/org.dbunit.eclipse.feature/feature.properties`.
+
+[source,html]
 ----
-The dbUnit Dataset Editor opens dbUnit dataset files as a spreadsheet inside Eclipse.
-
-* Each table is a sheet; each row element is a row; each attribute is a cell.
-* Type to edit, Enter and Tab to move, copy and paste rectangular ranges to and from Excel
-  or LibreOffice.
-* Insert, duplicate, move, and delete rows; add, rename, and delete columns and tables.
-* NULL (absent attribute) and empty string are shown and edited distinctly.
-* Understands dbUnit semantics: column sensing, empty tables, repeated table segments,
-  and DTD-declared columns and tables.
-* Warns about dataset content that dbUnit would silently ignore.
-* Edits are written back into the XML with minimal text changes: comments, formatting,
-  attribute order, and the DOCTYPE are preserved, so version-control diffs stay small.
-* Full undo and redo; a Source tab shows the XML, always in sync with the grid.
-
-Version 1 supports the dbUnit flat XML format (FlatXmlDataSet).
-Other dbUnit dataset formats are planned for later versions.
-
-dbUnit is a JUnit extension for database-driven projects that puts the database into a known
-state between test runs: https://github.com/dbunit/dbunit-extension
+<p>Edit dbUnit dataset files like a spreadsheet inside the Eclipse IDE.</p>
+<p>The dbUnit Dataset Editor opens dbUnit dataset files as a grid inside Eclipse.</p>
+<ul>
+<li>Each table is a sheet, its rows are spreadsheet rows, and its values are cells.</li>
+<li>Type to edit, Enter and Tab to move, copy and paste rectangular ranges to and from Excel or LibreOffice.</li>
+<li>Insert, duplicate, move, and delete rows; add, rename, and delete columns and tables.</li>
+<li>NULL and empty string are shown and edited distinctly.</li>
+<li>Understands dbUnit semantics: column sensing, empty tables, repeated table segments, and DTD-declared columns and tables.</li>
+<li>Warns about dataset content that dbUnit ignores or rejects.</li>
+<li>Edits are written back into the file with minimal text changes, so comments, formatting, and the rest of the file stay as they were and version-control diffs stay small.</li>
+<li>Full undo and redo; a Source tab shows the text of the dataset, always in sync with the grid.</li>
+</ul>
+<p>Dataset files open in the editor automatically, and File &gt; New &gt; Other... &gt; dbUnit creates a new one. Requires Eclipse 2024-06 or newer on Java 17 or newer; see the <a href="https://dbunit.github.io/dbunit-eclipse-plugin/usage.html">user guide</a> and the <a href="https://dbunit.github.io/dbunit-eclipse-plugin/install.html">installation notes</a>.</p>
+<p>The plugin currently supports the dbUnit flat XML format; other dataset formats are planned.</p>
+<p><a href="https://github.com/dbunit/dbunit-extension">dbUnit</a> is a JUnit extension for database-driven projects that puts the database into a known state between test runs.</p>
 ----
 
 == Screenshots
@@ -88,11 +107,33 @@ Capture from a running workbench (light and dark themes) and upload with the lis
 . The Source page showing the same dataset.
 . A validation warning shown on a column header.
 
+The user guide's `tables-page.png` (a multi-table dataset with a warning on the PHONE column header and the
+Problems section) and `source-page.png`, in `src/site/resources/images/`, already cover items 2 and 3 in the
+light theme.
+Use the same sample dataset for the other captures, so that the screenshots match.
+
 == Install Button
 
-After the listing is approved, the marketplace assigns a node id.
-Add the drag-to-install button to `README.adoc` and the site's index page:
+After the listing is approved, its page has a *Marketplace Drag to Install Button* tab with the button's code,
+which contains the listing's node id (`mpc_install=NODE_ID`).
+Add the drag-to-install button to `README.adoc` and the site's index page (`src/site/asciidoc/index.adoc`):
 
 ----
-image:https://marketplace.eclipse.org/sites/all/themes/solstice/public/images/marketplace/btn-install.svg["Drag to your running Eclipse workspace to install dbUnit Dataset Editor", link="https://marketplace.eclipse.org/marketplace-client-intro?mpc_install=NODE_ID"]
+image:https://marketplace.eclipse.org/modules/custom/eclipsefdn/eclipsefdn_marketplace/images/btn-install.svg["Drag to your running Eclipse workspace to install dbUnit Dataset Editor. Requires the Eclipse Marketplace Client.", width=80, link="https://marketplace.eclipse.org/marketplace-client-intro?mpc_install=NODE_ID"]
 ----
+
+== Creating and Updating the Listing
+
+. Sign in at https://marketplace.eclipse.org with the Eclipse Foundation account that will own the listing.
+. Choose *Add Content* in the navigation bar, then *Add a new Solutions Listing*.
+. Enter the values of <<Listing Fields>> and the HTML of <<Description>>, and upload the logo and the <<Screenshots>>.
+. Submit the form.
+The listing waits in the moderation queue until a Marketplace administrator approves it,
+normally within 24 hours.
+. When the listing is live, add the <<Install Button>>.
+. Install the plugin through the Marketplace Client (*Help > Eclipse Marketplace...*, search for "dbUnit") in a
+fresh Eclipse of the oldest supported release (2024-06) and of the latest release, and confirm that Eclipse still
+starts (see the installation risk in `src/site/asciidoc/install.adoc`).
+
+After each release, edit the listing from *My Marketplace*: set the *Version* to the released version, and review
+the description, the Eclipse versions, and the screenshots against the release's entries in `src/changes/changes.xml`.
