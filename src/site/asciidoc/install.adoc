@@ -9,6 +9,14 @@
 Installing from an update site with Eclipse's default settings can leave an Eclipse that cannot start.
 This is not specific to the dbUnit Eclipse plugin, and clearing one checkbox avoids it.
 
+== Install from Eclipse Marketplace
+
+. In Eclipse, open *Help > Eclipse Marketplace...*.
+. Search for dbUnit.
+. Click the Install button.
+
+https://marketplace.eclipse.org/content/dbunit-dataset-editor
+
 == Install from the update site
 
 . In Eclipse, open *Help > Install New Software...*.
