@@ -43,6 +43,12 @@
       <item name="User Guide" href="usage.html" />
       <item name="Changes" href="changes.html" />
     </menu>
+
+    <menu name="Getting Help">
+      <item name="Discussion Forum"  href="https://github.com/dbunit/dbunit-eclipse-plugin/discussions"/>
+      <item name="Issues"            href="https://github.com/dbunit/dbunit-eclipse-plugin/issues"/>
+    </menu>
+
     <menu name="Developing the dbUnit Eclipse Plugin">
       <item name="Developers Guide" href="devguide.html"/>
       <item name="Building" href="building.html"/>
