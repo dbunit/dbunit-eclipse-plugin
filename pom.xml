@@ -51,8 +51,8 @@
     <resourcesPluginVersion>3.5.0</resourcesPluginVersion>
     <sitePluginVersion>3.22.0</sitePluginVersion>
     <spotbugsMavenPluginVersion>4.10.4.1</spotbugsMavenPluginVersion>
-    <surefirePluginVersion>3.6.0</surefirePluginVersion>
-    <versionsMavenPluginVersion>2.22.0</versionsMavenPluginVersion>
+    <surefirePluginVersion>3.6.1</surefirePluginVersion>
+    <versionsMavenPluginVersion>2.23.0</versionsMavenPluginVersion>
   </properties>
 
   <scm>
